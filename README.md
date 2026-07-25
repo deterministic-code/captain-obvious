@@ -27,12 +27,19 @@ Wire it to run on every `npm install` so a fresh clone is gated automatically:
 ```
 
 `captain-obvious-install` reads `captain-obvious.config.json` from the repo root
-(override with `--config <path>`, or the repo root with `--target <dir>`) and:
+(override with `--config <path>`, or the repo root with `--target <dir>`) and owns all
+the reference wiring so you never hand-edit it:
 
 - writes `.git/hooks/pre-commit` and `pre-push` that invoke the configured lint hooks
-  from their installed location, and
+  from their installed location,
 - merges the configured Claude hooks into `.claude/settings.json` (idempotently — it
-  only ever rewrites entries it previously added, tagged `_captainObvious`).
+  only ever rewrites entries it previously added, tagged `_captainObvious`), and
+- rewrites the `lint:*` scripts in your `package.json` to run through the package's
+  `captain-obvious-lint` bin, tracking the keys it owns under `captainObvious.managedScripts`
+  so re-runs stay idempotent and dropped hooks get pruned.
+
+Run any hook directly with the bin: `captain-obvious-lint <name> --staged` (e.g.
+`captain-obvious-lint comments --staged` runs `hooks/git/lint-comments.mjs`).
 
 ## Config
 
@@ -64,6 +71,10 @@ Wire it to run on every `npm install` so a fresh clone is gated automatically:
   Everything else is blocking (`|| exit 1`).
 - **Each `claudeHooks` entry** names a script in `hooks/claude/` (drop the `.sh`), the
   Claude event, an optional tool `matcher`, and a `timeout` in seconds.
+- **`npmScripts.extraScripts`** (optional, `key → bin args`) adds or overrides managed
+  aliases for the odd modes — e.g. `"lint:dead-code": "dead-code --all"` or
+  `"lint:frozen-interfaces:add": "frozen-interfaces --add"`. Set `npmScripts.enabled:
+  false` to skip package.json rewriting entirely.
 
 ## What's in the box
 

@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { loadConfig } from "../lib/config.mjs";
 import { installGitHooks } from "../lib/git-hooks.mjs";
 import { installClaudeHooks } from "../lib/claude-settings.mjs";
+import { installNpmScripts } from "../lib/npm-scripts.mjs";
 
 const pkgRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -26,6 +27,7 @@ async function main() {
   const written = [
     ...(await installGitHooks({ target, pkgRoot, gitHooks: config.gitHooks ?? {} })),
     ...(await installClaudeHooks({ target, pkgRoot, claudeHooks: config.claudeHooks })),
+    ...(await installNpmScripts({ target, gitHooks: config.gitHooks ?? {}, npmScripts: config.npmScripts })),
   ];
   for (const file of written) {
     process.stdout.write(`captain-obvious: wrote ${file}\n`);
