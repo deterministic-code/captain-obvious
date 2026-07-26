@@ -1,0 +1,168 @@
+import { isUniqueViolation } from "./languages.js";
+import {
+  requireActionTypeId,
+  requireEnvironmentId,
+  requireHookId,
+  requireLanguageId,
+  requireRule,
+} from "./lookups.js";
+import type { Db } from "./open.js";
+import type {
+  ActionBinding,
+  AddRuleOpts,
+  ConfigureRuleOpts,
+  RuleRow,
+} from "./types.js";
+
+/**
+ * Insert a rule and link it to languages and hooks. All referenced language and
+ * hook slugs must already exist; validation happens before any write and the
+ * whole thing runs in a transaction, so a bad reference leaves no partial rows.
+ */
+export function addRule(db: Db, opts: AddRuleOpts): RuleRow {
+  const { slug, name, category, description, languages, config, hooks } = opts;
+  if (!slug || !name) throw new Error("add-rule requires --slug and --name");
+  const configJson = normalizeConfig(config);
+
+  const languageIds = (languages ?? []).map((s) => requireLanguageId(db, s));
+  const hookIds = (hooks ?? []).map((s) => requireHookId(db, s));
+
+  const insert = db.transaction((): RuleRow => {
+    let ruleId: number | bigint;
+    try {
+      ruleId = db
+        .prepare(
+          "INSERT INTO rules (slug, name, category, description, config_json) VALUES (?, ?, ?, ?, ?)",
+        )
+        .run(slug, name, category ?? null, description ?? null, configJson)
+        .lastInsertRowid;
+    } catch (err) {
+      if (isUniqueViolation(err)) throw new Error(`rule already exists: ${slug}`);
+      throw err;
+    }
+    const linkLang = db.prepare(
+      "INSERT INTO rule_languages (rule_id, language_id) VALUES (?, ?)",
+    );
+    for (const id of languageIds) linkLang.run(ruleId, id);
+    const linkHook = db.prepare(
+      "INSERT INTO hook_rules (hook_id, rule_id) VALUES (?, ?)",
+    );
+    for (const id of hookIds) linkHook.run(id, ruleId);
+    return db.prepare("SELECT * FROM rules WHERE id = ?").get(ruleId) as RuleRow;
+  });
+
+  return insert();
+}
+
+/**
+ * Update a rule's settings (config, enabled, languages) and its per-environment
+ * action bindings. Every requested change is validated up front and applied in
+ * one transaction.
+ */
+export function configureRule(
+  db: Db,
+  slug: string,
+  opts: ConfigureRuleOpts,
+): RuleRow {
+  const rule = requireRule(db, slug);
+  const configJson =
+    opts.setConfig !== undefined ? normalizeConfig(opts.setConfig) : undefined;
+  const addLangIds = (opts.addLanguages ?? []).map((s) => requireLanguageId(db, s));
+  const removeLangIds = (opts.removeLanguages ?? []).map((s) =>
+    requireLanguageId(db, s),
+  );
+  const binding = opts.setAction
+    ? resolveBinding(db, opts.setAction)
+    : undefined;
+
+  const apply = db.transaction((): RuleRow => {
+    if (configJson !== undefined) {
+      db.prepare("UPDATE rules SET config_json = ? WHERE id = ?").run(
+        configJson,
+        rule.id,
+      );
+    }
+    if (opts.enabled !== undefined) {
+      db.prepare("UPDATE rules SET enabled = ? WHERE id = ?").run(
+        opts.enabled ? 1 : 0,
+        rule.id,
+      );
+    }
+    const linkLang = db.prepare(
+      "INSERT OR IGNORE INTO rule_languages (rule_id, language_id) VALUES (?, ?)",
+    );
+    for (const id of addLangIds) linkLang.run(rule.id, id);
+    const unlinkLang = db.prepare(
+      "DELETE FROM rule_languages WHERE rule_id = ? AND language_id = ?",
+    );
+    for (const id of removeLangIds) unlinkLang.run(rule.id, id);
+
+    if (binding) setRuleAction(db, rule.id, binding);
+    if (opts.removeAction) removeRuleAction(db, rule.id, opts.removeAction);
+
+    return db.prepare("SELECT * FROM rules WHERE id = ?").get(rule.id) as RuleRow;
+  });
+
+  return apply();
+}
+
+interface ResolvedBinding {
+  environmentId: number | null;
+  actionTypeId: number;
+  delayMs: number | null;
+}
+
+function resolveBinding(db: Db, b: ActionBinding): ResolvedBinding {
+  return {
+    environmentId: b.environment ? requireEnvironmentId(db, b.environment) : null,
+    actionTypeId: requireActionTypeId(db, b.type),
+    delayMs: b.delayMs,
+  };
+}
+
+/**
+ * Upsert one rule_action. Done as delete-then-insert because the
+ * UNIQUE(rule_id, environment_id) constraint does NOT catch duplicate default
+ * bindings (SQLite treats NULL environment_id values as distinct), so ON
+ * CONFLICT would not fire for the default (all-env) row.
+ */
+function setRuleAction(db: Db, ruleId: number, b: ResolvedBinding): void {
+  if (b.environmentId === null) {
+    db.prepare(
+      "DELETE FROM rule_actions WHERE rule_id = ? AND environment_id IS NULL",
+    ).run(ruleId);
+  } else {
+    db.prepare(
+      "DELETE FROM rule_actions WHERE rule_id = ? AND environment_id = ?",
+    ).run(ruleId, b.environmentId);
+  }
+  db.prepare(
+    "INSERT INTO rule_actions (rule_id, environment_id, action_type_id, delay_ms) VALUES (?, ?, ?, ?)",
+  ).run(ruleId, b.environmentId, b.actionTypeId, b.delayMs);
+}
+
+function removeRuleAction(db: Db, ruleId: number, target: string): void {
+  if (target === "all") {
+    db.prepare("DELETE FROM rule_actions WHERE rule_id = ?").run(ruleId);
+  } else if (target === "default") {
+    db.prepare(
+      "DELETE FROM rule_actions WHERE rule_id = ? AND environment_id IS NULL",
+    ).run(ruleId);
+  } else {
+    const envId = requireEnvironmentId(db, target);
+    db.prepare(
+      "DELETE FROM rule_actions WHERE rule_id = ? AND environment_id = ?",
+    ).run(ruleId, envId);
+  }
+}
+
+/** Validate a raw config string as JSON, returning it as-is (or null). */
+function normalizeConfig(config: string | undefined): string | null {
+  if (config === undefined) return null;
+  try {
+    JSON.parse(config);
+  } catch {
+    throw new Error(`--config is not valid JSON: ${config}`);
+  }
+  return config;
+}

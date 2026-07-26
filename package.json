@@ -9,6 +9,7 @@
     "url": "git+https://github.com/deterministic-code/captain-obvious.git"
   },
   "bin": {
+    "captain-obvious": "dist/bin/captain-obvious.js",
     "captain-obvious-install": "bin/install.mjs",
     "captain-obvious-lint": "bin/lint.mjs"
   },
@@ -19,21 +20,28 @@
   "files": [
     "bin",
     "lib",
-    "hooks"
+    "hooks",
+    "dist",
+    "db"
   ],
   "scripts": {
+    "build": "tsc",
+    "prepare": "tsc",
     "test": "vitest run"
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
+    "better-sqlite3": "^13.0.1",
     "jscpd": "^3.5.10",
     "knip": "^6.24.0",
     "typescript": "^5.7.0",
     "yaml": "^2.6.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^22.10.0",
     "vitest": "^2.1.0"
   }
 }
