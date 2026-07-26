@@ -7,6 +7,7 @@ import {
   requireRule,
 } from "./lookups.js";
 import type { Db } from "./open.js";
+import type { RuleMeta } from "../rules/types.js";
 import type {
   ActionBinding,
   AddRuleOpts,
@@ -154,6 +155,42 @@ function removeRuleAction(db: Db, ruleId: number, target: string): void {
       "DELETE FROM rule_actions WHERE rule_id = ? AND environment_id = ?",
     ).run(ruleId, envId);
   }
+}
+
+/**
+ * Idempotently insert-or-update a rule from its registry metadata and sync its
+ * language links. Used by `seed-rules`. Preserves `enabled` so re-seeding never
+ * re-enables a rule a user has turned off. Languages must already exist (the
+ * seeder ensures them first).
+ */
+export function upsertRule(db: Db, meta: RuleMeta): void {
+  const configJson = meta.config ? JSON.stringify(meta.config) : null;
+  const languageIds = meta.languages.map((s) => requireLanguageId(db, s));
+
+  const tx = db.transaction(() => {
+    db.prepare(
+      `INSERT INTO rules (slug, name, category, description, config_json)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(slug) DO UPDATE SET
+         name = excluded.name,
+         category = excluded.category,
+         description = excluded.description,
+         config_json = excluded.config_json`,
+    ).run(meta.slug, meta.name, meta.category, meta.description, configJson);
+
+    const ruleId = (
+      db.prepare("SELECT id FROM rules WHERE slug = ?").get(meta.slug) as {
+        id: number;
+      }
+    ).id;
+    db.prepare("DELETE FROM rule_languages WHERE rule_id = ?").run(ruleId);
+    const link = db.prepare(
+      "INSERT INTO rule_languages (rule_id, language_id) VALUES (?, ?)",
+    );
+    for (const id of languageIds) link.run(ruleId, id);
+  });
+
+  tx();
 }
 
 /** Validate a raw config string as JSON, returning it as-is (or null). */

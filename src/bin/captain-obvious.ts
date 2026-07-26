@@ -4,7 +4,9 @@ import { csv, parseArgs, type ParsedArgs } from "../db/args.js";
 import { addLanguage } from "../db/languages.js";
 import { openDb, resolveDbPath, type Db } from "../db/open.js";
 import { addRule, configureRule } from "../db/rules.js";
+import { seedRules } from "../db/seed.js";
 import type { ActionBinding } from "../db/types.js";
+import { RULES } from "../rules/index.js";
 
 const USAGE = `usage: captain-obvious <command> [flags]
 
@@ -16,6 +18,7 @@ commands:
                    [--add-lang <csv>] [--remove-lang <csv>]
                    [--set-action <type>[:<env>][:<delayMs>]] [--remove-action <env|default|all>]
   configure-action <type-slug> [--add] [--name <n>]
+  seed-rules       [--only <slug>]   populate the registry from the bundled rule set
   init             create and seed the registry DB
 
 global:
@@ -125,6 +128,16 @@ function runConfigureAction(args: ParsedArgs): void {
   });
 }
 
+function runSeedRules(args: ParsedArgs): void {
+  withDb(args, (db) => {
+    const summary = seedRules(db, RULES, { only: args.values.get("only") });
+    done(
+      `seeded ${summary.seeded.length} rule(s), ${summary.languages.length} language(s)`,
+      summary,
+    );
+  });
+}
+
 function runInit(args: ParsedArgs): void {
   const path = resolveDbPath({ db: args.values.get("db") });
   const db = openDb(path);
@@ -137,6 +150,7 @@ const COMMANDS: Record<string, (args: ParsedArgs) => void> = {
   "add-rule": runAddRule,
   "configure-rule": runConfigureRule,
   "configure-action": runConfigureAction,
+  "seed-rules": runSeedRules,
   init: runInit,
 };
 

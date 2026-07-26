@@ -1,0 +1,73 @@
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { openDb, type Db } from "../open.js";
+import { seedRules } from "../seed.js";
+import { RULES } from "../../rules/index.js";
+
+let db: Db;
+
+beforeEach(() => {
+  db = openDb(":memory:");
+});
+
+afterEach(() => {
+  db.close();
+});
+
+function count(table: string): number {
+  return (db.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number })
+    .n;
+}
+
+describe("seedRules", () => {
+  it("seeds every rule plus its languages and links", () => {
+    const summary = seedRules(db, RULES);
+    expect(summary.seeded).toHaveLength(RULES.length);
+    expect(summary.languages).toEqual(["javascript", "typescript"]);
+    expect(count("rules")).toBe(RULES.length);
+    expect(count("languages")).toBe(2);
+    // every rule links to both JS/TS languages
+    expect(count("rule_languages")).toBe(RULES.length * 2);
+  });
+
+  it("is idempotent", () => {
+    seedRules(db, RULES);
+    seedRules(db, RULES);
+    expect(count("rules")).toBe(RULES.length);
+    expect(count("languages")).toBe(2);
+    expect(count("rule_languages")).toBe(RULES.length * 2);
+  });
+
+  it("preserves a user-disabled rule across re-seed", () => {
+    seedRules(db, RULES);
+    db.prepare("UPDATE rules SET enabled = 0 WHERE slug = ?").run("lint-naming");
+    seedRules(db, RULES);
+    const row = db
+      .prepare("SELECT enabled FROM rules WHERE slug = ?")
+      .get("lint-naming") as { enabled: number };
+    expect(row.enabled).toBe(0);
+  });
+
+  it("updates metadata on re-seed", () => {
+    seedRules(db, RULES);
+    db.prepare("UPDATE rules SET description = 'stale' WHERE slug = ?").run(
+      "lint-naming",
+    );
+    seedRules(db, RULES);
+    const row = db
+      .prepare("SELECT description FROM rules WHERE slug = ?")
+      .get("lint-naming") as { description: string };
+    expect(row.description).not.toBe("stale");
+  });
+
+  it("seeds only one rule with --only", () => {
+    const summary = seedRules(db, RULES, { only: "lint-naming" });
+    expect(summary.seeded).toEqual(["lint-naming"]);
+    expect(count("rules")).toBe(1);
+  });
+
+  it("rejects an unknown --only slug", () => {
+    expect(() => seedRules(db, RULES, { only: "lint-nope" })).toThrow(
+      /unknown rule/,
+    );
+  });
+});
