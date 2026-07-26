@@ -1,0 +1,41 @@
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { addLanguage } from "../languages.js";
+import { openDb, type Db } from "../open.js";
+
+let db: Db;
+
+beforeEach(() => {
+  db = openDb(":memory:");
+});
+
+afterEach(() => {
+  db.close();
+});
+
+describe("addLanguage", () => {
+  it("inserts a language with JSON-encoded extensions", () => {
+    const row = addLanguage(db, {
+      slug: "typescript",
+      name: "TypeScript",
+      extensions: ["ts", "tsx"],
+    });
+    expect(row).toMatchObject({ slug: "typescript", name: "TypeScript" });
+    expect(JSON.parse(row.extensions as string)).toEqual(["ts", "tsx"]);
+  });
+
+  it("stores null extensions when none given", () => {
+    const row = addLanguage(db, { slug: "rust", name: "Rust" });
+    expect(row.extensions).toBeNull();
+  });
+
+  it("rejects a duplicate slug", () => {
+    addLanguage(db, { slug: "rust", name: "Rust" });
+    expect(() => addLanguage(db, { slug: "rust", name: "Rust 2" })).toThrow(
+      /already exists/,
+    );
+  });
+
+  it("requires slug and name", () => {
+    expect(() => addLanguage(db, { slug: "", name: "x" })).toThrow(/requires/);
+  });
+});
