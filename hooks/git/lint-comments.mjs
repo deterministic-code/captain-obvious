@@ -191,7 +191,7 @@ async function lintFile(path) {
   return findViolations(src).map((v) => ({ ...v, path }));
 }
 
-async function main(argv) {
+export async function main(argv) {
   const args = argv.slice(2);
   const mode = args[0];
   let files;
