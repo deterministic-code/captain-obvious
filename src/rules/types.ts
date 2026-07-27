@@ -56,7 +56,14 @@ export interface RuleActionMeta {
 export interface RuleMeta {
   slug: string;
   name: string;
+  /** The rule's primary category (stored on rules.category; drives panel grouping/stats). */
   category: RuleCategory;
+  /**
+   * Additional categories beyond the primary. The full set written to
+   * `rule_categories` is the primary plus these, de-duplicated. Omit for a
+   * single-category rule.
+   */
+  categories?: RuleCategory[];
   description: string;
   languages: Language[];
   /** Thresholds etc.; serialized to rules.config_json. null when the rule has none. */

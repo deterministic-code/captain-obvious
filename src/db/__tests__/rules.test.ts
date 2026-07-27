@@ -33,6 +33,24 @@ function langCount(slug: string): number {
   return row.n;
 }
 
+function categories(slug: string): string[] {
+  return (
+    db
+      .prepare(
+        "SELECT rc.category FROM rule_categories rc JOIN rules r ON r.id = rc.rule_id WHERE r.slug = ? ORDER BY rc.category",
+      )
+      .all(slug) as { category: string }[]
+  ).map((r) => r.category);
+}
+
+function primaryCategory(slug: string): string | null {
+  return (
+    db.prepare("SELECT category FROM rules WHERE slug = ?").get(slug) as {
+      category: string | null;
+    }
+  ).category;
+}
+
 describe("addRule", () => {
   it("inserts a rule and links languages", () => {
     const row = addRule(db, {
@@ -45,6 +63,23 @@ describe("addRule", () => {
     expect(row.slug).toBe("lint-max-lines");
     expect(row.config_json).toBe('{"maxLines":300}');
     expect(langCount("lint-max-lines")).toBe(2);
+  });
+
+  it("links the primary plus extra categories, de-duplicated", () => {
+    addRule(db, {
+      slug: "lint-max-lines",
+      name: "Max lines",
+      category: "size",
+      categories: ["complexity", "size"],
+    });
+    expect(categories("lint-max-lines")).toEqual(["complexity", "size"]);
+    expect(primaryCategory("lint-max-lines")).toBe("size");
+  });
+
+  it("links only extra categories when no primary is given", () => {
+    addRule(db, { slug: "lint-x", name: "X", categories: ["naming"] });
+    expect(categories("lint-x")).toEqual(["naming"]);
+    expect(primaryCategory("lint-x")).toBeNull();
   });
 
   it("rolls back with no partial write on an unknown language", () => {
@@ -85,6 +120,33 @@ describe("configureRule", () => {
     expect(langCount("lint-max-lines")).toBe(2);
     configureRule(db, "lint-max-lines", { removeLanguages: ["typescript"] });
     expect(langCount("lint-max-lines")).toBe(1);
+  });
+
+  it("adds and removes category links", () => {
+    configureRule(db, "lint-max-lines", { addCategories: ["size", "complexity"] });
+    expect(categories("lint-max-lines")).toEqual(["complexity", "size"]);
+    configureRule(db, "lint-max-lines", { removeCategories: ["complexity"] });
+    expect(categories("lint-max-lines")).toEqual(["size"]);
+  });
+
+  it("re-points the primary when the primary category is removed", () => {
+    addRule(db, {
+      slug: "lint-multi",
+      name: "Multi",
+      category: "size",
+      categories: ["complexity"],
+    });
+    expect(primaryCategory("lint-multi")).toBe("size");
+    configureRule(db, "lint-multi", { removeCategories: ["size"] });
+    expect(categories("lint-multi")).toEqual(["complexity"]);
+    expect(primaryCategory("lint-multi")).toBe("complexity");
+  });
+
+  it("clears the primary when the last category is removed", () => {
+    addRule(db, { slug: "lint-one", name: "One", category: "size" });
+    configureRule(db, "lint-one", { removeCategories: ["size"] });
+    expect(categories("lint-one")).toEqual([]);
+    expect(primaryCategory("lint-one")).toBeNull();
   });
 
   it("upserts a default action binding without duplicating it", () => {

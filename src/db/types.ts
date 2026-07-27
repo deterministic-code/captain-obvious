@@ -69,7 +69,10 @@ export interface AddLanguageOpts {
 export interface AddRuleOpts {
   slug: string;
   name: string;
+  /** Primary category (stored on rules.category). */
   category?: string;
+  /** Additional categories beyond the primary; the full set is linked in rule_categories. */
+  categories?: string[];
   description?: string;
   /** Language slugs to link. Each must already exist. */
   languages?: string[];
@@ -94,6 +97,10 @@ export interface ConfigureRuleOpts {
   enabled?: boolean;
   addLanguages?: string[];
   removeLanguages?: string[];
+  /** Categories to link (in addition to the primary). */
+  addCategories?: string[];
+  /** Categories to unlink. Removing the primary re-points rules.category to the first remaining (or null). */
+  removeCategories?: string[];
   setAction?: ActionBinding;
   /** Environment slug to remove, or "all" to clear every binding. */
   removeAction?: string;

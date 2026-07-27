@@ -21,7 +21,8 @@ import type {
  * whole thing runs in a transaction, so a bad reference leaves no partial rows.
  */
 export function addRule(db: Db, opts: AddRuleOpts): RuleRow {
-  const { slug, name, category, description, languages, config, hooks } = opts;
+  const { slug, name, category, categories, description, languages, config, hooks } =
+    opts;
   if (!slug || !name) throw new Error("add-rule requires --slug and --name");
   const configJson = normalizeConfig(config);
 
@@ -49,10 +50,59 @@ export function addRule(db: Db, opts: AddRuleOpts): RuleRow {
       "INSERT INTO hook_rules (hook_id, rule_id) VALUES (?, ?)",
     );
     for (const id of hookIds) linkHook.run(id, ruleId);
+    linkCategories(db, ruleId, categorySet(category, categories));
     return db.prepare("SELECT * FROM rules WHERE id = ?").get(ruleId) as RuleRow;
   });
 
   return insert();
+}
+
+/** The rule's full category set: primary first, then extras, de-duplicated, empties dropped. */
+function categorySet(
+  primary: string | null | undefined,
+  extras: string[] | undefined,
+): string[] {
+  const out: string[] = [];
+  for (const c of [primary, ...(extras ?? [])]) {
+    if (c && !out.includes(c)) out.push(c);
+  }
+  return out;
+}
+
+/** Replace a rule's category links with the given full set. */
+function linkCategories(
+  db: Db,
+  ruleId: number | bigint,
+  categories: string[],
+): void {
+  db.prepare("DELETE FROM rule_categories WHERE rule_id = ?").run(ruleId);
+  const link = db.prepare(
+    "INSERT INTO rule_categories (rule_id, category) VALUES (?, ?)",
+  );
+  for (const c of categories) link.run(ruleId, c);
+}
+
+/**
+ * Keep rules.category (the primary) consistent with the rule_categories set
+ * after edits: if the current primary is gone (or never set), re-point it to the
+ * first remaining category, or null when none remain.
+ */
+function reconcilePrimaryCategory(db: Db, ruleId: number): void {
+  const current = db
+    .prepare("SELECT category FROM rules WHERE id = ?")
+    .get(ruleId) as { category: string | null };
+  const remaining = (
+    db
+      .prepare(
+        "SELECT category FROM rule_categories WHERE rule_id = ? ORDER BY category",
+      )
+      .all(ruleId) as { category: string }[]
+  ).map((r) => r.category);
+  if (current.category && remaining.includes(current.category)) return;
+  db.prepare("UPDATE rules SET category = ? WHERE id = ?").run(
+    remaining[0] ?? null,
+    ruleId,
+  );
 }
 
 /**
@@ -97,6 +147,20 @@ export function configureRule(
       "DELETE FROM rule_languages WHERE rule_id = ? AND language_id = ?",
     );
     for (const id of removeLangIds) unlinkLang.run(rule.id, id);
+
+    const addCategories = opts.addCategories ?? [];
+    const removeCategories = opts.removeCategories ?? [];
+    const linkCat = db.prepare(
+      "INSERT OR IGNORE INTO rule_categories (rule_id, category) VALUES (?, ?)",
+    );
+    for (const c of addCategories) linkCat.run(rule.id, c);
+    const unlinkCat = db.prepare(
+      "DELETE FROM rule_categories WHERE rule_id = ? AND category = ?",
+    );
+    for (const c of removeCategories) unlinkCat.run(rule.id, c);
+    if (addCategories.length || removeCategories.length) {
+      reconcilePrimaryCategory(db, rule.id);
+    }
 
     if (binding) setRuleAction(db, rule.id, binding);
     if (opts.removeAction) removeRuleAction(db, rule.id, opts.removeAction);
@@ -188,6 +252,8 @@ export function upsertRule(db: Db, meta: RuleMeta): void {
       "INSERT INTO rule_languages (rule_id, language_id) VALUES (?, ?)",
     );
     for (const id of languageIds) link.run(ruleId, id);
+
+    linkCategories(db, ruleId, categorySet(meta.category, meta.categories));
   });
 
   tx();
