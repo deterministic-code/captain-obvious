@@ -19,10 +19,15 @@ export type RuleCategory =
   | "performance"
   | "api-stability"
   | "dead-code"
-  | "testing";
+  | "testing"
+  | "governance";
 
-/** Git stage the rule runs at today (metadata for future hook-link seeding). */
-export type Stage = "pre-commit" | "pre-push";
+/**
+ * When the rule runs. The git stages fire locally (pre-commit / pre-push);
+ * `server` marks a governance policy that only GitHub can enforce (branch
+ * protection / rulesets) and therefore has no local runner.
+ */
+export type Stage = "pre-commit" | "pre-push" | "server";
 
 /** Normalized violation shape, identical across every rule (lint-shared.mjs). */
 export interface Violation {

@@ -18,6 +18,10 @@ function count(table: string): number {
     .n;
 }
 
+// Total language links = sum over rules of their language count. Governance
+// rules are language-agnostic (languages: []) so they contribute zero.
+const LANGUAGE_LINKS = RULES.reduce((n, r) => n + r.meta.languages.length, 0);
+
 describe("seedRules", () => {
   it("seeds every rule plus its languages and links", () => {
     const summary = seedRules(db, RULES);
@@ -25,8 +29,7 @@ describe("seedRules", () => {
     expect(summary.languages).toEqual(["javascript", "typescript"]);
     expect(count("rules")).toBe(RULES.length);
     expect(count("languages")).toBe(2);
-    // every rule links to both JS/TS languages
-    expect(count("rule_languages")).toBe(RULES.length * 2);
+    expect(count("rule_languages")).toBe(LANGUAGE_LINKS);
   });
 
   it("is idempotent", () => {
@@ -34,7 +37,7 @@ describe("seedRules", () => {
     seedRules(db, RULES);
     expect(count("rules")).toBe(RULES.length);
     expect(count("languages")).toBe(2);
-    expect(count("rule_languages")).toBe(RULES.length * 2);
+    expect(count("rule_languages")).toBe(LANGUAGE_LINKS);
   });
 
   it("preserves a user-disabled rule across re-seed", () => {

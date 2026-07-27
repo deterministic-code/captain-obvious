@@ -236,4 +236,44 @@ export const RULES: LintRule[] = [
     modes: RATCHET_MODES,
     stage: "pre-commit",
   }),
+  // Governance rules police the repo/workflow, not source files: language-agnostic
+  // (languages: []) and enforced per environment via action bindings (e.g. halt on
+  // github, warn on claude). The runnable ones delegate to a hooks/git/<slug>.mjs;
+  // gov-require-pr is server-only (stage: "server") and carries no local runner.
+  defineRule({
+    slug: "gov-main-ci-green",
+    name: "Block on red main CI",
+    category: "governance",
+    description:
+      "Blocks commits/merges while the latest Tests run on main failed in a blocking job (gh). Bypass: ALLOW_COMMIT_ON_RED_MAIN=1.",
+    languages: [],
+    config: { branch: "main", blockingJobs: ["unit", "integration"] },
+    ratchetable: false,
+    modes: ["push", "warn"],
+    stage: "pre-push",
+  }),
+  defineRule({
+    slug: "gov-no-push-to-main",
+    name: "No direct commits on main",
+    category: "governance",
+    description:
+      "Blocks committing directly on main/master; work must happen on a branch. Bypass: ALLOW_EDIT_ON_MAIN=1.",
+    languages: [],
+    config: { branches: ["main", "master"] },
+    ratchetable: false,
+    modes: ["push", "warn"],
+    stage: "pre-push",
+  }),
+  defineRule({
+    slug: "gov-require-pr",
+    name: "Require pull request",
+    category: "governance",
+    description:
+      "Policy: changes to main must land via pull request. Enforced server-side by GitHub branch protection (.github/rulesets/main.json); no local runner.",
+    languages: [],
+    config: { branch: "main", ruleset: ".github/rulesets/main.json" },
+    ratchetable: false,
+    modes: [],
+    stage: "server",
+  }),
 ];
