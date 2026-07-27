@@ -18,19 +18,33 @@ const CATEGORIES: RuleCategory[] = [
   "api-stability",
   "dead-code",
   "testing",
+  "formatting",
   "governance",
 ];
 
+const ACTION_KINDS = ["inferred", "script", "output"];
+
 describe("RULES registry", () => {
-  it("has 23 rules with unique slugs", () => {
-    expect(RULES).toHaveLength(23);
+  it("has 24 rules with unique slugs", () => {
+    expect(RULES).toHaveLength(24);
     const slugs = RULES.map((r) => r.meta.slug);
-    expect(new Set(slugs).size).toBe(23);
+    expect(new Set(slugs).size).toBe(24);
   });
 
   it("uses only known categories", () => {
     for (const r of RULES) {
       expect(CATEGORIES).toContain(r.meta.category);
+    }
+  });
+
+  it("declares only valid actions (script actions carry a scriptPath)", () => {
+    for (const r of RULES) {
+      for (const a of r.meta.actions ?? []) {
+        expect(ACTION_KINDS, r.meta.slug).toContain(a.kind);
+        if (a.kind === "script") {
+          expect(a.scriptPath, r.meta.slug).toBeTruthy();
+        }
+      }
     }
   });
 

@@ -86,12 +86,14 @@ CREATE TABLE IF NOT EXISTS rule_actions (
 CREATE TABLE IF NOT EXISTS fixes (
   id          INTEGER PRIMARY KEY,
   rule_id     INTEGER NOT NULL REFERENCES rules(id) ON DELETE CASCADE,
-  kind        TEXT NOT NULL CHECK (kind IN ('inferred', 'script')),
+  kind        TEXT NOT NULL CHECK (kind IN ('inferred', 'script', 'output')),
   language_id INTEGER REFERENCES languages(id),   -- script may be lang-specific
   script_path TEXT,
   script_body TEXT,
   description TEXT,
-  CHECK (kind = 'inferred' OR script_path IS NOT NULL OR script_body IS NOT NULL)
+  -- Only 'script' actions need a script; 'inferred' (model-driven) and 'output'
+  -- (report-only) actions carry none.
+  CHECK (kind IN ('inferred', 'output') OR script_path IS NOT NULL OR script_body IS NOT NULL)
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS idx_hooks_env       ON hooks(environment_id);

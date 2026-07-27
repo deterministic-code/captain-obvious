@@ -5,6 +5,7 @@
  * bearing — see src/server/serve.ts for the routes that expose them.
  */
 import { configureActionType } from "../db/actions.js";
+import type { RuleAction } from "../db/fixes.js";
 import { configureRule } from "../db/rules.js";
 import { seedRules, type SeedSummary } from "../db/seed.js";
 import type { Db } from "../db/open.js";
@@ -32,6 +33,11 @@ export interface RuleView {
   config: Record<string, unknown> | null;
   defaultAction: ActionView | null;
   envActions: EnvActionView[];
+  /**
+   * The rule's remediation/output actions (fixes table). Additive field — the
+   * prebuilt panel ignores it; CLI (`show-rule`) and API consumers read it.
+   */
+  actions: RuleAction[];
 }
 
 function parseConfig(json: string | null): Record<string, unknown> | null {
@@ -72,6 +78,32 @@ export function listRules(db: Db): RuleView[] {
     byRule.set(a.ruleId, list);
   }
 
+  // Rule actions (fixes table): one grouped read, then split per rule.
+  const fixRows = db
+    .prepare(
+      `SELECT rule_id AS ruleId, kind, script_path AS scriptPath,
+              script_body AS scriptBody, description
+         FROM fixes ORDER BY id`,
+    )
+    .all() as {
+    ruleId: number;
+    kind: RuleAction["kind"];
+    scriptPath: string | null;
+    scriptBody: string | null;
+    description: string | null;
+  }[];
+  const fixesByRule = new Map<number, RuleAction[]>();
+  for (const f of fixRows) {
+    const list = fixesByRule.get(f.ruleId) ?? [];
+    list.push({
+      kind: f.kind,
+      ...(f.scriptPath !== null ? { scriptPath: f.scriptPath } : {}),
+      ...(f.scriptBody !== null ? { scriptBody: f.scriptBody } : {}),
+      ...(f.description !== null ? { description: f.description } : {}),
+    });
+    fixesByRule.set(f.ruleId, list);
+  }
+
   return rules.map((r) => {
     const bindings = byRule.get(r.id) ?? [];
     const def = bindings.find((b) => b.environment === null);
@@ -88,6 +120,7 @@ export function listRules(db: Db): RuleView[] {
       config: parseConfig(r.config_json),
       defaultAction: def ? { type: def.type, delayMs: def.delayMs } : null,
       envActions,
+      actions: fixesByRule.get(r.id) ?? [],
     };
   });
 }

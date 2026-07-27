@@ -50,6 +50,26 @@ export const RULES: LintRule[] = [
     stage: "pre-commit",
   }),
   defineRule({
+    slug: "lint-prettier",
+    name: "Prettier formatting",
+    category: "formatting",
+    description:
+      "Flags files that are not Prettier-formatted (prettier --check); the fix action runs prettier --write.",
+    languages: JSTS,
+    config: null,
+    ratchetable: false,
+    modes: FILE_MODES,
+    stage: "pre-commit",
+    actions: [
+      {
+        kind: "script",
+        scriptPath: "hooks/git/lint-prettier.mjs",
+        description:
+          "Reformat with prettier --write (invoke the hook with --fix).",
+      },
+    ],
+  }),
+  defineRule({
     slug: "lint-dup",
     name: "Token duplication",
     category: "duplication",

@@ -37,6 +37,7 @@
     "better-sqlite3": "^13.0.1",
     "jscpd": "^3.5.10",
     "knip": "^6.24.0",
+    "prettier": "^3.4.0",
     "typescript": "^5.7.0",
     "yaml": "^2.6.0"
   },
