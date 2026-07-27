@@ -1,6 +1,7 @@
 import { nameFor } from "../rules/languages.js";
 import type { LintRule } from "../rules/types.js";
 import type { Db } from "./open.js";
+import { logEvent } from "./audit.js";
 import { setRuleFixesTx } from "./fixes.js";
 import { requireRule } from "./lookups.js";
 import { upsertRule } from "./rules.js";
@@ -52,6 +53,8 @@ export function seedRules(
     }
   });
   tx();
+
+  logEvent("rules.seeded", `seeded ${selected.length} rule(s)`);
 
   return {
     seeded: selected.map((r) => r.meta.slug),

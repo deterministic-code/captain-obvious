@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { configureActionType } from "../db/actions.js";
 import { csv, parseArgs, type ParsedArgs } from "../db/args.js";
+import { openAuditDb, resolveAuditDbPath, useAuditLog } from "../db/audit.js";
 import { addLanguage } from "../db/languages.js";
 import { openDb, resolveDbPath, type Db } from "../db/open.js";
 import { addRule, configureRule } from "../db/rules.js";
@@ -25,9 +26,11 @@ commands:
   show-rule        <rule-slug>       print a rule (incl. its actions) as JSON
   init             create and seed the registry DB
   serve            [--port <n>] [--host <h>]   run the web control panel + /api
+  prune-logs       [--days <n>]      delete audit logs older than n days (default 30, max 60)
 
 global:
-  --db <path>      registry DB path (default: CAPTAIN_OBVIOUS_DB env or data/captain-obvious.db)
+  --db <path>       registry DB path (default: CAPTAIN_OBVIOUS_DB env or data/captain-obvious.db)
+  --audit-db <path> audit-log DB path (default: CAPTAIN_OBVIOUS_AUDIT_DB env or data/audit-log.db)
 `;
 
 function fail(message: string): never {
@@ -163,6 +166,28 @@ function runShowRule(args: ParsedArgs): void {
   });
 }
 
+const MAX_PRUNE_DAYS = 60;
+const DEFAULT_PRUNE_DAYS = 30;
+
+function runPruneLogs(args: ParsedArgs): void {
+  const daysRaw = args.values.get("days");
+  const days = daysRaw ? parseIntStrict(daysRaw, "--days") : DEFAULT_PRUNE_DAYS;
+  if (days < 1 || days > MAX_PRUNE_DAYS) {
+    fail(`--days must be between 1 and ${MAX_PRUNE_DAYS}`);
+  }
+  const db = openAuditDb(resolveAuditDbPath({ db: args.values.get("audit-db") }));
+  try {
+    const info = db
+      .prepare("DELETE FROM logs WHERE created < datetime('now', ?)")
+      .run(`-${days} days`);
+    process.stdout.write(
+      `captain-obvious: pruned ${info.changes} log(s) older than ${days} day(s)\n`,
+    );
+  } finally {
+    db.close();
+  }
+}
+
 function runServe(args: ParsedArgs): void {
   const portRaw = args.values.get("port");
   startServer({
@@ -181,7 +206,17 @@ const COMMANDS: Record<string, (args: ParsedArgs) => void> = {
   "show-rule": runShowRule,
   init: runInit,
   serve: runServe,
+  "prune-logs": runPruneLogs,
 };
+
+/** Commands that change registry state; only these open the audit-log sink. */
+const MUTATING_COMMANDS = new Set([
+  "add-language",
+  "add-rule",
+  "configure-rule",
+  "configure-action",
+  "seed-rules",
+]);
 
 function main(argv: string[]): void {
   const [command, ...rest] = argv;
@@ -197,10 +232,19 @@ function main(argv: string[]): void {
   } catch (err) {
     fail(err instanceof Error ? err.message : String(err));
   }
+  const auditDb = MUTATING_COMMANDS.has(command)
+    ? openAuditDb(resolveAuditDbPath({ db: args.values.get("audit-db") }))
+    : undefined;
+  if (auditDb) useAuditLog(auditDb);
   try {
     handler(args);
   } catch (err) {
     fail(err instanceof Error ? err.message : String(err));
+  } finally {
+    if (auditDb) {
+      useAuditLog(undefined);
+      auditDb.close();
+    }
   }
 }
 

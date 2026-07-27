@@ -1,3 +1,4 @@
+import { logEvent } from "./audit.js";
 import type { Db } from "./open.js";
 import type { AddLanguageOpts, LanguageRow } from "./types.js";
 
@@ -16,6 +17,7 @@ export function addLanguage(db: Db, opts: AddLanguageOpts): LanguageRow {
     const info = db
       .prepare("INSERT INTO languages (slug, name, extensions) VALUES (?, ?, ?)")
       .run(slug, name, extensionsJson);
+    logEvent("language.added", `added language ${slug}`);
     return db
       .prepare("SELECT * FROM languages WHERE id = ?")
       .get(info.lastInsertRowid) as LanguageRow;
