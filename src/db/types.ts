@@ -39,6 +39,24 @@ export interface RuleActionRow {
   delay_ms: number | null;
 }
 
+/**
+ * A rule action's kind (stored in the `fixes` table). 'script' runs a
+ * deterministic fix (e.g. prettier --write); 'inferred' delegates the fix to the
+ * model/inference; 'output' just reports to the user. A rule may have zero
+ * actions (check only).
+ */
+export type FixKind = "inferred" | "script" | "output";
+
+export interface FixRow {
+  id: number;
+  rule_id: number;
+  kind: string;
+  language_id: number | null;
+  script_path: string | null;
+  script_body: string | null;
+  description: string | null;
+}
+
 // --- Command option bags --------------------------------------------------
 
 export interface AddLanguageOpts {

@@ -1,6 +1,8 @@
 import { nameFor } from "../rules/languages.js";
 import type { LintRule } from "../rules/types.js";
 import type { Db } from "./open.js";
+import { setRuleFixesTx } from "./fixes.js";
+import { requireRule } from "./lookups.js";
 import { upsertRule } from "./rules.js";
 
 export interface SeedOpts {
@@ -15,7 +17,8 @@ export interface SeedSummary {
 
 /**
  * Seed the registry from the rule set: auto-seed every referenced language, then
- * upsert each rule (and its language links). Idempotent. Does not touch action
+ * upsert each rule (and its language links) and sync its actions (fixes table)
+ * when the rule declares any. Idempotent. Does not touch per-environment action
  * bindings. Pass `only` to seed a single rule by slug.
  */
 export function seedRules(
@@ -38,7 +41,15 @@ export function seedRules(
   );
   const tx = db.transaction(() => {
     for (const slug of languages) ensureLang.run(slug, nameFor(slug));
-    for (const r of selected) upsertRule(db, r.meta);
+    for (const r of selected) {
+      upsertRule(db, r.meta);
+      // `undefined` = leave a rule's actions alone; `[]` = clear. We're already
+      // in a transaction, so use the non-transactional writer.
+      if (r.meta.actions !== undefined) {
+        const rule = requireRule(db, r.meta.slug);
+        setRuleFixesTx(db, rule.id, r.meta.actions);
+      }
+    }
   });
   tx();
 

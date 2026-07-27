@@ -7,6 +7,8 @@ import { addRule, configureRule } from "../db/rules.js";
 import { seedRules } from "../db/seed.js";
 import type { ActionBinding } from "../db/types.js";
 import { RULES } from "../rules/index.js";
+import { listRules } from "../server/registry.js";
+import { startServer } from "../server/serve.js";
 
 const USAGE = `usage: captain-obvious <command> [flags]
 
@@ -19,7 +21,9 @@ commands:
                    [--set-action <type>[:<env>][:<delayMs>]] [--remove-action <env|default|all>]
   configure-action <type-slug> [--add] [--name <n>]
   seed-rules       [--only <slug>]   populate the registry from the bundled rule set
+  show-rule        <rule-slug>       print a rule (incl. its actions) as JSON
   init             create and seed the registry DB
+  serve            [--port <n>] [--host <h>]   run the web control panel + /api
 
 global:
   --db <path>      registry DB path (default: CAPTAIN_OBVIOUS_DB env or data/captain-obvious.db)
@@ -145,13 +149,34 @@ function runInit(args: ParsedArgs): void {
   process.stdout.write(`captain-obvious: initialized registry at ${path}\n`);
 }
 
+function runShowRule(args: ParsedArgs): void {
+  const slug = args._;
+  if (!slug) usage();
+  withDb(args, (db) => {
+    const rule = listRules(db).find((r) => r.slug === slug);
+    if (!rule) fail(`unknown rule: ${slug}`);
+    done(`rule ${slug}`, rule);
+  });
+}
+
+function runServe(args: ParsedArgs): void {
+  const portRaw = args.values.get("port");
+  startServer({
+    port: portRaw ? parseIntStrict(portRaw, "--port") : undefined,
+    host: args.values.get("host"),
+    dbPath: args.values.get("db"),
+  }).catch((err) => fail(err instanceof Error ? err.message : String(err)));
+}
+
 const COMMANDS: Record<string, (args: ParsedArgs) => void> = {
   "add-language": runAddLanguage,
   "add-rule": runAddRule,
   "configure-rule": runConfigureRule,
   "configure-action": runConfigureAction,
   "seed-rules": runSeedRules,
+  "show-rule": runShowRule,
   init: runInit,
+  serve: runServe,
 };
 
 function main(argv: string[]): void {

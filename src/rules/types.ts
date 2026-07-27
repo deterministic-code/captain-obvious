@@ -20,6 +20,7 @@ export type RuleCategory =
   | "api-stability"
   | "dead-code"
   | "testing"
+  | "formatting"
   | "governance";
 
 /**
@@ -38,6 +39,19 @@ export interface Violation {
   path?: string;
 }
 
+/**
+ * An action a rule offers beyond the check itself. 'script' runs a deterministic
+ * fix (e.g. prettier --write); 'inferred' delegates the fix to the model;
+ * 'output' just reports to the user. Mirrors the db `FixKind` union (kept inline
+ * so the rule layer stays decoupled from the db layer).
+ */
+export interface RuleActionMeta {
+  kind: "inferred" | "script" | "output";
+  /** For 'script' actions: the hook/script that applies the fix. */
+  scriptPath?: string;
+  description?: string;
+}
+
 /** DB-facing metadata — the source that `seed-rules` writes into the registry. */
 export interface RuleMeta {
   slug: string;
@@ -50,6 +64,12 @@ export interface RuleMeta {
   ratchetable: boolean;
   modes: LintMode[];
   stage: Stage;
+  /**
+   * Remediation/output actions (rows in the `fixes` table). A rule may have
+   * none (check only). On re-seed: `undefined` leaves existing actions
+   * untouched; `[]` clears them.
+   */
+  actions?: RuleActionMeta[];
 }
 
 /** The common wrapper: metadata + execution. */

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { getRuleFixes } from "../fixes.js";
 import { openDb, type Db } from "../open.js";
 import { seedRules } from "../seed.js";
 import { RULES } from "../../rules/index.js";
@@ -72,5 +73,15 @@ describe("seedRules", () => {
     expect(() => seedRules(db, RULES, { only: "lint-nope" })).toThrow(
       /unknown rule/,
     );
+  });
+
+  it("seeds a rule's actions into the fixes table (idempotently)", () => {
+    seedRules(db, RULES);
+    const actions = getRuleFixes(db, "lint-prettier");
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({ kind: "script" });
+    const before = count("fixes");
+    seedRules(db, RULES);
+    expect(count("fixes")).toBe(before);
   });
 });
