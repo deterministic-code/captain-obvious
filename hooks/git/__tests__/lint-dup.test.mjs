@@ -133,6 +133,23 @@ describe("lint-dup / isImportOnlyFragment", () => {
   test("an empty fragment is not import-only", () => {
     expect(isImportOnlyFragment("")).toBe(false);
   });
+
+  test("a non-string fragment is not import-only", () => {
+    expect(isImportOnlyFragment(null)).toBe(false);
+    expect(isImportOnlyFragment(undefined)).toBe(false);
+  });
+
+  // A closer line `} from "x";` as the very FIRST line (never inImport) matches
+  // IMPORT_MEMBER_RE and, because it carries `from`, sets sawImport directly.
+  test("a lone `} from \"x\";` closer is import-only via the member+from branch", () => {
+    expect(isImportOnlyFragment('} from "x";')).toBe(true);
+  });
+
+  test("comment-only and blank lines are stripped before the import scan", () => {
+    expect(
+      isImportOnlyFragment('// leading note\n\nimport { a } from "x";'),
+    ).toBe(true);
+  });
 });
 
 describe("lint-dup / jscpdIgnoreGlobs", () => {

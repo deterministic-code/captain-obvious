@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -13,7 +13,11 @@ import {
   SUPPORTED_EXTS,
   EXCLUDED_PATH_PARTS,
 } from "../lint-empty-catch.mjs";
-import { cleanupTmp } from "./test-helpers.mjs";
+import {
+  cleanupTmp,
+  commitAllIn,
+  makeTempGitRepo,
+} from "./test-helpers.mjs";
 
 describe("findViolations", () => {
   test("empty src returns no violations", () => {
@@ -68,6 +72,19 @@ describe("findViolations", () => {
 
   test("catch body with nested braces and a statement is non-empty", () => {
     const src = `try { f(); } catch (e) { if (x) { y(); } }\n`;
+    expect(findViolations(src)).toEqual([]);
+  });
+
+  test("nested braces in the catch body exercise depth tracking and are non-empty", () => {
+    // The inner `{ ... }` drives the depth++/depth-- bookkeeping; nested block
+    // text is still body content, so the catch is not flagged empty.
+    const src = `try { f(); } catch (e) { while (a) { b(); } }\n`;
+    expect(findViolations(src)).toEqual([]);
+  });
+
+  test("catch with an unbalanced (never-closed) brace is skipped, not flagged", () => {
+    // No matching `}` before EOF → depth stays > 0 → the scanner bails.
+    const src = `try { f(); } catch (e) { `;
     expect(findViolations(src)).toEqual([]);
   });
 
@@ -228,6 +245,20 @@ describe("lintFile", () => {
     const violations = await lintFile(p);
     expect(violations).toEqual([]);
   });
+
+  test("resolves a relative path against `cwd` and reports the violation", async () => {
+    await writeFile(join(tmpRoot, "rel.ts"), `try { f(); } catch {}\n`, "utf8");
+    const violations = await lintFile("rel.ts", tmpRoot);
+    expect(violations.length).toBe(1);
+    expect(violations[0].path).toBe("rel.ts");
+  });
+
+  test("rethrows a non-ENOENT read error (e.g. EISDIR on a directory path)", async () => {
+    const dir = join(tmpRoot, "adir");
+    await mkdir(dir);
+    // Reading a directory as a file surfaces EISDIR, which is not swallowed.
+    await expect(lintFile(dir)).rejects.toMatchObject({ code: "EISDIR" });
+  });
 });
 
 describe("formatViolation", () => {
@@ -304,5 +335,48 @@ describe("main", () => {
     await writeFile(md, `try { f(); } catch {}\n`, "utf8");
     await main(["node", "script.mjs", "--files", md]);
     expect(exitSpy).not.toHaveBeenCalled();
+  });
+
+  test("--staged over a clean repo prints the staged-diff OK line", async () => {
+    const repo = await makeTempGitRepo("lec-staged-");
+    await writeFile(
+      join(repo, "clean.ts"),
+      `try { f(); } catch (e) { console.log(e); }\n`,
+      "utf8",
+    );
+    await commitAllIn(repo, "seed");
+    await main(["node", "script.mjs", "--staged"], { cwd: repo });
+    expect(exitSpy).not.toHaveBeenCalled();
+    const out = stdoutSpy.mock.calls.map((c) => c[0]).join("");
+    expect(out).toMatch(/no empty catch blocks in staged diff/);
+    await cleanupTmp(repo);
+  });
+
+  test("--all over a repo with an empty catch flags it and exits 1", async () => {
+    const repo = await makeTempGitRepo("lec-all-");
+    await writeFile(join(repo, "bad.ts"), `try { f(); } catch {}\n`, "utf8");
+    await commitAllIn(repo, "seed");
+    await expect(
+      main(["node", "script.mjs", "--all"], { cwd: repo }),
+    ).rejects.toThrow(/__exit__:1/);
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    const err = stderrSpy.mock.calls.map((c) => c[0]).join("");
+    expect(err).toContain("empty catch block");
+    await cleanupTmp(repo);
+  });
+
+  test("--all over a clean repo prints the in-repo OK line", async () => {
+    const repo = await makeTempGitRepo("lec-all-clean-");
+    await writeFile(
+      join(repo, "clean.ts"),
+      `try { f(); } catch (e) { console.log(e); }\n`,
+      "utf8",
+    );
+    await commitAllIn(repo, "seed");
+    await main(["node", "script.mjs", "--all"], { cwd: repo });
+    expect(exitSpy).not.toHaveBeenCalled();
+    const out = stdoutSpy.mock.calls.map((c) => c[0]).join("");
+    expect(out).toMatch(/no empty catch blocks in repo/);
+    await cleanupTmp(repo);
   });
 });

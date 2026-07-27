@@ -102,4 +102,55 @@ describe("clusterTier + clusterViolation", () => {
     ]);
     expect(clusterTier(clusters[0])).toBe("cross-file");
   });
+
+  // Two differently-named twins in ONE file: the files>1 test fails, so the
+  // names>1 disjunct is what keeps the cluster, and the tier is same-file.
+  test("two differently-named twins in the same file are tier 'same-file'", () => {
+    const bothInOne = `${CAMEL_TO_SNAKE}\n${PASCAL_OR_CAMEL}`;
+    const clusters = functionClones([subtrees("scripts/a.mjs", bothInOne)]);
+    expect(clusters).toHaveLength(1);
+    expect(clusterTier(clusters[0])).toBe("same-file");
+    const v = clusterViolation(clusters[0], "/repo");
+    expect(v.kind).toContain("same-file");
+    expect(v.detail).toContain("collapse to one");
+  });
+
+  // clusterViolation with no explicit primary anchors on the first non-canonical
+  // site and normalizes absolute member paths to repo-relative in the sites list.
+  test("absolute member paths are rendered repo-relative in the sites list", () => {
+    const clusters = functionClones([
+      subtrees("/repo/scripts/a.mjs", CAMEL_TO_SNAKE),
+      subtrees("/repo/scripts/b.mjs", PASCAL_OR_CAMEL),
+    ]);
+    const v = clusterViolation(clusters[0], "/repo");
+    expect(v.path).toBe("scripts/a.mjs");
+    expect(v.detail).toContain("scripts/a.mjs:");
+    expect(v.detail).toContain("scripts/b.mjs:");
+    expect(v.detail).not.toContain("/repo/scripts");
+  });
+
+  // An explicit primary (the diff-hit member in ratchet mode) overrides the
+  // non-canonical/first-site anchor fallback.
+  test("an explicit primary anchors the violation", () => {
+    const cluster = [
+      { path: "/repo/x.mjs", name: "one", start: 3, end: 9, nodeCount: 20 },
+      { path: "/repo/y.mjs", name: "two", start: 4, end: 10, nodeCount: 20 },
+    ];
+    const v = clusterViolation(cluster, "/repo", cluster[1]);
+    expect(v.path).toBe("y.mjs");
+    expect(v.line).toBe(4);
+  });
+
+  // Every site is under emitter-sdk/, so cluster.find(!isCanonical) is undefined
+  // and the anchor falls back to cluster[0]; an unnamed member renders "(anon)".
+  test("all-canonical cluster falls back to the first site and shows (anon)", () => {
+    const cluster = [
+      { path: "/repo/emitter-sdk/a.mjs", name: null, start: 2, end: 8, nodeCount: 20 },
+      { path: "/repo/emitter-sdk/b.mjs", name: "named", start: 5, end: 11, nodeCount: 20 },
+    ];
+    const v = clusterViolation(cluster, "/repo");
+    expect(v.path).toBe("emitter-sdk/a.mjs");
+    expect(v.line).toBe(2);
+    expect(v.detail).toContain("(anon)");
+  });
 });

@@ -25,6 +25,8 @@ export function findViolations(src) {
   let m;
   while ((m = re.exec(stripped)) !== null) {
     const openIdx = stripped.indexOf("{", m.index);
+    // Unreachable: the catch regex guarantees a following "{", so indexOf never returns -1.
+    /* v8 ignore next */
     if (openIdx === -1) continue;
     let depth = 1;
     let j = openIdx + 1;

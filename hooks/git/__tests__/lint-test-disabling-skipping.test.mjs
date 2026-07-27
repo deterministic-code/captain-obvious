@@ -385,6 +385,37 @@ describe("findViolations — expect(actual, /re/) with no matcher (universal)", 
       ).toContain("expect-no-matcher");
     }
   });
+
+  // A top-level comma with array/object literals in the args exercises the
+  // nested `[`/`{`/`]`/`}` depth bookkeeping in scanExpectArgs; the outer comma
+  // is still a bare no-op expect.
+  test("flags expect(x, [{ k: 1 }]); despite nested bracket/brace pairs", () => {
+    const v = findViolations(
+      `test("t", () => { expect(actual, [{ k: 1 }]); });\n`,
+      "unit",
+    );
+    expect(v.map((x) => x.kind)).toContain("expect-no-matcher");
+  });
+
+  // A comma nested *inside* an object/array is NOT a top-level arg separator,
+  // so expect({ a: 1, b: 2 }) with a single argument is not a no-op.
+  test("does NOT flag expect({ a: 1, b: 2 }).toEqual(...) — comma is nested", () => {
+    const v = findViolations(
+      `test("t", () => { expect({ a: 1, b: 2 }).toEqual(x); });\n`,
+      "unit",
+    );
+    expect(v.map((x) => x.kind)).not.toContain("expect-no-matcher");
+  });
+
+  // Whitespace between the closing paren and the chained matcher must be
+  // skipped before the `.` check, so a matcher on the next line is honored.
+  test("does NOT flag expect(x, msg)\\n  .toBe(y) — whitespace-then-dot is a chained matcher", () => {
+    const v = findViolations(
+      `test("t", () => { expect(x, "msg")\n  .toBe(1); });\n`,
+      "unit",
+    );
+    expect(v.map((x) => x.kind)).not.toContain("expect-no-matcher");
+  });
 });
 
 describe("lintFile", () => {
@@ -418,6 +449,22 @@ describe("lintFile", () => {
   test("missing file returns empty (does not throw)", async () => {
     const v = await lintFile("frontend/e2e/does-not-exist.spec.ts", tmp);
     expect(v).toEqual([]);
+  });
+
+  // With no cwd, the path is used as-is (no resolve) — pass an absolute path.
+  test("absolute path with no cwd is read directly", async () => {
+    const abs = join(tmp, "frontend/e2e/direct.spec.ts");
+    await writeFile(abs, `test('bad', async ({ page }) => { await page.request.get('/'); });\n`);
+    const v = await lintFile(abs);
+    expect(v.length).toBeGreaterThan(0);
+    expect(v[0].path).toBe(abs);
+  });
+
+  // A non-ENOENT read error (EISDIR when the path is a directory) is rethrown.
+  test("rethrows a non-ENOENT read error (EISDIR on a directory)", async () => {
+    const dir = join(tmp, "frontend/e2e/adir.spec.ts");
+    await mkdir(dir);
+    await expect(lintFile(dir)).rejects.toMatchObject({ code: "EISDIR" });
   });
 });
 

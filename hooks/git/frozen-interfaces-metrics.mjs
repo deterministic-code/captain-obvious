@@ -48,6 +48,8 @@ function collapse(text) {
 }
 
 function normalizeSig(sf, params, type) {
+  // Unreachable: every caller passes a defined array (decls have .parameters; the getter passes []).
+  /* v8 ignore next */
   const inner = (params ?? []).map((p) => p.getText(sf)).join(", ");
   const ret = type ? `: ${type.getText(sf)}` : "";
   return collapse(`(${inner})${ret}`);

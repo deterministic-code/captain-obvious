@@ -166,9 +166,13 @@ function disjointClusterDeps(components) {
     for (let j = i + 1; j < nonEmpty.length; j++) {
       const a = nonEmpty[i];
       const b = nonEmpty[j];
+      // Dead false-path: cohesionGraph components are connected, so two non-empty clusters never share a dep; the first pair always returns.
+      /* v8 ignore else */
       if (![...a].some((d) => b.has(d))) {
         return { split: true, left: [...a].sort(), right: [...b].sort() };
       }
+      // Dead loop-back: the first disjoint pair always returns, so neither loop ever iterates a second time.
+      /* v8 ignore next 2 */
     }
   }
   return { split: false };

@@ -4,6 +4,8 @@ node_modules/
 dist/
 *.tsbuildinfo
 data/*.db
+coverage/
+.worktrees/
 
 # The prebuilt control-panel bundle is shipped (see package.json "files") and
 # has no source in this repo, so it must be committed despite the dist/ rule.

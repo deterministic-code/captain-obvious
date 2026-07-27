@@ -19,6 +19,8 @@ export function implementsClause(node) {
     if (h.token !== ts.SyntaxKind.ImplementsKeyword) continue;
     for (const t of h.types) {
       if (ts.isIdentifier(t.expression)) names.push(t.expression.text);
+      // Dead: this else re-checks isIdentifier(t.expression), false on the else branch, so the body never runs.
+      /* v8 ignore next 6 */
       else if (
         ts.isExpressionWithTypeArguments(t) &&
         ts.isIdentifier(t.expression)

@@ -208,4 +208,108 @@ describe("main --staged via git", () => {
     await expect(runStaged(tmp)).resolves.toBeUndefined();
     expect(exit).toBe(null);
   });
+
+  test("a clean staged diff prints the staged OK line and does not exit", async () => {
+    await commitModifyStage(
+      tmp,
+      "frontend/e2e/x.spec.ts",
+      `test('a', async ({ page }) => { await page.click('btn'); });\n`,
+      `test('a', async ({ page }) => { await page.click('btn'); await page.fill('i', 'v'); });\n`,
+    );
+    await expect(runStaged(tmp)).resolves.toBeUndefined();
+    expect(exit).toBe(null);
+    expect(outs.join("")).toMatch(/no synthetic test patterns and no honesty regressions in staged diff/);
+  });
+
+  // An added (status A) file is skipped by the ratchet; the absolute layer
+  // still runs, so a clean added file leaves the staged diff clean.
+  test("a brand-new clean test file passes both layers", async () => {
+    await stage(
+      tmp,
+      "frontend/e2e/new-clean.spec.ts",
+      `test('a', async ({ page }) => { await page.click('btn'); });\n`,
+    );
+    await expect(runStaged(tmp)).resolves.toBeUndefined();
+    expect(exit).toBe(null);
+  });
+
+  // A rename (status R) leaves the new path absent from HEAD, so readFromGit
+  // returns null for `before` and the ratchet skips the entry.
+  test("a renamed test file is skipped by the ratchet (before is absent from HEAD)", async () => {
+    await stage(
+      tmp,
+      "frontend/e2e/orig.spec.ts",
+      `test('a', async ({ page }) => { await page.click('btn'); });\n`,
+    );
+    await execFileAsync("git", ["commit", "-m", "init", "--quiet"], { cwd: tmp });
+    await execFileAsync(
+      "git",
+      ["mv", "frontend/e2e/orig.spec.ts", "frontend/e2e/renamed.spec.ts"],
+      { cwd: tmp },
+    );
+    await expect(runStaged(tmp)).resolves.toBeUndefined();
+    expect(exit).toBe(null);
+  });
+
+  test("--all mode scans the whole repo and flags a committed suppression", async () => {
+    await stage(
+      tmp,
+      "frontend/e2e/legacy.spec.ts",
+      `test.skip('a', () => {});\n`,
+    );
+    await execFileAsync("git", ["commit", "-m", "init", "--quiet"], { cwd: tmp });
+    await expect(
+      main(["node", "lint-test-disabling-skipping.mjs", "--all"], { cwd: tmp }),
+    ).rejects.toThrow("__EXIT__");
+    expect(exit).toBe(1);
+    expect(errors.join("")).toMatch(/skip/);
+  });
+
+  test("--all mode over a clean repo prints the in-repo OK line", async () => {
+    await stage(
+      tmp,
+      "frontend/e2e/ok.spec.ts",
+      `test('a', async ({ page }) => { await page.click('btn'); });\n`,
+    );
+    await execFileAsync("git", ["commit", "-m", "init", "--quiet"], { cwd: tmp });
+    await expect(
+      main(["node", "lint-test-disabling-skipping.mjs", "--all"], { cwd: tmp }),
+    ).resolves.toBeUndefined();
+    expect(exit).toBe(null);
+    expect(outs.join("")).toMatch(/no synthetic test patterns in repo/);
+  });
+
+  test("an e2e-helper (non-.test) file in scope is linted in --all", async () => {
+    await mkdir(join(tmp, "frontend/e2e/lib"), { recursive: true });
+    await stage(
+      tmp,
+      "frontend/e2e/lib/helper.ts",
+      `export const run = () => { test.skip('x', () => {}); };\n`,
+    );
+    await execFileAsync("git", ["commit", "-m", "init", "--quiet"], { cwd: tmp });
+    await expect(
+      main(["node", "lint-test-disabling-skipping.mjs", "--all"], { cwd: tmp }),
+    ).rejects.toThrow("__EXIT__");
+    expect(exit).toBe(1);
+  });
+
+  // listStagedTestFiles filters non-.test staged paths out of the ratchet scan.
+  test("a staged non-test file is ignored by the ratchet scan", async () => {
+    await mkdir(join(tmp, "src"), { recursive: true });
+    await stage(tmp, "src/util.ts", `export const x = 1;\n`);
+    await execFileAsync("git", ["commit", "-m", "init", "--quiet"], { cwd: tmp });
+    await stage(tmp, "src/util.ts", `export const x = 2;\n`);
+    await expect(runStaged(tmp)).resolves.toBeUndefined();
+    expect(exit).toBe(null);
+  });
+
+  test("an unknown mode prints usage and exits 2", async () => {
+    await expect(
+      main(["node", "lint-test-disabling-skipping.mjs", "--bogus"], {
+        cwd: tmp,
+      }),
+    ).rejects.toThrow("__EXIT__");
+    expect(exit).toBe(2);
+    expect(errors.join("")).toMatch(/Usage:/);
+  });
 });

@@ -102,6 +102,40 @@ describe("addRule", () => {
       /already exists/,
     );
   });
+
+  it("requires slug and name", () => {
+    expect(() => addRule(db, { slug: "", name: "X" })).toThrow(/requires/);
+  });
+
+  it("links hooks to the rule", () => {
+    const envId = (
+      db.prepare("SELECT id FROM environments WHERE slug = ?").get("claude") as {
+        id: number;
+      }
+    ).id;
+    db.prepare("INSERT INTO hooks (environment_id, slug) VALUES (?, ?)").run(
+      envId,
+      "dispatch-guard",
+    );
+    const row = addRule(db, {
+      slug: "lint-hooked",
+      name: "Hooked",
+      hooks: ["dispatch-guard"],
+    });
+    const links = db
+      .prepare("SELECT count(*) AS n FROM hook_rules WHERE rule_id = ?")
+      .get(row.id) as { n: number };
+    expect(links.n).toBe(1);
+  });
+
+  it("rethrows a non-unique insert error unchanged", () => {
+    // Dropping the rules table makes the INSERT fail with a non-UNIQUE error,
+    // so the transaction's catch must rethrow it as-is.
+    db.exec("DROP TABLE rules");
+    expect(() => addRule(db, { slug: "lint-x", name: "X" })).toThrow(
+      /no such table: rules/,
+    );
+  });
 });
 
 describe("configureRule", () => {
@@ -177,6 +211,52 @@ describe("configureRule", () => {
     });
     configureRule(db, "lint-max-lines", { removeAction: "all" });
     expect(ruleActions("lint-max-lines")).toHaveLength(0);
+  });
+
+  it("removes only the default binding, keeping env-scoped ones", () => {
+    configureRule(db, "lint-max-lines", {
+      setAction: { type: "warn", environment: null, delayMs: null },
+    });
+    configureRule(db, "lint-max-lines", {
+      setAction: { type: "halt", environment: "claude", delayMs: 500 },
+    });
+    configureRule(db, "lint-max-lines", { removeAction: "default" });
+    const rows = ruleActions("lint-max-lines");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].environment_id).not.toBeNull();
+  });
+
+  it("removes only the binding for a named environment", () => {
+    configureRule(db, "lint-max-lines", {
+      setAction: { type: "warn", environment: null, delayMs: null },
+    });
+    configureRule(db, "lint-max-lines", {
+      setAction: { type: "halt", environment: "claude", delayMs: 500 },
+    });
+    configureRule(db, "lint-max-lines", { removeAction: "claude" });
+    const rows = ruleActions("lint-max-lines");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].environment_id).toBeNull();
+  });
+
+  it("normalizes and updates config JSON", () => {
+    const row = configureRule(db, "lint-max-lines", {
+      setConfig: '{"maxLines":500}',
+    });
+    expect(row.config_json).toBe('{"maxLines":500}');
+  });
+
+  it("rejects invalid config JSON on update", () => {
+    expect(() =>
+      configureRule(db, "lint-max-lines", { setConfig: "{bad}" }),
+    ).toThrow(/not valid JSON/);
+  });
+
+  it("keeps the primary category when adding another category", () => {
+    addRule(db, { slug: "lint-keep", name: "Keep", category: "size" });
+    configureRule(db, "lint-keep", { addCategories: ["complexity"] });
+    expect(primaryCategory("lint-keep")).toBe("size");
+    expect(categories("lint-keep")).toEqual(["complexity", "size"]);
   });
 
   it("rejects an unknown rule", () => {

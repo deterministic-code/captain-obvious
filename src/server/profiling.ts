@@ -60,6 +60,8 @@ export interface ReportQuery {
 
 /** Nearest-rank percentile over an ascending-sorted array of numbers. */
 function percentile(sorted: number[], p: number): number {
+  // Unreachable: profilingReport only creates a bucket once an event pushes to it, so sorted is never empty.
+  /* v8 ignore next */
   if (sorted.length === 0) return 0;
   const rank = Math.ceil((p / 100) * sorted.length);
   return sorted[Math.min(rank, sorted.length) - 1];

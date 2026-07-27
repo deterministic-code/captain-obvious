@@ -38,4 +38,13 @@ describe("addLanguage", () => {
   it("requires slug and name", () => {
     expect(() => addLanguage(db, { slug: "", name: "x" })).toThrow(/requires/);
   });
+
+  it("rethrows a non-unique DB error unchanged", () => {
+    // Dropping the table makes the INSERT fail with a "no such table" error,
+    // which is NOT a UNIQUE violation, so the catch must rethrow it as-is.
+    db.exec("DROP TABLE languages");
+    expect(() => addLanguage(db, { slug: "rust", name: "Rust" })).toThrow(
+      /no such table: languages/,
+    );
+  });
 });

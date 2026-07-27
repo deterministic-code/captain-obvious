@@ -21,8 +21,9 @@ order, and which are advisory — so one package drives a strict repo and a lax 
   metrics + ratchets) with vitest `__tests__/`. **`hooks/claude/*.sh`** — the Claude Code guard hooks
   (`main-branch-guard`, `pre-merge-ci-guard`, `stop-unmerged-guard`, `dispatch-guard`, session status).
 - **`db/schema.sql`** — registry schema. **`web/dist/`** — the prebuilt control-panel bundle (see below).
-- Node ≥ 18, ESM (`"type": "module"`). Commands: `npm test` (`vitest run` — covers both `.ts` and
-  `.mjs` tests), `npm run build` / `npm run prepare` (`tsc`, emits `dist/`). There is **no CI workflow,
+- Node ≥ 18, ESM (`"type": "module"`). Commands: `npm test` (`vitest run --coverage` — covers both
+  `.ts` and `.mjs` tests and enforces 100% coverage via `vitest.config.ts` thresholds; thin shims are
+  excluded there), `npm run build` / `npm run prepare` (`tsc`, emits `dist/`). There is **no CI workflow,
   no typecheck-only script, and no self-applied config** — a green `vitest` + a clean `tsc` are the
   only automated gates. (`main` is branch-protected by `.github/rulesets/main.json`.)
 
