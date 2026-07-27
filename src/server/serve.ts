@@ -10,6 +10,7 @@ import { dirname, extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { openDb, resolveDbPath } from "../db/open.js";
+import { openAuditDb, resolveAuditDbPath, useAuditLog } from "../db/audit.js";
 import {
   addActionType,
   getMeta,
@@ -104,6 +105,7 @@ export function startServer(opts: ServeOptions = {}): Promise<void> {
   const host = opts.host ?? "127.0.0.1";
   const dbPath = resolveDbPath({ db: opts.dbPath });
   const db = openDb(dbPath);
+  useAuditLog(openAuditDb(resolveAuditDbPath()));
 
   const server = createServer((req, res) => {
     handle(req, res, db).catch((err) => {

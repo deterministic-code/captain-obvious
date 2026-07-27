@@ -1,3 +1,4 @@
+import { logEvent } from "./audit.js";
 import type { Db } from "./open.js";
 import type { ActionTypeRow, ConfigureActionOpts } from "./types.js";
 
@@ -24,6 +25,7 @@ export function configureActionType(
     const info = db
       .prepare("INSERT INTO action_types (slug, name) VALUES (?, ?)")
       .run(slug, opts.name ?? slug);
+    logEvent("action_type.added", `added action type ${slug}`);
     return byId(db, info.lastInsertRowid);
   }
 
@@ -32,6 +34,7 @@ export function configureActionType(
       opts.name,
       existing.id,
     );
+    logEvent("action_type.updated", `renamed action type ${slug} to ${opts.name}`);
   }
   return byId(db, existing.id);
 }

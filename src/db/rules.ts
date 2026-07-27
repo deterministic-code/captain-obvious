@@ -1,3 +1,4 @@
+import { logEvent } from "./audit.js";
 import { isUniqueViolation } from "./languages.js";
 import {
   requireActionTypeId,
@@ -54,7 +55,9 @@ export function addRule(db: Db, opts: AddRuleOpts): RuleRow {
     return db.prepare("SELECT * FROM rules WHERE id = ?").get(ruleId) as RuleRow;
   });
 
-  return insert();
+  const row = insert();
+  logEvent("rule.added", `added rule ${slug}`);
+  return row;
 }
 
 /** The rule's full category set: primary first, then extras, de-duplicated, empties dropped. */
@@ -168,7 +171,36 @@ export function configureRule(
     return db.prepare("SELECT * FROM rules WHERE id = ?").get(rule.id) as RuleRow;
   });
 
-  return apply();
+  const row = apply();
+  auditConfigureRule(slug, opts, configJson !== undefined);
+  return row;
+}
+
+/** Emit one audit event per distinct change a configureRule call made. */
+function auditConfigureRule(
+  slug: string,
+  opts: ConfigureRuleOpts,
+  configChanged: boolean,
+): void {
+  if (opts.enabled === true) logEvent("rule.enabled", `enabled rule ${slug}`);
+  if (opts.enabled === false) logEvent("rule.disabled", `disabled rule ${slug}`);
+  if (configChanged) logEvent("rule.configured", `updated config for rule ${slug}`);
+  if ((opts.addLanguages?.length ?? 0) + (opts.removeLanguages?.length ?? 0) > 0) {
+    logEvent("rule.configured", `updated languages for rule ${slug}`);
+  }
+  if ((opts.addCategories?.length ?? 0) + (opts.removeCategories?.length ?? 0) > 0) {
+    logEvent("rule.configured", `updated categories for rule ${slug}`);
+  }
+  if (opts.setAction) {
+    const env = opts.setAction.environment ?? "all environments";
+    logEvent("severity.set", `set ${opts.setAction.type} on rule ${slug} for ${env}`);
+  }
+  if (opts.removeAction) {
+    logEvent(
+      "severity.removed",
+      `removed action binding (${opts.removeAction}) on rule ${slug}`,
+    );
+  }
 }
 
 interface ResolvedBinding {
