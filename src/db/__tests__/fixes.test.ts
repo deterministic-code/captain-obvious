@@ -26,6 +26,13 @@ describe("setRuleFixes / getRuleFixes", () => {
     ]);
   });
 
+  it("round-trips a script action carrying an inline scriptBody", () => {
+    setRuleFixes(db, "r1", [{ kind: "script", scriptBody: "echo fix" }]);
+    expect(getRuleFixes(db, "r1")).toEqual([
+      { kind: "script", scriptBody: "echo fix" },
+    ]);
+  });
+
   it("is idempotent — re-set replaces, not appends", () => {
     setRuleFixes(db, "r1", [{ kind: "inferred" }]);
     setRuleFixes(db, "r1", [{ kind: "inferred" }]);
@@ -47,6 +54,13 @@ describe("setRuleFixes / getRuleFixes", () => {
     expect(() => setRuleFixes(db, "r1", [{ kind: "script" }])).toThrow(
       /script action requires/,
     );
+  });
+
+  it("rejects an unknown action kind", () => {
+    // Cast past the FixKind union to reach validate()'s unknown-kind guard.
+    expect(() =>
+      setRuleFixes(db, "r1", [{ kind: "bogus" as unknown as "output" }]),
+    ).toThrow(/unknown action kind: bogus/);
   });
 
   it("throws on an unknown rule", () => {

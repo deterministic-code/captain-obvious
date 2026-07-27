@@ -36,4 +36,13 @@ describe("configureActionType", () => {
   it("refuses an unknown type without --add", () => {
     expect(() => configureActionType(db, "quarantine", {})).toThrow(/--add/);
   });
+
+  it("requires an action-type slug", () => {
+    expect(() => configureActionType(db, "", {})).toThrow(/requires an/);
+  });
+
+  it("defaults the name to the slug when created without one", () => {
+    const row = configureActionType(db, "quarantine", { add: true });
+    expect(row).toMatchObject({ slug: "quarantine", name: "quarantine" });
+  });
 });

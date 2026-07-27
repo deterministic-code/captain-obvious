@@ -1,5 +1,13 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { logEvent, openAuditDb, useAuditLog } from "../audit.js";
+import {
+  logEvent,
+  openAuditDb,
+  resolveAuditDbPath,
+  useAuditLog,
+} from "../audit.js";
 import { configureActionType } from "../actions.js";
 import { addLanguage } from "../languages.js";
 import { openDb, type Db } from "../open.js";
@@ -87,5 +95,58 @@ describe("audit logging", () => {
     expect(logs()).toEqual([
       { log_type: "rule.disabled", message: "fresh" },
     ]);
+  });
+});
+
+describe("resolveAuditDbPath", () => {
+  // Save/restore so the env cases don't leak into the beforeEach in other suites.
+  const savedEnv = process.env.CAPTAIN_OBVIOUS_AUDIT_DB;
+
+  afterEach(() => {
+    if (savedEnv === undefined) delete process.env.CAPTAIN_OBVIOUS_AUDIT_DB;
+    else process.env.CAPTAIN_OBVIOUS_AUDIT_DB = savedEnv;
+  });
+
+  it("passes :memory: through untouched from opts", () => {
+    expect(resolveAuditDbPath({ db: ":memory:" })).toBe(":memory:");
+  });
+
+  it("resolves a relative opts path to an absolute one", () => {
+    expect(resolveAuditDbPath({ db: "rel/audit.db" })).toBe(
+      resolve("rel/audit.db"),
+    );
+  });
+
+  it("passes :memory: through from the env var when no opts", () => {
+    process.env.CAPTAIN_OBVIOUS_AUDIT_DB = ":memory:";
+    expect(resolveAuditDbPath()).toBe(":memory:");
+  });
+
+  it("resolves a relative env path to an absolute one", () => {
+    process.env.CAPTAIN_OBVIOUS_AUDIT_DB = "rel/audit.db";
+    expect(resolveAuditDbPath()).toBe(resolve("rel/audit.db"));
+  });
+
+  it("falls back to the package-local default when neither opts nor env is set", () => {
+    delete process.env.CAPTAIN_OBVIOUS_AUDIT_DB;
+    expect(resolveAuditDbPath()).toContain(join("data", "audit-log.db"));
+  });
+});
+
+describe("openAuditDb against a real file", () => {
+  it("creates the parent dir recursively and applies the schema", () => {
+    const dir = mkdtempSync(join(tmpdir(), "co-audit-"));
+    try {
+      // A nested (not-yet-existing) dir exercises the recursive mkdir branch.
+      const dbPath = join(dir, "nested", "audit.db");
+      const db = openAuditDb(dbPath);
+      try {
+        expect(() => db.prepare("SELECT id FROM logs").all()).not.toThrow();
+      } finally {
+        db.close();
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

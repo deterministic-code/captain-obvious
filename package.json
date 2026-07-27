@@ -28,7 +28,7 @@
   "scripts": {
     "build": "tsc",
     "prepare": "tsc",
-    "test": "vitest run"
+    "test": "vitest run --coverage"
   },
   "engines": {
     "node": ">=18"
@@ -44,6 +44,7 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^22.10.0",
+    "@vitest/coverage-v8": "^2.1.9",
     "vitest": "^2.1.0"
   }
 }

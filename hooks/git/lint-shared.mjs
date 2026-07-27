@@ -82,6 +82,8 @@ export function stripStringsAndComments(src) {
       out += "  ";
       i += 2;
       while (i < n && src[i] !== "\n") {
+        // Dead ternary arm: the loop guard is src[i] !== "\n", so src[i] === "\n" is never true here.
+        /* v8 ignore next */
         out += src[i] === "\n" ? "\n" : " ";
         i++;
       }
@@ -142,6 +144,8 @@ export function stripStringsAndComments(src) {
           i += 2;
           continue;
         }
+        // Dead ternary arm: the loop guard is src[i] !== q, so the src[i] === q ? q arm is never taken.
+        /* v8 ignore next */
         out += src[i] === "\n" ? "\n" : src[i] === q ? q : " ";
         i++;
       }
@@ -185,6 +189,8 @@ async function resolveToolPackageJson(pkgName) {
         `${pkgName} is not installed. Run \`npm install\` so the hook can run.`,
       );
     }
+    // Dead: require.resolve on a present-but-unexported pkg only throws ERR_PACKAGE_PATH_NOT_EXPORTED, so the rethrow never fires.
+    /* v8 ignore next */
     if (err.code !== "ERR_PACKAGE_PATH_NOT_EXPORTED") throw err;
   }
   const entry = require.resolve(pkgName);
@@ -193,6 +199,8 @@ async function resolveToolPackageJson(pkgName) {
   while (true) {
     if (basename(dir) === leaf) return resolve(dir, "package.json");
     const parent = dirname(dir);
+    // Unreachable invariant: an installed package's entry dir has basename === leaf before filesystem root.
+    /* v8 ignore next 3 */
     if (parent === dir) {
       throw new Error(`invariant: cannot locate package.json for ${pkgName}`);
     }

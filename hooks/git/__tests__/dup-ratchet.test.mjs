@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { parseAddedLineRanges, rangesOverlap } from "../dup-ratchet.mjs";
+import {
+  parseAddedLineRanges,
+  pushRatchetInputs,
+  rangesOverlap,
+} from "../dup-ratchet.mjs";
 
 describe("dup-ratchet / parseAddedLineRanges", () => {
   test("hunk with a count yields the inclusive added range", () => {
@@ -58,5 +62,22 @@ describe("dup-ratchet / rangesOverlap", () => {
 
   test("empty ranges array returns false", () => {
     expect(rangesOverlap([4, 8], [])).toBe(false);
+  });
+});
+
+describe("dup-ratchet / pushBase error handling", () => {
+  // A git spawn failure carries a `.stderr` ("" at minimum), so pushBase's
+  // classify regex sees an empty message and can't match "origin/main absent" —
+  // the error rethrows rather than being swallowed as a missing-ref skip.
+  test("pushRatchetInputs rethrows a git spawn error rather than skipping", async () => {
+    const savedPath = process.env.PATH;
+    process.env.PATH = "";
+    try {
+      await expect(pushRatchetInputs("/nonexistent-repo", "t")).rejects.toThrow(
+        /ENOENT|spawn/,
+      );
+    } finally {
+      process.env.PATH = savedPath;
+    }
   });
 });

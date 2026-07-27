@@ -1,5 +1,9 @@
-import { describe, expect, test } from "vitest";
-import { findViolations } from "../lint-comments.mjs";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { findViolations, main } from "../lint-comments.mjs";
+import { cleanupTmp, commitAllIn, makeTempGitRepo } from "./test-helpers.mjs";
 
 describe("lint-comments / findViolations", () => {
   test("clean single-line // comments produce no violations", () => {
@@ -84,5 +88,109 @@ describe("lint-comments / findViolations", () => {
     expect(v.length).toBe(2);
     expect(v[0].kind).toMatch(/2-line consecutive/);
     expect(v[1].kind).toMatch(/multi-line block/);
+  });
+
+  test("an escape sequence inside a string literal is skipped by the string scanner", () => {
+    // The backslash-escaped quote must not prematurely close the string, or the
+    // trailing `//` would be misread as a comment. Exercises stripStrings' \\ branch.
+    const src = `const s = "a\\"// still string";\nconst t = 1;\n`;
+    expect(findViolations(src)).toEqual([]);
+  });
+
+  test("a division operator (`/` not opening a comment) is not treated as a comment", () => {
+    // classifyCommentOpen returns null for a bare `/`, so the scanner advances
+    // past it. Two divisions on consecutive lines must not form a comment run.
+    const src = `const a = 10 / 2;\nconst b = 8 / 4;\n`;
+    expect(findViolations(src)).toEqual([]);
+  });
+
+  test("a single-line /* */ block after a division does not false-positive", () => {
+    // A `/` division followed later by a real `/* */` block on the same line
+    // drives both the null-open (division) and the block-open classify branches.
+    const src = `const a = 10 / 2; /* note */\n`;
+    expect(findViolations(src)).toEqual([]);
+  });
+});
+
+describe("lint-comments / main", () => {
+  let tmpRoot;
+  let origCwd;
+  let exitSpy;
+  let stderrSpy;
+  let stdoutSpy;
+  beforeEach(async () => {
+    tmpRoot = await mkdtemp(join(tmpdir(), "lc-main-"));
+    origCwd = process.cwd();
+    exitSpy = vi.spyOn(process, "exit").mockImplementation((code) => {
+      throw new Error(`__exit__:${code}`);
+    });
+    stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+  });
+  afterEach(async () => {
+    process.chdir(origCwd);
+    exitSpy.mockRestore();
+    stderrSpy.mockRestore();
+    stdoutSpy.mockRestore();
+    await cleanupTmp(tmpRoot);
+  });
+
+  const stderrText = () => stderrSpy.mock.calls.map((c) => c[0]).join("");
+  const stdoutText = () => stdoutSpy.mock.calls.map((c) => c[0]).join("");
+
+  test("no/unknown mode prints usage and exits 2", async () => {
+    await expect(main(["node", "script.mjs"])).rejects.toThrow(/__exit__:2/);
+    expect(exitSpy).toHaveBeenCalledWith(2);
+    expect(stderrText()).toMatch(/Usage:/);
+  });
+
+  test("--files with a clean file resolves without exit and prints nothing", async () => {
+    const clean = join(tmpRoot, "clean.ts");
+    await writeFile(clean, `// one-liner\nconst x = 1;\n`, "utf8");
+    await main(["node", "script.mjs", "--files", clean]);
+    expect(exitSpy).not.toHaveBeenCalled();
+    // --files clean has no OK line (only --staged does).
+    expect(stdoutText()).toBe("");
+  });
+
+  test("--files with a consecutive-comment run writes violations and exits 1", async () => {
+    const bad = join(tmpRoot, "bad.ts");
+    await writeFile(bad, `// a\n// b\nconst x = 1;\n`, "utf8");
+    await expect(
+      main(["node", "script.mjs", "--files", bad]),
+    ).rejects.toThrow(/__exit__:1/);
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(stderrText()).toContain("consecutive comment block");
+    expect(stderrText()).toMatch(/1 violation\(s\)/);
+  });
+
+  test("--files silently skips a missing file (ENOENT swallowed) and a non-lintable path", async () => {
+    const missing = join(tmpRoot, "gone.ts");
+    const md = join(tmpRoot, "notes.md");
+    await writeFile(md, `// a\n// b\n`, "utf8");
+    await main(["node", "script.mjs", "--files", missing, md]);
+    expect(exitSpy).not.toHaveBeenCalled();
+  });
+
+  test("--files rethrows a non-ENOENT read error (EISDIR on a directory)", async () => {
+    // A directory path is lintable by extension but reading it throws EISDIR,
+    // which lintFile must surface rather than swallow.
+    const dir = join(tmpRoot, "adir.ts");
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(dir);
+    await expect(
+      main(["node", "script.mjs", "--files", dir]),
+    ).rejects.toMatchObject({ code: "EISDIR" });
+  });
+
+  test("--staged over a clean repo prints the staged-diff OK line", async () => {
+    const repo = await makeTempGitRepo("lc-staged-");
+    await writeFile(join(repo, "clean.ts"), `// one-liner\nconst x = 1;\n`, "utf8");
+    await commitAllIn(repo, "seed");
+    process.chdir(repo);
+    await main(["node", "script.mjs", "--staged"]);
+    expect(exitSpy).not.toHaveBeenCalled();
+    expect(stdoutText()).toMatch(/no multi-line comments in staged diff/);
+    await cleanupTmp(repo);
   });
 });

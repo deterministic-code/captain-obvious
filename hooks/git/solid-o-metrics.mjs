@@ -34,6 +34,8 @@ export function isAnalyzable(path) {
 }
 
 function trailingName(text) {
+  // Unreachable: String.split always returns >=1 element, so pop() is never undefined.
+  /* v8 ignore next */
   const seg = text.split(".").pop() ?? text;
   const m = /^[A-Za-z_$][\w$]*/.exec(seg);
   return m ? m[0] : null;

@@ -43,6 +43,8 @@ async function fetchRunJobs(databaseId) {
   try {
     return JSON.parse(stdout).jobs;
   } catch (err) {
+    // Unreachable throw: JSON.parse only throws SyntaxError, so the non-SyntaxError rethrow is dead.
+    /* v8 ignore next */
     if (!(err instanceof SyntaxError)) throw err;
     return null;
   }
@@ -83,6 +85,8 @@ export async function fetchMainTestsVerdict() {
   try {
     runs = JSON.parse(stdout);
   } catch (err) {
+    // Unreachable throw: JSON.parse only throws SyntaxError, so the non-SyntaxError rethrow is dead.
+    /* v8 ignore next */
     if (!(err instanceof SyntaxError)) throw err;
     return { verdict: null, unavailable: "gh returned non-JSON output" };
   }

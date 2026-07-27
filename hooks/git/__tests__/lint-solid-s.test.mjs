@@ -1,5 +1,22 @@
-import { describe, expect, test } from "vitest";
-import { CLASS_LIMITS, analyzeSource } from "../solid-s-metrics.mjs";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  CLASS_LIMITS,
+  analyzeSource,
+  classesInDiff,
+  isAnalyzable,
+  runSolidSHook,
+} from "../solid-s-metrics.mjs";
+import { main } from "../lint-solid-s.mjs";
+import {
+  cleanupTmp,
+  commitAllIn,
+  gitIn,
+  makeTempGitRepo,
+  mockProcessIo,
+} from "./test-helpers.mjs";
 
 const only = (src) => {
   const classes = analyzeSource("f.ts", src);
@@ -152,6 +169,61 @@ describe("solid-s-metrics / external dependency analysis", () => {
   });
 });
 
+describe("solid-s-metrics / analysis edge branches", () => {
+  test("a qualified-name field type resolves to its head import", () => {
+    const src = [
+      'import * as ns from "./ns";',
+      "class Holder {",
+      "  private a: ns.Thing; private b: ns.Thing;",
+      "  useA() { return this.a; }",
+      "  useB() { return this.b; }",
+      "}",
+    ].join("\n");
+    const cls = only(src);
+    expect(cls.deps).toBe(1);
+    expect([...new Set([cls.disjoint.split])]).toContain(false);
+  });
+
+  test("a field typed by a non-imported reference contributes no dep", () => {
+    const src = [
+      "class Holder {",
+      "  private a: Local; private b: number;",
+      "  useA() { return this.a; }",
+      "  useB() { return this.a + 1; }",
+      "}",
+    ].join("\n");
+    expect(only(src).deps).toBe(0);
+  });
+
+  test("a plain (non-parameter-property) constructor param is not a field", () => {
+    const src = [
+      "class C {",
+      "  private a = 0;",
+      "  constructor(seed) { this.a = seed; }",
+      "  useA() { return this.a; }",
+      "  alsoA() { return this.a + 1; }",
+      "}",
+    ].join("\n");
+    expect(only(src).lcom4).toBe(1);
+  });
+
+  test("two clusters where only one carries a dep are not a clean split (fewer than 2 non-empty)", () => {
+    const src = [
+      'import { log } from "./log";',
+      "class OneDep {",
+      "  private a = 0; private b = 0;",
+      "  incA() { this.a++; log(this.a); }",
+      "  readA() { return this.a; }",
+      "  incB() { this.b++; }",
+      "  readB() { return this.b; }",
+      "}",
+    ].join("\n");
+    const cls = only(src);
+    expect(cls.lcom4).toBe(2);
+    expect(cls.disjoint.split).toBe(false);
+  });
+});
+
 describe("solid-s-metrics / escape hatches", () => {
   test("a class below the method floor is never flagged", () => {
     const src = [
@@ -174,5 +246,202 @@ describe("solid-s-metrics / escape hatches", () => {
       "}",
     ].join("\n");
     expect(only(src).allow).toBe(true);
+  });
+});
+
+// A class that splits into two field-clusters (LCOM4 2) — the canonical cohesion offender.
+const SPLIT_CLASS = [
+  "class Split {",
+  "  private a = 0; private b = 0;",
+  "  incA() { this.a++; }",
+  "  readA() { return this.a; }",
+  "  incB() { this.b++; }",
+  "  readB() { return this.b; }",
+  "}",
+].join("\n");
+
+describe("solid-s-metrics / isAnalyzable & anonymous class", () => {
+  test("test files, excluded paths, and non-JS extensions are skipped", () => {
+    expect(isAnalyzable("src/x.test.ts")).toBe(false);
+    expect(isAnalyzable("node_modules/x.ts")).toBe(false);
+    expect(isAnalyzable("src/x.md")).toBe(false);
+    expect(isAnalyzable("src/x.ts")).toBe(true);
+  });
+
+  test("an anonymous class expression is named (anonymous class)", () => {
+    const src = "const C = class { a() { this.x; } b() { this.x; } };";
+    const [cls] = analyzeSource("f.ts", src);
+    expect(cls.name).toBe("(anonymous class)");
+  });
+});
+
+describe("solid-s-metrics / classesInDiff", () => {
+  const classes = [{ startLine: 3, endLine: 6 }];
+
+  test("keeps a class when an added line falls inside its span", () => {
+    expect(classesInDiff(classes, new Set([5]))).toHaveLength(1);
+  });
+  test("drops a class untouched by the diff", () => {
+    expect(classesInDiff(classes, new Set([10]))).toHaveLength(0);
+  });
+});
+
+describe("solid-s-metrics / runSolidSHook runner", () => {
+  let tmpRoot;
+  let io;
+  beforeEach(async () => {
+    tmpRoot = await mkdtemp(join(tmpdir(), "solid-s-run-"));
+    io = mockProcessIo();
+  });
+  afterEach(async () => {
+    io.restore();
+    await cleanupTmp(tmpRoot);
+  });
+
+  test("empty argv prints usage and exits 2", async () => {
+    await expect(runSolidSHook(["node", "s.mjs"])).rejects.toThrow(/__exit__:2/);
+    expect(io.text(io.stderrSpy)).toMatch(/Usage/);
+  });
+
+  test("--files clean class prints the ok line without exiting", async () => {
+    const clean = join(tmpRoot, "clean.ts");
+    await writeFile(clean, "class Ok { a() { this.x; } }\n", "utf8");
+    await runSolidSHook(["node", "s.mjs", "--files", clean]);
+    expect(io.exitSpy).not.toHaveBeenCalled();
+    expect(io.text(io.stdoutSpy)).toContain("SOLID-S: no SRP violations");
+  });
+
+  test("--files with a clean-split cohesion offender emits the {clusters} suffix", async () => {
+    const bad = join(tmpRoot, "dump.ts");
+    const dump = [
+      'import { Db } from "./db";',
+      'import { Http } from "./http";',
+      "class UserManager {",
+      "  private db: Db; private http: Http;",
+      "  load(id) { return this.db.query(id); }",
+      "  save(u) { return this.db.write(u); }",
+      "  fetch(url) { return this.http.get(url); }",
+      "}",
+    ].join("\n");
+    await writeFile(bad, dump, "utf8");
+    await expect(
+      runSolidSHook(["node", "s.mjs", "--files", bad]),
+    ).rejects.toThrow(/__exit__:1/);
+    const err = io.text(io.stderrSpy);
+    expect(err).toContain("cohesion");
+    expect(err).toMatch(/one cluster owns \{Db\}/);
+  });
+
+  test("--files with a non-split cohesion offender emits the generic suffix", async () => {
+    const bad = join(tmpRoot, "shared.ts");
+    const shared = [
+      'import { log } from "./log";',
+      "class OneDep {",
+      "  private a = 0; private b = 0;",
+      "  incA() { this.a++; log(this.a); }",
+      "  readA() { return this.a; }",
+      "  incB() { this.b++; }",
+      "  readB() { return this.b; }",
+      "}",
+    ].join("\n");
+    await writeFile(bad, shared, "utf8");
+    await expect(
+      runSolidSHook(["node", "s.mjs", "--files", bad]),
+    ).rejects.toThrow(/__exit__:1/);
+    expect(io.text(io.stderrSpy)).toContain("independent groups sharing no state");
+  });
+
+  test("--files with a high fan-out class emits a fan-out violation", async () => {
+    const deps = Array.from({ length: 9 }, (_, i) => String.fromCharCode(65 + i));
+    const src = [
+      ...deps.map((d) => `import { ${d} } from "./${d}";`),
+      "class Orchestrator {",
+      `  constructor(${deps.map((d) => `private ${d.toLowerCase()}: ${d}`).join(", ")}) {}`,
+      `  run() { ${deps.map((d) => `this.${d.toLowerCase()};`).join(" ")} }`,
+      "  stop() { this.a; this.b; }",
+      "}",
+    ].join("\n");
+    const bad = join(tmpRoot, "fanout.ts");
+    await writeFile(bad, src, "utf8");
+    await expect(
+      runSolidSHook(["node", "s.mjs", "--files", bad]),
+    ).rejects.toThrow(/__exit__:1/);
+    expect(io.text(io.stderrSpy)).toContain("fan-out");
+  });
+
+  test("--files rethrows a non-ENOENT read error (a directory named like a .ts file)", async () => {
+    const dirPath = join(tmpRoot, "dir.ts");
+    await mkdir(dirPath);
+    await expect(
+      runSolidSHook(["node", "s.mjs", "--files", dirPath]),
+    ).rejects.toThrow(/EISDIR|illegal operation on a directory/);
+  });
+
+  test("--files skips a non-analyzable path (.md) and stays clean", async () => {
+    const md = join(tmpRoot, "notes.md");
+    await writeFile(md, SPLIT_CLASS, "utf8");
+    await runSolidSHook(["node", "s.mjs", "--files", md]);
+    expect(io.exitSpy).not.toHaveBeenCalled();
+  });
+
+  test("--warn on an offender reports advisory and does not exit", async () => {
+    const bad = join(tmpRoot, "warn.ts");
+    await writeFile(bad, SPLIT_CLASS, "utf8");
+    await runSolidSHook(["node", "s.mjs", "--files", bad, "--warn"]);
+    expect(io.exitSpy).not.toHaveBeenCalled();
+    expect(io.text(io.stderrSpy)).toMatch(/advisory/);
+  });
+
+  test("--files on a missing file swallows ENOENT and stays clean", async () => {
+    await runSolidSHook([
+      "node",
+      "s.mjs",
+      "--files",
+      join(tmpRoot, "gone.ts"),
+    ]);
+    expect(io.exitSpy).not.toHaveBeenCalled();
+  });
+
+  test("the thin wrapper main drives a clean --files run", async () => {
+    const clean = join(tmpRoot, "wrap.ts");
+    await writeFile(clean, "class Ok { a() { this.x; } }\n", "utf8");
+    await main(["node", "s.mjs", "--files", clean]);
+    expect(io.exitSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("solid-s-metrics / --staged diff scope", () => {
+  let repo;
+  let io;
+  let cwd;
+  beforeEach(async () => {
+    repo = await makeTempGitRepo("solid-s-staged-");
+    cwd = process.cwd();
+    process.chdir(repo);
+    io = mockProcessIo();
+  });
+  afterEach(async () => {
+    io.restore();
+    process.chdir(cwd);
+    await cleanupTmp(repo);
+  });
+
+  test("a newly-staged offender class is caught in --staged scope", async () => {
+    await writeFile(join(repo, "bad.ts"), SPLIT_CLASS, "utf8");
+    await gitIn(repo, ["add", "bad.ts"]);
+    await expect(
+      runSolidSHook(["node", "s.mjs", "--staged"]),
+    ).rejects.toThrow(/__exit__:1/);
+    expect(io.text(io.stderrSpy)).toContain("cohesion");
+  });
+
+  test("an offender that is committed but untouched by the staged diff is out of scope", async () => {
+    await writeFile(join(repo, "old.ts"), SPLIT_CLASS, "utf8");
+    await commitAllIn(repo, "seed");
+    await writeFile(join(repo, "note.ts"), "export const x = 1;\n", "utf8");
+    await gitIn(repo, ["add", "note.ts"]);
+    await runSolidSHook(["node", "s.mjs", "--staged"]);
+    expect(io.exitSpy).not.toHaveBeenCalled();
+    expect(io.text(io.stdoutSpy)).toContain("in staged diff");
   });
 });

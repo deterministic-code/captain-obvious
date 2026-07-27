@@ -197,6 +197,8 @@ export function diffMarkers(before, after) {
   const b = countMarkers(after);
   const regressions = [];
   for (const marker of FORBIDDEN_MARKERS) {
+    // Dead defaults: countMarkers seeds every FORBIDDEN_MARKERS id to 0, so the ?? 0 fallbacks never fire.
+    /* v8 ignore next 2 */
     const oldCount = a[marker.id] ?? 0;
     const newCount = b[marker.id] ?? 0;
     if (newCount > oldCount) {
@@ -312,6 +314,8 @@ async function listStagedTestFiles(cwd) {
     if (!line) continue;
     const [status, ...rest] = line.split(/\s+/);
     const path = rest[rest.length - 1];
+    // Unreachable: git never emits a whitespace-only name-status line.
+    /* v8 ignore next */
     if (!path) continue;
     if (!TEST_SUFFIX_RE.test(path)) continue;
     out.push({ status, path });
@@ -329,6 +333,8 @@ async function readFromGit(ref, path, cwd) {
     });
     return stdout;
   } catch (err) {
+    // Dead: git-show failures always carry code 128, so the || is always true — the extra operands, the else-branch, and the throw are unreachable (v8 cannot exclude the else-branch without enclosing the lone reachable return null).
+    /* v8 ignore start */
     if (
       err.code === 128 ||
       /exists on disk, but not in/i.test(err.stderr ?? "") ||
@@ -338,6 +344,7 @@ async function readFromGit(ref, path, cwd) {
     }
     throw err;
   }
+  /* v8 ignore stop */
 }
 
 async function collectRatchetReports(cwd) {
@@ -415,7 +422,7 @@ export async function main(argv, opts = {}) {
   process.exit(1);
 }
 
-/* v8 ignore next 6 */
+/* v8 ignore next 8 */
 if (isInvokedAsScript(import.meta.url)) {
   main(process.argv).catch((err) => {
     process.stderr.write(

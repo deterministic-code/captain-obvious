@@ -1,5 +1,35 @@
-import { describe, expect, test } from "vitest";
-import { knipIssuesToViolations } from "../lint-dead-code.mjs";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+
+// Drive both `git rev-parse` (repoRootOf) and the knip subprocess
+// deterministically. `promisify(execFile)` calls the mock as
+// execFile(cmd, args, opts, cb); the knip run uses cmd === process.execPath.
+let repoRootStdout = `${process.cwd()}\n`;
+let knipResponder = null;
+vi.mock("node:child_process", () => ({
+  execFile: (cmd, args, opts, cb) => {
+    const done = typeof opts === "function" ? opts : cb;
+    if (cmd === "git" && args[0] === "rev-parse") {
+      done(null, { stdout: repoRootStdout, stderr: "" });
+      return;
+    }
+    if (!knipResponder) {
+      done(new Error(`no knip responder for ${cmd} ${args.join(" ")}`));
+      return;
+    }
+    const { err, stdout = "", stderr = "" } = knipResponder(args);
+    if (err) {
+      done(Object.assign(err, { stdout, stderr }));
+      return;
+    }
+    done(null, { stdout, stderr });
+  },
+}));
+
+const { knipIssuesToViolations, main } = await import("../lint-dead-code.mjs");
+
+function knipJson(report) {
+  knipResponder = () => ({ stdout: JSON.stringify(report) });
+}
 
 describe("lint-dead-code / knipIssuesToViolations", () => {
   test("a nonempty files entry yields one unused-file violation at line 1", () => {
@@ -19,6 +49,11 @@ describe("lint-dead-code / knipIssuesToViolations", () => {
           "no other module imports this file. Delete it, or add its entrypoint to knip.json if it is reached dynamically.",
       },
     ]);
+  });
+
+  test("a files entry without a `name` falls back to the issue's file path", () => {
+    const issues = [{ file: "scripts/orphan.mjs", files: [{}] }];
+    expect(knipIssuesToViolations(issues)[0].path).toBe("scripts/orphan.mjs");
   });
 
   test("exports and types entries yield per-entry violations with kind, path, line, col", () => {
@@ -47,6 +82,18 @@ describe("lint-dead-code / knipIssuesToViolations", () => {
         detail,
       },
     ]);
+  });
+
+  test("an export missing line/col defaults both to 1", () => {
+    const issues = [
+      { file: "scripts/bar.mjs", exports: [{ name: "noPos" }] },
+    ];
+    expect(knipIssuesToViolations(issues)[0]).toMatchObject({
+      path: "scripts/bar.mjs",
+      line: 1,
+      col: 1,
+      kind: "unused export `noPos`",
+    });
   });
 
   test("enumMembers object-of-arrays flattens into per-member violations", () => {
@@ -84,5 +131,90 @@ describe("lint-dead-code / knipIssuesToViolations", () => {
       { file: "scripts/quux.mjs" },
     ];
     expect(knipIssuesToViolations(issues)).toEqual([]);
+  });
+});
+
+describe("lint-dead-code / main", () => {
+  let exitSpy;
+  let stderrSpy;
+  let stdoutSpy;
+  let savedExitCode;
+  beforeEach(() => {
+    repoRootStdout = `${process.cwd()}\n`;
+    knipResponder = null;
+    savedExitCode = process.exitCode;
+    exitSpy = vi.spyOn(process, "exit").mockImplementation((code) => {
+      throw new Error(`__exit__:${code}`);
+    });
+    stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    stdoutSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+  });
+  afterEach(() => {
+    exitSpy.mockRestore();
+    stderrSpy.mockRestore();
+    stdoutSpy.mockRestore();
+    process.exitCode = savedExitCode;
+  });
+
+  const stderrText = () => stderrSpy.mock.calls.map((c) => c[0]).join("");
+  const stdoutText = () => stdoutSpy.mock.calls.map((c) => c[0]).join("");
+
+  test("--all with no dead code prints the clean line and leaves exitCode unset", async () => {
+    knipJson({ issues: [] });
+    await main(["node", "s.mjs", "--all"]);
+    expect(stdoutText()).toMatch(/no dead code found in the repo/);
+    expect(process.exitCode).toBe(savedExitCode);
+  });
+
+  test("--all with dead code prints findings (blocking, no suffix) and sets exitCode 1", async () => {
+    knipJson({
+      issues: [{ file: "src/a.ts", exports: [{ name: "unusedFn", line: 3, col: 2 }] }],
+    });
+    await main(["node", "s.mjs", "--all"]);
+    const out = stdoutText();
+    expect(out).toMatch(/unused export `unusedFn`/);
+    expect(out).toMatch(/1 dead-code finding\(s\) in the repo\. Whitelist/);
+    expect(out).not.toMatch(/report-only/);
+    expect(process.exitCode).toBe(1);
+  });
+
+  test("runKnip throws the invariant when `issues` is not an array", async () => {
+    knipJson({ issues: 123 });
+    await expect(main(["node", "s.mjs", "--all"])).rejects.toThrow(
+      /invariant: knip report has no `issues` array/,
+    );
+  });
+
+  test("--files with a matching violation prints report-only findings", async () => {
+    const abs = `${process.cwd()}/src/b.ts`;
+    knipJson({
+      issues: [{ file: "src/b.ts", exports: [{ name: "deadExport", line: 9, col: 1 }] }],
+    });
+    await main(["node", "s.mjs", "--files", abs]);
+    const out = stdoutText();
+    expect(out).toMatch(/unused export `deadExport`/);
+    expect(out).toMatch(/dead-code finding\(s\) in the given files \(report-only\)/);
+    expect(exitSpy).not.toHaveBeenCalled();
+  });
+
+  test("--files with no paths prints the no-files line", async () => {
+    await main(["node", "s.mjs", "--files"]);
+    expect(stdoutText()).toMatch(/no files given/);
+  });
+
+  test("--files whose targets match no violations prints the clean given-files line", async () => {
+    const abs = `${process.cwd()}/src/c.ts`;
+    knipJson({
+      issues: [{ file: "src/other.ts", exports: [{ name: "x", line: 1, col: 1 }] }],
+    });
+    await main(["node", "s.mjs", "--files", abs]);
+    expect(stdoutText()).toMatch(/no dead code found in the given files/);
+    expect(exitSpy).not.toHaveBeenCalled();
+  });
+
+  test("an unknown/absent mode prints usage and exits 2", async () => {
+    await expect(main(["node", "s.mjs"])).rejects.toThrow(/__exit__:2/);
+    expect(exitSpy).toHaveBeenCalledWith(2);
+    expect(stderrText()).toMatch(/Usage:/);
   });
 });
