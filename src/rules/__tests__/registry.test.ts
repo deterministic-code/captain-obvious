@@ -31,9 +31,12 @@ describe("RULES registry", () => {
     expect(new Set(slugs).size).toBe(24);
   });
 
-  it("uses only known categories", () => {
+  it("uses only known categories (primary and extras)", () => {
     for (const r of RULES) {
       expect(CATEGORIES).toContain(r.meta.category);
+      for (const c of r.meta.categories ?? []) {
+        expect(CATEGORIES, r.meta.slug).toContain(c);
+      }
     }
   });
 

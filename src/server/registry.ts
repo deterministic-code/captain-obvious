@@ -28,6 +28,11 @@ export interface RuleView {
   name: string;
   description: string | null;
   category: string | null;
+  /**
+   * The rule's full category set (primary first). Additive field — the prebuilt
+   * panel reads the scalar `category`; API/CLI consumers read this for the rest.
+   */
+  categories: string[];
   stage: string | null;
   enabled: boolean;
   config: Record<string, unknown> | null;
@@ -48,6 +53,12 @@ function parseConfig(json: string | null): Record<string, unknown> | null {
   } catch {
     return null;
   }
+}
+
+/** Full category set with the primary first, then the rest in the query's (alpha) order. */
+function orderCategories(primary: string | null, all: string[]): string[] {
+  if (!primary) return all;
+  return [primary, ...all.filter((c) => c !== primary)];
 }
 
 /** GET /api/rules — every rule with its actions resolved to slugs. */
@@ -76,6 +87,18 @@ export function listRules(db: Db): RuleView[] {
     const list = byRule.get(a.ruleId) ?? [];
     list.push(a);
     byRule.set(a.ruleId, list);
+  }
+
+  const categoryRows = db
+    .prepare(
+      "SELECT rule_id AS ruleId, category FROM rule_categories ORDER BY category",
+    )
+    .all() as { ruleId: number; category: string }[];
+  const categoriesByRule = new Map<number, string[]>();
+  for (const c of categoryRows) {
+    const list = categoriesByRule.get(c.ruleId) ?? [];
+    list.push(c.category);
+    categoriesByRule.set(c.ruleId, list);
   }
 
   // Rule actions (fixes table): one grouped read, then split per rule.
@@ -115,6 +138,7 @@ export function listRules(db: Db): RuleView[] {
       name: r.name,
       description: r.description,
       category: r.category,
+      categories: orderCategories(r.category, categoriesByRule.get(r.id) ?? []),
       stage: META_BY_SLUG.get(r.slug)?.stage ?? null,
       enabled: r.enabled === 1,
       config: parseConfig(r.config_json),

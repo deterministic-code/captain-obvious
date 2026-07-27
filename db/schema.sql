@@ -60,6 +60,18 @@ CREATE TABLE IF NOT EXISTS rule_languages (
   PRIMARY KEY (rule_id, language_id)
 ) STRICT;
 
+-- Rule <-> Category (many-to-many) ----------------------------------------
+-- A rule carries one primary category (rules.category, kept for the prebuilt
+-- panel) plus any number of additional ones here. The primary is also stored as
+-- a row, so this table holds the rule's full category set. Free text, mirroring
+-- rules.category (no category lookup table).
+
+CREATE TABLE IF NOT EXISTS rule_categories (
+  rule_id  INTEGER NOT NULL REFERENCES rules(id) ON DELETE CASCADE,
+  category TEXT NOT NULL,
+  PRIMARY KEY (rule_id, category)
+) STRICT;
+
 -- Hook <-> Rule (which rules run under which hook) ------------------------
 
 CREATE TABLE IF NOT EXISTS hook_rules (
@@ -98,5 +110,6 @@ CREATE TABLE IF NOT EXISTS fixes (
 
 CREATE INDEX IF NOT EXISTS idx_hooks_env       ON hooks(environment_id);
 CREATE INDEX IF NOT EXISTS idx_hook_rules_rule ON hook_rules(rule_id);
+CREATE INDEX IF NOT EXISTS idx_rule_categories  ON rule_categories(rule_id);
 CREATE INDEX IF NOT EXISTS idx_rule_actions    ON rule_actions(rule_id);
 CREATE INDEX IF NOT EXISTS idx_fixes_rule      ON fixes(rule_id);

@@ -23,6 +23,12 @@ function count(table: string): number {
 // rules are language-agnostic (languages: []) so they contribute zero.
 const LANGUAGE_LINKS = RULES.reduce((n, r) => n + r.meta.languages.length, 0);
 
+// Category links = the primary plus any extras, de-duplicated, per rule.
+const CATEGORY_LINKS = RULES.reduce(
+  (n, r) => n + new Set([r.meta.category, ...(r.meta.categories ?? [])]).size,
+  0,
+);
+
 describe("seedRules", () => {
   it("seeds every rule plus its languages and links", () => {
     const summary = seedRules(db, RULES);
@@ -31,6 +37,7 @@ describe("seedRules", () => {
     expect(count("rules")).toBe(RULES.length);
     expect(count("languages")).toBe(2);
     expect(count("rule_languages")).toBe(LANGUAGE_LINKS);
+    expect(count("rule_categories")).toBe(CATEGORY_LINKS);
   });
 
   it("is idempotent", () => {
@@ -39,6 +46,7 @@ describe("seedRules", () => {
     expect(count("rules")).toBe(RULES.length);
     expect(count("languages")).toBe(2);
     expect(count("rule_languages")).toBe(LANGUAGE_LINKS);
+    expect(count("rule_categories")).toBe(CATEGORY_LINKS);
   });
 
   it("preserves a user-disabled rule across re-seed", () => {
