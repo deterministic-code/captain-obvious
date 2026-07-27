@@ -19,6 +19,7 @@ import {
   seed,
 } from "./registry.js";
 import { profilingMeta, profilingReport } from "./profiling.js";
+import { FIXES_PAGE } from "./fixesPage.js";
 
 // dist/server/serve.js -> repo root (matches open.ts's pkgRoot derivation).
 const pkgRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -122,6 +123,11 @@ async function handle(
 
   if (!pathname.startsWith("/api/")) {
     if (method !== "GET") return sendJson(res, 405, { error: "method not allowed" });
+    if (pathname === "/fixes") {
+      res.writeHead(200, { "content-type": MIME[".html"] });
+      res.end(FIXES_PAGE);
+      return;
+    }
     return serveStatic(res, pathname);
   }
 
