@@ -19,7 +19,7 @@ import {
   seed,
 } from "./registry.js";
 import { profilingMeta, profilingReport } from "./profiling.js";
-import { FIXES_PAGE } from "./fixesPage.js";
+import { PANEL_EXT } from "./panelExt.js";
 
 // dist/server/serve.js -> repo root (matches open.ts's pkgRoot derivation).
 const pkgRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -73,9 +73,23 @@ async function serveStatic(res: ServerResponse, pathname: string): Promise<void>
     filePath = join(WEB_DIR, "index.html");
   }
   try {
+    const ext = extname(filePath);
+    // Inject the panel augmentation into the SPA entry. The bundle has no
+    // source, so this serve-time graft is the only way to extend its UI; it
+    // adds nothing the panel depends on, so it stays ignorable.
+    if (ext === ".html") {
+      const html = await readFile(filePath, "utf8");
+      const grafted = html.replace(
+        "</body>",
+        '<script src="/panel-ext.js" defer></script></body>',
+      );
+      res.writeHead(200, { "content-type": MIME[".html"] });
+      res.end(grafted);
+      return;
+    }
     const data = await readFile(filePath);
     res.writeHead(200, {
-      "content-type": MIME[extname(filePath)] ?? "application/octet-stream",
+      "content-type": MIME[ext] ?? "application/octet-stream",
     });
     res.end(data);
   } catch {
@@ -123,9 +137,9 @@ async function handle(
 
   if (!pathname.startsWith("/api/")) {
     if (method !== "GET") return sendJson(res, 405, { error: "method not allowed" });
-    if (pathname === "/fixes") {
-      res.writeHead(200, { "content-type": MIME[".html"] });
-      res.end(FIXES_PAGE);
+    if (pathname === "/panel-ext.js") {
+      res.writeHead(200, { "content-type": MIME[".js"] });
+      res.end(PANEL_EXT);
       return;
     }
     return serveStatic(res, pathname);
