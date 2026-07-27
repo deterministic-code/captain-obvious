@@ -18,7 +18,7 @@ export const PANEL_EXT = `(() => {
     if (!Array.isArray(actions) || actions.length === 0) {
       return '<span class="co-fix-none">—</span>';
     }
-    return actions.map((a) => {
+    const items = actions.map((a) => {
       const kind = KINDS.includes(a.kind) ? a.kind : "output";
       const target = a.scriptPath || (a.scriptBody ? "(inline script)" : "");
       const path = target ? ' <span class="co-fix-path">' + esc(target) + "</span>" : "";
@@ -26,6 +26,9 @@ export const PANEL_EXT = `(() => {
       return '<div class="co-fix"><div><span class="co-kind co-kind-' + kind + '">' +
         esc(a.kind) + "</span>" + path + "</div>" + desc + "</div>";
     }).join("");
+    const label = actions.length + (actions.length === 1 ? " fix" : " fixes");
+    return '<details class="co-fix-dd"><summary class="co-fix-summary">' + label +
+      '</summary><div class="co-fix-list">' + items + "</div></details>";
   }
 
   function decorate() {
@@ -62,7 +65,13 @@ export const PANEL_EXT = `(() => {
       ".co-kind{display:inline-block;font-size:11px;font-weight:600;padding:1px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:.03em}" +
       ".co-kind-script{background:#dcfce7;color:#166534}.co-kind-inferred{background:#e0e7ff;color:#3730a3}.co-kind-output{background:#f1f5f9;color:#475569}" +
       ".co-fix-path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#0f172a}" +
-      ".co-fix-desc{color:#64748b;font-size:12px;margin-top:2px}.co-fix-none{color:#cbd5e1}";
+      ".co-fix-desc{color:#64748b;font-size:12px;margin-top:2px}.co-fix-none{color:#cbd5e1}" +
+      ".co-fix-dd{display:inline-block}" +
+      ".co-fix-summary{cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:6px;border:1px solid #cbd5e1;border-radius:6px;padding:4px 10px;font-size:13px;color:#334155;background:#fff}" +
+      ".co-fix-summary::-webkit-details-marker{display:none}" +
+      '.co-fix-summary::before{content:"▸";font-size:10px;color:#94a3b8}' +
+      '.co-fix-dd[open] .co-fix-summary::before{content:"▾"}' +
+      ".co-fix-list{margin-top:6px}";
     document.head.appendChild(style);
   }
 
