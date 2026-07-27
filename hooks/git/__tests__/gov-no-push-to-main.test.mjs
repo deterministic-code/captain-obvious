@@ -53,18 +53,31 @@ describe("gov-no-push-to-main / main", () => {
   });
 
   test("defaults env to process.env and cwd to process.cwd() when opts is omitted", async () => {
-    // The repo under test runs on a feature branch, so the real-cwd default
-    // path resolves to a non-protected branch and allows the work.
+    // Cover both defaults without depending on the branch of the checkout
+    // running the suite (it may be on main). The cwd default (`?? process.cwd()`)
+    // is evaluated before the ALLOW_EDIT_ON_MAIN short-circuit returns, so an
+    // omitted cwd is exercised here without the real cwd ever being read.
+    await main(["node", "s.mjs"], { env: { ALLOW_EDIT_ON_MAIN: "1" } });
+    expect(stdoutText()).toMatch(/ALLOW_EDIT_ON_MAIN=1 accepted/);
+    expect(exitSpy).not.toHaveBeenCalled();
+
+    // The env default (`?? process.env`, which carries no ALLOW_EDIT_ON_MAIN)
+    // with cwd pointed at a temp repo on a feature branch — a deterministic
+    // non-protected result regardless of the suite's own checkout.
     const prev = process.env.ALLOW_EDIT_ON_MAIN;
     delete process.env.ALLOW_EDIT_ON_MAIN;
+    const repo = await makeTempGitRepo("gnptm-default-");
+    await gitIn(repo, ["commit", "--allow-empty", "-q", "-m", "seed"]);
+    await gitIn(repo, ["checkout", "-q", "-b", "feature/x"]);
     try {
-      await main(["node", "s.mjs"]);
+      await main(["node", "s.mjs"], { cwd: repo });
     } finally {
       if (prev === undefined) delete process.env.ALLOW_EDIT_ON_MAIN;
       else process.env.ALLOW_EDIT_ON_MAIN = prev;
+      await cleanupTmp(repo);
     }
+    expect(stdoutText()).toMatch(/on 'feature\/x' — not a protected branch/);
     expect(exitSpy).not.toHaveBeenCalled();
-    expect(stdoutText()).toMatch(/not a protected branch/);
   });
 
   test("detached HEAD (symbolic-ref fails) is treated as not protected", async () => {
