@@ -22,7 +22,8 @@
     "lib",
     "hooks",
     "dist",
-    "db"
+    "db",
+    "web/dist"
   ],
   "scripts": {
     "build": "tsc",

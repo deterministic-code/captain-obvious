@@ -7,6 +7,7 @@ import { addRule, configureRule } from "../db/rules.js";
 import { seedRules } from "../db/seed.js";
 import type { ActionBinding } from "../db/types.js";
 import { RULES } from "../rules/index.js";
+import { startServer } from "../server/serve.js";
 
 const USAGE = `usage: captain-obvious <command> [flags]
 
@@ -20,6 +21,7 @@ commands:
   configure-action <type-slug> [--add] [--name <n>]
   seed-rules       [--only <slug>]   populate the registry from the bundled rule set
   init             create and seed the registry DB
+  serve            [--port <n>] [--host <h>]   run the web control panel + /api
 
 global:
   --db <path>      registry DB path (default: CAPTAIN_OBVIOUS_DB env or data/captain-obvious.db)
@@ -145,6 +147,15 @@ function runInit(args: ParsedArgs): void {
   process.stdout.write(`captain-obvious: initialized registry at ${path}\n`);
 }
 
+function runServe(args: ParsedArgs): void {
+  const portRaw = args.values.get("port");
+  startServer({
+    port: portRaw ? parseIntStrict(portRaw, "--port") : undefined,
+    host: args.values.get("host"),
+    dbPath: args.values.get("db"),
+  }).catch((err) => fail(err instanceof Error ? err.message : String(err)));
+}
+
 const COMMANDS: Record<string, (args: ParsedArgs) => void> = {
   "add-language": runAddLanguage,
   "add-rule": runAddRule,
@@ -152,6 +163,7 @@ const COMMANDS: Record<string, (args: ParsedArgs) => void> = {
   "configure-action": runConfigureAction,
   "seed-rules": runSeedRules,
   init: runInit,
+  serve: runServe,
 };
 
 function main(argv: string[]): void {
