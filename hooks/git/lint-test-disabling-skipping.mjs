@@ -135,6 +135,24 @@ const UNIVERSAL_RULES = [
     detail:
       "xtest / xit / xdescribe are suppression aliases of .skip. Forbidden for the same reason.",
   },
+  {
+    id: "focus-alias",
+    re: /\b(?:fdescribe|fit)\s*\(/g,
+    detail:
+      "fdescribe / fit focus a subset and silently skip the rest of the suite — the same suppression as .only. Remove the focus.",
+  },
+  {
+    id: "todo",
+    re: /\b(?:test|it|describe)\.todo\b/g,
+    detail:
+      ".todo marks a test as planned-but-absent — it asserts nothing and can hide a missing test indefinitely. Write the test, or track it outside the suite.",
+  },
+  {
+    id: "this-skip",
+    re: /\bthis\.skip\s*\(/g,
+    detail:
+      "this.skip() suppresses a test at runtime — a silent skip. Make the test always run, or fail loudly when its prerequisites are missing.",
+  },
 ];
 
 const RULE_SETS = {
@@ -162,6 +180,9 @@ const RATCHET_ONLY_MARKERS = [
 
 const RATCHET_RULE_IDS = new Set([
   "x-prefix",
+  "focus-alias",
+  "todo",
+  "this-skip",
   "page-request",
   "page-route",
   "page-evaluate",

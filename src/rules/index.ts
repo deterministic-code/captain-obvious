@@ -249,7 +249,7 @@ export const RULES: LintRule[] = [
     slug: "lint-test-disabling-skipping",
     name: "Test disabling / skipping",
     category: "testing",
-    description: "Blocks .skip/.only and other test-disabling patterns across test tiers.",
+    description: "Blocks .skip/.only/.fixme/.skipIf/.todo, xit/xdescribe, fdescribe/fit, and this.skip() across test tiers.",
     languages: JSTS,
     config: null,
     ratchetable: true,
