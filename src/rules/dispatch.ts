@@ -49,8 +49,13 @@ export function selectDispatch(db: Db, stage: Stage): Dispatched[] {
   }));
 }
 
+/** Absolute path to a rule's hook implementation (`hooks/git/<slug>.mjs`). */
+export function hookScriptPath(slug: string): string {
+  return resolve(pkgRoot, "hooks", "git", `${slug}.mjs`);
+}
+
 function runRule(slug: string, args: string[]): Promise<number> {
-  const script = resolve(pkgRoot, "hooks", "git", `${slug}.mjs`);
+  const script = hookScriptPath(slug);
   return new Promise((resolveCode, reject) => {
     const child = spawn(process.execPath, [script, ...args], { stdio: "inherit" });
     child.on("error", reject);

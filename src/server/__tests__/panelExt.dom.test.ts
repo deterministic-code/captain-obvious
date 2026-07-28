@@ -22,6 +22,15 @@ const META = {
 };
 
 let patchCalls: { url: string; body: { languages: string[] } }[];
+let runCalls: { slugs: string[]; path: string }[];
+const RUN_RESULT = [
+  {
+    slug: "lint-a",
+    ok: true,
+    violations: [{ path: "x.ts", line: 4, col: 2, kind: "size", detail: "too big" }],
+  },
+  { slug: "lint-b", ok: true, violations: [] },
+];
 
 function jsonRes(obj: unknown) {
   return { ok: true, status: 200, json: async () => obj } as unknown as Response;
@@ -38,7 +47,9 @@ function row(slug: string, name: string, category: string): string {
 
 function buildPanelDom() {
   document.body.innerHTML =
-    '<div id="root"><div class="bar">' +
+    '<div id="root"><nav class="tabs">' +
+    "<button>Rules</button><button>Profiling</button></nav>" +
+    '<div class="bar">' +
     '<input class="search"/>' +
     '<select class="native-cat">' +
     '<option value="all">All categories</option>' +
@@ -65,9 +76,17 @@ async function runInjected() {
 
 beforeEach(() => {
   patchCalls = [];
+  runCalls = [];
   vi.stubGlobal("fetch", async (url: string, opts?: RequestInit) => {
     if (url === "/api/rules") return jsonRes(RULES);
     if (url === "/api/meta") return jsonRes(META);
+    if (url === "/api/run/meta") {
+      return jsonRes({ root: "/proj", runnableSlugs: ["lint-a", "lint-b"] });
+    }
+    if (url === "/api/run") {
+      runCalls.push(JSON.parse(opts?.body as string));
+      return jsonRes(RUN_RESULT);
+    }
     if (opts?.method === "PATCH") {
       patchCalls.push({ url, body: JSON.parse(opts.body as string) });
       return jsonRes({});
@@ -236,5 +255,55 @@ describe("panelExt injected script", () => {
     expect(rows[0].style.display).toBe("none"); // lint-a (size) hidden
     expect(rows[1].style.display).toBe(""); // lint-b (naming) shown
     expect(rows[2].style.display).toBe(""); // lint-c (no category) always shows
+  });
+
+  it("injects a Run tab into the nav and a hidden overlay listing only runnable rules", async () => {
+    await runInjected();
+    const tab = document.querySelector(".co-run-tab")!;
+    expect(tab.textContent).toBe("Run");
+    const overlay = document.querySelector<HTMLElement>("#co-run-overlay")!;
+    expect(overlay.style.display).toBe("none");
+    // Picker prefills the folder and lists only the runnable slugs (lint-a, lint-b).
+    expect(document.querySelector<HTMLInputElement>("#co-run-path")!.value).toBe("/proj");
+    const opts = [...overlay.querySelectorAll<HTMLInputElement>(".co-run-opt")].map(
+      (i) => i.value,
+    );
+    expect(opts.sort()).toEqual(["lint-a", "lint-b"]);
+  });
+
+  it("Run tab shows the overlay and hides the panel; Back restores it", async () => {
+    await runInjected();
+    const root = document.getElementById("root")!;
+    const overlay = document.querySelector<HTMLElement>("#co-run-overlay")!;
+    (document.querySelector(".co-run-tab") as HTMLElement).click();
+    expect(overlay.style.display).toBe("block");
+    expect(root.style.display).toBe("none");
+    (overlay.querySelector(".co-run-back") as HTMLElement).click();
+    expect(overlay.style.display).toBe("none");
+    expect(root.style.display).toBe("");
+  });
+
+  it("gates Run on a selection, then POSTs the chosen slugs and renders grouped results", async () => {
+    await runInjected();
+    const overlay = document.querySelector<HTMLElement>("#co-run-overlay")!;
+    const btn = overlay.querySelector<HTMLButtonElement>("#co-run-btn")!;
+    expect(btn.disabled).toBe(true); // no selection yet
+
+    const box = [...overlay.querySelectorAll<HTMLInputElement>(".co-run-opt")].find(
+      (i) => i.value === "lint-a",
+    )!;
+    box.checked = true;
+    box.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(btn.disabled).toBe(false);
+
+    btn.click();
+    for (let i = 0; i < 4; i++) await flush();
+
+    expect(runCalls).toHaveLength(1);
+    expect(runCalls[0]).toEqual({ slugs: ["lint-a"], path: "/proj" });
+    const results = overlay.querySelector("#co-run-results")!;
+    expect(results.querySelector(".co-run-slug")!.textContent).toBe("lint-a");
+    expect(results.textContent).toContain("too big");
+    expect(results.textContent).toContain("no violations"); // lint-b, empty
   });
 });

@@ -23,6 +23,12 @@ export const PANEL_EXT = `(() => {
   let allCategories = [];
   const selectedCats = new Set();
   const selectedLangs = new Set();
+  let runRoot = "";
+  let runnableSlugs = [];
+  let slugList = [];
+  const selectedSlugs = new Set();
+  let runActive = false;
+  let running = false;
 
   function esc(s) {
     return String(s).replace(/[&<>"]/g, (c) =>
@@ -282,6 +288,8 @@ export const PANEL_EXT = `(() => {
   }
 
   function decorate() {
+    injectRunTab();
+    syncRunView();
     const table = document.querySelector("table");
     if (!table) return;
     const headRow = table.querySelector("thead tr");
@@ -348,8 +356,339 @@ export const PANEL_EXT = `(() => {
       ".co-dd-foot button:hover{background:#f1f5f9}" +
       ".co-dd-close{background:#0f172a;color:#fff;border-color:#0f172a}" +
       ".co-dd-close:hover{background:#1e293b}" +
-      ".co-filter-cats,.co-filter-langs{margin-left:8px;vertical-align:middle}";
+      ".co-filter-cats,.co-filter-langs{margin-left:8px;vertical-align:middle}" +
+      ".co-run-tab{cursor:pointer}.co-run-tab-active{font-weight:700}" +
+      "#co-run-overlay{padding:24px 28px;font-family:inherit}" +
+      ".co-run-wrap{max-width:1000px;margin:0 auto}" +
+      ".co-run-head{display:flex;align-items:center;gap:12px;margin-bottom:18px}" +
+      ".co-run-back{cursor:pointer;font-size:13px;font-weight:600;padding:5px 12px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;color:#334155}" +
+      ".co-run-back:hover{background:#f1f5f9}" +
+      ".co-run-title{font-size:20px;font-weight:700;color:#0f172a}" +
+      ".co-run-field{margin-bottom:16px}" +
+      ".co-run-field label{display:block;font-size:12px;font-weight:600;color:#64748b;margin-bottom:4px}" +
+      ".co-run-path{width:100%;box-sizing:border-box;padding:7px 10px;font-size:13px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid #cbd5e1;border-radius:6px;outline:none}" +
+      ".co-run-path:focus{border-color:#94a3b8}" +
+      ".co-run-picker{border:1px solid #e2e8f0;border-radius:8px;margin-bottom:16px}" +
+      ".co-run-picker-head{display:flex;align-items:center;gap:12px;padding:8px;border-bottom:1px solid #f1f5f9}" +
+      ".co-run-search{flex:1}" +
+      ".co-run-picker-list{max-height:320px;overflow:auto;padding:6px}" +
+      ".co-run-group{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#94a3b8;padding:8px 8px 4px}" +
+      ".co-run-rule-item span{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}" +
+      ".co-run-actions{display:flex;align-items:center;gap:12px;margin-bottom:18px}" +
+      ".co-run-btn{cursor:pointer;font-size:14px;font-weight:600;padding:8px 20px;border-radius:6px;border:1px solid #0f172a;background:#0f172a;color:#fff}" +
+      ".co-run-btn:hover{background:#1e293b}.co-run-btn:disabled{cursor:not-allowed;opacity:.45}" +
+      ".co-run-status{font-size:13px;color:#64748b}" +
+      ".co-run-results{display:flex;flex-direction:column;gap:14px}" +
+      ".co-run-rule{border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}" +
+      ".co-run-rule-head{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#f8fafc;border-bottom:1px solid #f1f5f9}" +
+      ".co-run-slug{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600;color:#0f172a}" +
+      ".co-run-pill{font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px}" +
+      ".co-run-pill-ok{background:#dcfce7;color:#166534}.co-run-pill-n{background:#fee2e2;color:#991b1b}.co-run-pill-err{background:#fef3c7;color:#92400e}" +
+      ".co-run-file{padding:8px 14px}.co-run-file + .co-run-file{border-top:1px solid #f8fafc}" +
+      ".co-run-file-name{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#475569;margin-bottom:4px}" +
+      ".co-run-vio{font-size:13px;padding:2px 0 2px 12px;display:flex;gap:8px;align-items:baseline}" +
+      ".co-run-loc{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#94a3b8;min-width:44px}" +
+      ".co-run-detail{color:#334155}" +
+      ".co-run-empty,.co-run-error{font-size:13px;color:#64748b;padding:8px}.co-run-error{color:#991b1b}";
     document.head.appendChild(style);
+  }
+
+  async function loadRunMeta() {
+    const res = await fetch("/api/run/meta");
+    if (!res.ok) throw new Error("GET /api/run/meta -> " + res.status);
+    const meta = await res.json();
+    runRoot = meta.root || "";
+    runnableSlugs = meta.runnableSlugs || [];
+  }
+
+  function runnableRules() {
+    const ok = new Set(runnableSlugs);
+    return slugList.filter((r) => ok.has(r.slug));
+  }
+
+  // The panel bundle owns the nav; we locate it by a leaf element whose text is a
+  // known tab ("Rules"/"Profiling"), clone it into a "Run" tab, and re-inject
+  // idempotently on every observer tick (a native tab click re-renders it away).
+  function findNav() {
+    const wanted = ["rules", "profiling"];
+    for (const el of document.querySelectorAll("button, a, [role=tab], nav *")) {
+      const txt = (el.textContent || "").trim().toLowerCase();
+      if (wanted.indexOf(txt) !== -1 && el.children.length === 0) {
+        return { nav: el.parentElement, tmpl: el };
+      }
+    }
+    return null;
+  }
+
+  function injectRunTab() {
+    const found = findNav();
+    if (!found || !found.nav || found.nav.querySelector(".co-run-tab")) return;
+    const tab = found.tmpl.cloneNode(true);
+    tab.classList.add("co-run-tab");
+    tab.textContent = "Run";
+    tab.removeAttribute("aria-selected");
+    tab.addEventListener("click", (e) => {
+      e.stopPropagation();
+      runActive = true;
+      syncRunView();
+    });
+    found.nav.appendChild(tab);
+  }
+
+  // The overlay lives OUTSIDE #root so React never reconciles it away; showing it
+  // hides #root wholesale (nav included) and a Back button returns to the panel.
+  function syncRunView() {
+    const root = document.getElementById("root");
+    const overlay = document.getElementById("co-run-overlay");
+    if (!root || !overlay) return;
+    overlay.style.display = runActive ? "block" : "none";
+    root.style.display = runActive ? "none" : "";
+    const tab = document.querySelector(".co-run-tab");
+    if (tab) tab.classList.toggle("co-run-tab-active", runActive);
+  }
+
+  function updateRunGate() {
+    const btn = document.getElementById("co-run-btn");
+    if (btn) btn.disabled = running || selectedSlugs.size === 0;
+    const status = document.getElementById("co-run-status");
+    if (status && !running) {
+      status.textContent = selectedSlugs.size ? selectedSlugs.size + " selected" : "";
+    }
+  }
+
+  function buildRulePicker(container) {
+    container.innerHTML = "";
+    const rules = runnableRules();
+
+    const head = document.createElement("div");
+    head.className = "co-run-picker-head";
+    const search = document.createElement("input");
+    search.type = "text";
+    search.className = "co-dd-search co-run-search";
+    search.placeholder = "Search rules…";
+    head.appendChild(search);
+    const allLabel = document.createElement("label");
+    allLabel.className = "co-dd-item co-dd-all-item";
+    const allBox = document.createElement("input");
+    allBox.type = "checkbox";
+    allBox.className = "co-run-all";
+    allLabel.appendChild(allBox);
+    const allSpan = document.createElement("span");
+    allSpan.textContent = "All " + rules.length + " rules";
+    allLabel.appendChild(allSpan);
+    head.appendChild(allLabel);
+    container.appendChild(head);
+
+    const list = document.createElement("div");
+    list.className = "co-run-picker-list";
+    container.appendChild(list);
+
+    const rows = [];
+    const byCat = {};
+    for (const r of rules) {
+      const cat = r.categories[0] || "other";
+      (byCat[cat] = byCat[cat] || []).push(r);
+    }
+    for (const cat of Object.keys(byCat).sort()) {
+      const group = document.createElement("div");
+      group.className = "co-run-group";
+      group.textContent = cat;
+      list.appendChild(group);
+      for (const r of byCat[cat]) {
+        const label = document.createElement("label");
+        label.className = "co-dd-item co-run-rule-item";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.className = "co-run-opt";
+        cb.value = r.slug;
+        cb.checked = selectedSlugs.has(r.slug);
+        label.appendChild(cb);
+        const span = document.createElement("span");
+        span.textContent = r.slug;
+        label.appendChild(span);
+        list.appendChild(label);
+        rows.push({ label, box: cb, text: (r.slug + " " + r.name).toLowerCase() });
+      }
+    }
+
+    function syncAll() {
+      allBox.checked = rows.length > 0 && selectedSlugs.size === rows.length;
+    }
+    syncAll();
+
+    list.addEventListener("change", (e) => {
+      if (!e.target.classList.contains("co-run-opt")) return;
+      if (e.target.checked) selectedSlugs.add(e.target.value);
+      else selectedSlugs.delete(e.target.value);
+      syncAll();
+      updateRunGate();
+    });
+    allBox.addEventListener("change", () => {
+      selectedSlugs.clear();
+      if (allBox.checked) for (const r of rows) selectedSlugs.add(r.box.value);
+      for (const r of rows) r.box.checked = allBox.checked;
+      updateRunGate();
+    });
+    search.addEventListener("input", () => {
+      const q = search.value.trim().toLowerCase();
+      for (const r of rows) {
+        r.label.style.display = !q || r.text.indexOf(q) !== -1 ? "" : "none";
+      }
+    });
+  }
+
+  function buildRunView() {
+    if (document.getElementById("co-run-overlay")) return;
+    const root = document.getElementById("root");
+    if (!root || !root.parentElement) return;
+
+    const overlay = document.createElement("div");
+    overlay.id = "co-run-overlay";
+    overlay.style.display = "none";
+    const wrap = document.createElement("div");
+    wrap.className = "co-run-wrap";
+    overlay.appendChild(wrap);
+
+    const head = document.createElement("div");
+    head.className = "co-run-head";
+    const back = document.createElement("button");
+    back.type = "button";
+    back.className = "co-run-back";
+    back.textContent = "← Back";
+    back.addEventListener("click", () => {
+      runActive = false;
+      syncRunView();
+    });
+    const title = document.createElement("span");
+    title.className = "co-run-title";
+    title.textContent = "Run rules";
+    head.appendChild(back);
+    head.appendChild(title);
+    wrap.appendChild(head);
+
+    const field = document.createElement("div");
+    field.className = "co-run-field";
+    const flabel = document.createElement("label");
+    flabel.textContent = "Target folder";
+    const pathInput = document.createElement("input");
+    pathInput.className = "co-run-path";
+    pathInput.id = "co-run-path";
+    pathInput.value = runRoot;
+    field.appendChild(flabel);
+    field.appendChild(pathInput);
+    wrap.appendChild(field);
+
+    const picker = document.createElement("div");
+    picker.className = "co-run-picker";
+    wrap.appendChild(picker);
+    buildRulePicker(picker);
+
+    const actions = document.createElement("div");
+    actions.className = "co-run-actions";
+    const runBtn = document.createElement("button");
+    runBtn.type = "button";
+    runBtn.className = "co-run-btn";
+    runBtn.id = "co-run-btn";
+    runBtn.textContent = "Run";
+    runBtn.disabled = true;
+    runBtn.addEventListener("click", () => { doRun(); });
+    const status = document.createElement("span");
+    status.className = "co-run-status";
+    status.id = "co-run-status";
+    actions.appendChild(runBtn);
+    actions.appendChild(status);
+    wrap.appendChild(actions);
+
+    const results = document.createElement("div");
+    results.className = "co-run-results";
+    results.id = "co-run-results";
+    wrap.appendChild(results);
+
+    root.parentElement.insertBefore(overlay, root.nextSibling);
+  }
+
+  function renderViolations(violations) {
+    const byFile = {};
+    for (const v of violations) {
+      const p = v.path || "(unknown)";
+      (byFile[p] = byFile[p] || []).push(v);
+    }
+    let html = "";
+    for (const path of Object.keys(byFile).sort()) {
+      html += '<div class="co-run-file"><div class="co-run-file-name">' +
+        esc(path) + "</div>";
+      for (const v of byFile[path]) {
+        html += '<div class="co-run-vio"><span class="co-run-loc">' +
+          esc(v.line + ":" + v.col) +
+          '</span> <span class="co-kind co-kind-output">' + esc(v.kind) +
+          '</span> <span class="co-run-detail">' + esc(v.detail) + "</span></div>";
+      }
+      html += "</div>";
+    }
+    return html;
+  }
+
+  function renderResults(data) {
+    const results = document.getElementById("co-run-results");
+    if (!results) return;
+    if (!Array.isArray(data) || data.length === 0) {
+      results.innerHTML = '<div class="co-run-empty">No results.</div>';
+      return;
+    }
+    let html = "";
+    for (const r of data) {
+      const count = (r.violations || []).length;
+      html += '<div class="co-run-rule"><div class="co-run-rule-head">' +
+        '<span class="co-run-slug">' + esc(r.slug) + "</span>";
+      if (!r.ok) {
+        html += '<span class="co-run-pill co-run-pill-err">' +
+          esc(r.error || "error") + "</span>";
+      } else if (count === 0) {
+        html += '<span class="co-run-pill co-run-pill-ok">no violations</span>';
+      } else {
+        html += '<span class="co-run-pill co-run-pill-n">' + count +
+          (count === 1 ? " violation" : " violations") + "</span>";
+      }
+      html += "</div>";
+      if (r.ok && count > 0) html += renderViolations(r.violations);
+      html += "</div>";
+    }
+    results.innerHTML = html;
+  }
+
+  async function doRun() {
+    if (running || selectedSlugs.size === 0) return;
+    const pathInput = document.getElementById("co-run-path");
+    const status = document.getElementById("co-run-status");
+    const results = document.getElementById("co-run-results");
+    running = true;
+    updateRunGate();
+    if (status) status.textContent = "Running " + selectedSlugs.size + " rule(s)…";
+    if (results) results.innerHTML = "";
+    try {
+      const res = await fetch("/api/run", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          slugs: Array.from(selectedSlugs),
+          path: pathInput ? pathInput.value.trim() : "",
+        }),
+      });
+      if (!res.ok) {
+        const msg = await res.json().then((b) => b.error, () => "");
+        throw new Error(msg || "POST /api/run -> " + res.status);
+      }
+      renderResults(await res.json());
+      if (status) status.textContent = "";
+    } catch (err) {
+      if (results) {
+        results.innerHTML = '<div class="co-run-error">' + esc(err.message) + "</div>";
+      }
+      if (status) status.textContent = "";
+    } finally {
+      running = false;
+      updateRunGate();
+    }
   }
 
   let scheduled = false;
@@ -376,6 +715,11 @@ export const PANEL_EXT = `(() => {
       catsBySlug[r.slug] = r.categories || [];
       for (const c of r.categories || []) cats.add(c);
     }
+    slugList = rules.map((r) => ({
+      slug: r.slug,
+      name: r.name,
+      categories: r.categories || [],
+    }));
     allCategories = Array.from(cats).sort();
     supportedLangs = meta.languages || [];
     nameBySlug = {};
@@ -391,6 +735,8 @@ export const PANEL_EXT = `(() => {
   async function start() {
     injectStyle();
     await loadData();
+    await loadRunMeta();
+    buildRunView();
     const root = document.getElementById("root") || document.body;
     new MutationObserver(schedule).observe(root, { childList: true, subtree: true });
     decorate();

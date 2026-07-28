@@ -204,6 +204,23 @@ describe("fn-metrics / runMetricHook", () => {
     );
   });
 
+  test("CO_JSON emits one JSON violations line and never exits", async () => {
+    await writeFile(join(repo, "big.ts"), OVER_COMPLEXITY, "utf8");
+    await commitAllIn(repo, "over-limit tree");
+    process.env.CO_JSON = "1";
+    try {
+      await withCwd(repo, () => runMetricHook("complexity", ["node", "hook", "--all"]));
+    } finally {
+      delete process.env.CO_JSON;
+    }
+    expect(io.exitSpy).not.toHaveBeenCalled();
+    expect(io.text(io.stderrSpy)).toBe("");
+    const lines = io.text(io.stdoutSpy).split("\n").filter(Boolean);
+    expect(lines).toHaveLength(1);
+    const parsed = JSON.parse(lines[0]);
+    expect(parsed.violations[0]).toMatchObject({ kind: "complexity" });
+  });
+
   test("an unknown mode prints usage and exits 2", async () => {
     await withCwd(repo, () =>
       expect(runMetricHook("lines", ["node", "hook", "--bogus"])).rejects.toThrow(

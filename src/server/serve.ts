@@ -20,6 +20,7 @@ import {
   seed,
 } from "./registry.js";
 import { profilingMeta, profilingReport } from "./profiling.js";
+import { runMeta, runRules, type RunRequest } from "./run.js";
 import { PANEL_EXT } from "./panelExt.js";
 
 // dist/server/serve.js -> repo root (matches open.ts's pkgRoot derivation).
@@ -168,6 +169,15 @@ async function handle(
   if (pathname === "/api/action-types" && method === "POST") {
     const body = (await readBody(req)) as Parameters<typeof addActionType>[1];
     return sendJson(res, 200, addActionType(db, body));
+  }
+
+  // --- run (execute rules against a folder) ---
+  if (pathname === "/api/run/meta" && method === "GET") {
+    return sendJson(res, 200, runMeta());
+  }
+  if (pathname === "/api/run" && method === "POST") {
+    const body = (await readBody(req)) as RunRequest;
+    return sendJson(res, 200, await runRules(body));
   }
 
   // --- profiling (separate DB) ---
