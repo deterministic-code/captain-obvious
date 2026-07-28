@@ -25,10 +25,10 @@ const CATEGORIES: RuleCategory[] = [
 const ACTION_KINDS = ["inferred", "script", "output"];
 
 describe("RULES registry", () => {
-  it("has 24 rules with unique slugs", () => {
-    expect(RULES).toHaveLength(24);
+  it("has 25 rules with unique slugs", () => {
+    expect(RULES).toHaveLength(25);
     const slugs = RULES.map((r) => r.meta.slug);
-    expect(new Set(slugs).size).toBe(24);
+    expect(new Set(slugs).size).toBe(25);
   });
 
   it("uses only known categories (primary and extras)", () => {
