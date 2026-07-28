@@ -33,6 +33,12 @@ export interface RuleView {
    * panel reads the scalar `category`; API/CLI consumers read this for the rest.
    */
   categories: string[];
+  /**
+   * The supported-language slugs this rule targets. Additive field — the
+   * prebuilt panel ignores it; the panel augmentation (panelExt) reads it to
+   * render/edit the Languages column.
+   */
+  languages: string[];
   stage: string | null;
   enabled: boolean;
   config: Record<string, unknown> | null;
@@ -101,6 +107,21 @@ export function listRules(db: Db): RuleView[] {
     categoriesByRule.set(c.ruleId, list);
   }
 
+  const languageRows = db
+    .prepare(
+      `SELECT rl.rule_id AS ruleId, l.slug AS slug
+         FROM rule_languages rl
+         JOIN languages l ON l.id = rl.language_id
+        ORDER BY l.slug`,
+    )
+    .all() as { ruleId: number; slug: string }[];
+  const languagesByRule = new Map<number, string[]>();
+  for (const l of languageRows) {
+    const list = languagesByRule.get(l.ruleId) ?? [];
+    list.push(l.slug);
+    languagesByRule.set(l.ruleId, list);
+  }
+
   // Rule actions (fixes table): one grouped read, then split per rule.
   const fixRows = db
     .prepare(
@@ -139,6 +160,7 @@ export function listRules(db: Db): RuleView[] {
       description: r.description,
       category: r.category,
       categories: orderCategories(r.category, categoriesByRule.get(r.id) ?? []),
+      languages: languagesByRule.get(r.id) ?? [],
       stage: META_BY_SLUG.get(r.slug)?.stage ?? null,
       enabled: r.enabled === 1,
       config: parseConfig(r.config_json),
@@ -152,9 +174,15 @@ export function listRules(db: Db): RuleView[] {
 export interface MetaView {
   actionTypes: { slug: string; name: string }[];
   environments: { slug: string; name: string }[];
+  /**
+   * Supported languages only (is_supported = 1). Additive field — the prebuilt
+   * panel ignores it; the panel augmentation (panelExt) uses it to populate the
+   * language filter and the per-row Languages picker.
+   */
+  languages: { slug: string; name: string }[];
 }
 
-/** GET /api/meta — dropdown sources for the action/environment selectors. */
+/** GET /api/meta — dropdown sources for the action/environment/language selectors. */
 export function getMeta(db: Db): MetaView {
   return {
     actionTypes: db
@@ -163,6 +191,11 @@ export function getMeta(db: Db): MetaView {
     environments: db
       .prepare("SELECT slug, name FROM environments ORDER BY name")
       .all() as MetaView["environments"],
+    languages: db
+      .prepare(
+        "SELECT slug, name FROM languages WHERE is_supported = 1 ORDER BY name",
+      )
+      .all() as MetaView["languages"],
   };
 }
 
@@ -220,6 +253,23 @@ export interface RulePatch {
   config?: Record<string, unknown>;
   setAction?: { type: string; environment?: string; delayMs?: number | null };
   removeAction?: string;
+  /** The rule's full desired language set; diffed against the current links. */
+  languages?: string[];
+}
+
+/** The rule's currently-linked language slugs. */
+function currentLanguages(db: Db, slug: string): string[] {
+  return (
+    db
+      .prepare(
+        `SELECT l.slug AS slug
+           FROM rule_languages rl
+           JOIN languages l ON l.id = rl.language_id
+           JOIN rules r ON r.id = rl.rule_id
+          WHERE r.slug = ?`,
+      )
+      .all(slug) as { slug: string }[]
+  ).map((r) => r.slug);
 }
 
 /** PATCH /api/rules/:slug — apply one edit and return the updated view. */
@@ -241,6 +291,15 @@ export function patchRule(db: Db, slug: string, patch: RulePatch): RuleView {
   }
   if (patch.removeAction) {
     configureRule(db, slug, { removeAction: patch.removeAction });
+  }
+  if (patch.languages !== undefined) {
+    const current = new Set(currentLanguages(db, slug));
+    const desired = new Set(patch.languages);
+    const addLanguages = [...desired].filter((s) => !current.has(s));
+    const removeLanguages = [...current].filter((s) => !desired.has(s));
+    if (addLanguages.length > 0 || removeLanguages.length > 0) {
+      configureRule(db, slug, { addLanguages, removeLanguages });
+    }
   }
   const view = listRules(db).find((r) => r.slug === slug);
   if (!view) throw new Error(`unknown rule: ${slug}`);

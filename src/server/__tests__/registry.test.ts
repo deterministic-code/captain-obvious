@@ -136,6 +136,17 @@ describe("listRules actions and bindings", () => {
     addRule(db, { slug: "lint-nofix", name: "NoFix" });
     expect(view("lint-nofix").actions).toEqual([]);
   });
+
+  it("exposes the rule's linked languages (sorted), empty when none", () => {
+    addRule(db, {
+      slug: "lint-lang",
+      name: "Lang",
+      languages: ["typescript", "javascript"],
+    });
+    addRule(db, { slug: "lint-nolang", name: "NoLang" });
+    expect(view("lint-lang").languages).toEqual(["javascript", "typescript"]);
+    expect(view("lint-nolang").languages).toEqual([]);
+  });
 });
 
 describe("getMeta", () => {
@@ -151,6 +162,16 @@ describe("getMeta", () => {
       "cursor",
       "github",
     ]);
+  });
+
+  it("lists only supported languages, alphabetically by name", () => {
+    const langs = getMeta(db).languages;
+    expect(langs.map((l) => l.slug)).toEqual([
+      "csharp",
+      "javascript",
+      "typescript",
+    ]);
+    expect(langs.every((l) => typeof l.name === "string")).toBe(true);
   });
 });
 
@@ -218,6 +239,27 @@ describe("patchRule", () => {
     patchRule(db, "lint-pr", { setAction: { type: "halt" } });
     const v = patchRule(db, "lint-pr", { removeAction: "default" });
     expect(v.defaultAction).toBeNull();
+  });
+
+  it("sets the language set by diffing add/remove against current links", () => {
+    addRule(db, { slug: "lint-pl", name: "PL", languages: ["typescript"] });
+    // Adds csharp, drops typescript, keeps javascript unmentioned-but-added.
+    const v = patchRule(db, "lint-pl", {
+      languages: ["javascript", "csharp"],
+    });
+    expect([...v.languages].sort()).toEqual(["csharp", "javascript"]);
+  });
+
+  it("is a no-op when the desired language set already matches", () => {
+    addRule(db, { slug: "lint-pl2", name: "PL2", languages: ["typescript"] });
+    const v = patchRule(db, "lint-pl2", { languages: ["typescript"] });
+    expect(v.languages).toEqual(["typescript"]);
+  });
+
+  it("clears all languages when given an empty set", () => {
+    addRule(db, { slug: "lint-pl3", name: "PL3", languages: ["typescript"] });
+    const v = patchRule(db, "lint-pl3", { languages: [] });
+    expect(v.languages).toEqual([]);
   });
 
   it("throws for an unknown rule when the patch is a no-op", () => {
