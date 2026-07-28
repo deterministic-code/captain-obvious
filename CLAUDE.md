@@ -77,3 +77,13 @@ run both before pushing and never push a red tree. Once the PR is open, squash-m
 don't arm `--auto`, don't poll. `main` is branch-protected, so any edit starts from a branch
 (`git worktree add -b <branch> .worktrees/<slug> main`); don't give the user guidance for changes that
 aren't merged to `main` yet.
+
+**After merging, show it.** As the final step of any task that changes the control panel or its
+`/api/*`, make the result visible on the dev server without being asked: once the change is on `main`,
+rebuild (`npm run build`), free the port if a stale instance holds it
+(`lsof -ti tcp:4317 | xargs -r kill`), then start `node dist/bin/captain-obvious.js serve`
+(http://127.0.0.1:4317) and confirm it responds. A stale `serve` started from a since-removed worktree
+serves a broken panel (`/` 404s because its `web/dist` is gone), so always kill-then-restart from the
+primary checkout. Note `gh pr merge --delete-branch` can't check out `main` while the primary worktree
+holds it — after the squash-merge lands, delete the merged branch by hand from the primary checkout:
+`git push origin --delete <branch>` + `git worktree remove <path>` + `git branch -D <branch>`.
