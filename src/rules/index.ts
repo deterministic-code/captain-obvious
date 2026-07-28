@@ -256,6 +256,18 @@ export const RULES: LintRule[] = [
     modes: RATCHET_MODES,
     stage: "pre-commit",
   }),
+  defineRule({
+    slug: "lint-coverage",
+    name: "Coverage ratchet",
+    category: "testing",
+    description:
+      "Blocks a drop in test coverage below the committed baseline (coverage-baseline.json); reads coverage/coverage-summary.json. Accept a new floor with --update.",
+    languages: JSTS,
+    config: null,
+    ratchetable: true,
+    modes: RATCHET_MODES,
+    stage: "pre-push",
+  }),
   // Governance rules police the repo/workflow, not source files: language-agnostic
   // (languages: []) and enforced per environment via action bindings (e.g. halt on
   // github, warn on claude). The runnable ones delegate to a hooks/git/<slug>.mjs;
