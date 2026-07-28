@@ -292,6 +292,18 @@ export const RULES: LintRule[] = [
     modes: FILE_MODES,
     stage: "pre-commit",
   }),
+  defineRule({
+    slug: "lint-test-determinism",
+    name: "Test determinism",
+    category: "testing",
+    description:
+      "Flags nondeterministic sources in tests — Date.now/new Date()/performance.now, Math.random, and real network (fetch/XMLHttpRequest).",
+    languages: JSTS,
+    config: null,
+    ratchetable: false,
+    modes: FILE_MODES,
+    stage: "pre-commit",
+  }),
   // Governance rules police the repo/workflow, not source files: language-agnostic
   // (languages: []) and enforced per environment via action bindings (e.g. halt on
   // github, warn on claude). The runnable ones delegate to a hooks/git/<slug>.mjs;
