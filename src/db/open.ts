@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
+import { LANGUAGES } from "../rules/languages.js";
 
 /** better-sqlite3 database handle. */
 export type Db = Database.Database;
@@ -45,7 +46,8 @@ export function resolveDbPath(opts: DbPathOpts = {}): string {
 /**
  * Open (creating if missing) the registry DB, apply the schema idempotently,
  * enable foreign keys, and seed the fixed lookup tables. Safe to call on an
- * existing DB — schema uses IF NOT EXISTS and seeds use INSERT OR IGNORE.
+ * existing DB — schema uses IF NOT EXISTS, lookups upsert, and pre-column DBs
+ * are migrated before seeding.
  */
 export function openDb(dbPath: string): Db {
   if (dbPath !== ":memory:") {
@@ -54,8 +56,22 @@ export function openDb(dbPath: string): Db {
   const db = new Database(dbPath);
   db.pragma("foreign_keys = ON");
   db.exec(readFileSync(SCHEMA_PATH, "utf8"));
+  migrateLanguages(db);
   seedLookups(db);
   return db;
+}
+
+// `CREATE TABLE IF NOT EXISTS` won't add columns to a table that predates them,
+// so a DB created before is_supported keeps the old shape — add it in place.
+function migrateLanguages(db: Db): void {
+  const cols = db.prepare("PRAGMA table_info(languages)").all() as {
+    name: string;
+  }[];
+  if (!cols.some((c) => c.name === "is_supported")) {
+    db.exec(
+      "ALTER TABLE languages ADD COLUMN is_supported INTEGER NOT NULL DEFAULT 0",
+    );
+  }
 }
 
 function seedLookups(db: Db): void {
@@ -65,9 +81,30 @@ function seedLookups(db: Db): void {
   const action = db.prepare(
     "INSERT OR IGNORE INTO action_types (slug, name) VALUES (?, ?)",
   );
+  // The catalog is authoritative for its slugs: upsert so an existing row (e.g.
+  // one rule-seeded with only slug+name) picks up the display name, extensions,
+  // and is_supported flag. CLI-added languages outside the catalog are untouched.
+  const lang = db.prepare(
+    `INSERT INTO languages (slug, name, extensions, is_supported)
+     VALUES (@slug, @name, @extensions, @isSupported)
+     ON CONFLICT(slug) DO UPDATE SET
+       name = excluded.name,
+       extensions = excluded.extensions,
+       is_supported = excluded.is_supported`,
+  );
   const seed = db.transaction(() => {
     for (const [slug, name] of ENVIRONMENTS) env.run(slug, name);
     for (const [slug, name] of ACTION_TYPES) action.run(slug, name);
+    // Every catalog entry carries at least one extension, so store the JSON
+    // array unconditionally (the CLI's addLanguage handles the empty case).
+    for (const l of LANGUAGES) {
+      lang.run({
+        slug: l.slug,
+        name: l.name,
+        extensions: JSON.stringify(l.extensions),
+        isSupported: l.isSupported ? 1 : 0,
+      });
+    }
   });
   seed();
 }

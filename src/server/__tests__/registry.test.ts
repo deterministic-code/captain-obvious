@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { setRuleFixes } from "../../db/fixes.js";
-import { addLanguage } from "../../db/languages.js";
 import { openDb, type Db } from "../../db/open.js";
 import { addRule, configureRule } from "../../db/rules.js";
 import { PANEL_EXT } from "../panelExt.js";
@@ -15,9 +14,9 @@ import {
 
 let db: Db;
 
+// openDb seeds the language catalog, so typescript already exists for linking.
 beforeEach(() => {
   db = openDb(":memory:");
-  addLanguage(db, { slug: "typescript", name: "TypeScript" });
 });
 
 afterEach(() => {

@@ -10,10 +10,11 @@ PRAGMA foreign_keys = ON;
 -- Lookups -----------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS languages (
-  id         INTEGER PRIMARY KEY,
-  slug       TEXT NOT NULL UNIQUE,        -- 'typescript'
-  name       TEXT NOT NULL,               -- 'TypeScript'
-  extensions TEXT                         -- JSON array: ["ts","tsx"] (optional)
+  id           INTEGER PRIMARY KEY,
+  slug         TEXT NOT NULL UNIQUE,      -- 'typescript'
+  name         TEXT NOT NULL,             -- 'TypeScript'
+  extensions   TEXT,                      -- JSON array: ["ts","tsx"] (optional)
+  is_supported INTEGER NOT NULL DEFAULT 0 -- 1 when the bundled rule set can police it today
 ) STRICT;
 
 CREATE TABLE IF NOT EXISTS environments (

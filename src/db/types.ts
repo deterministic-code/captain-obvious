@@ -13,6 +13,8 @@ export interface LanguageRow {
   slug: string;
   name: string;
   extensions: string | null;
+  /** 1 when the bundled rule set can police this language today, else 0. */
+  is_supported: number;
 }
 
 export interface RuleRow {
