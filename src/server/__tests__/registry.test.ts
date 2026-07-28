@@ -147,6 +147,13 @@ describe("listRules actions and bindings", () => {
     expect(view("lint-lang").languages).toEqual(["javascript", "typescript"]);
     expect(view("lint-nolang").languages).toEqual([]);
   });
+
+  it("flags a rule as language-independent exactly when it has no languages", () => {
+    addRule(db, { slug: "lint-scoped", name: "Scoped", languages: ["typescript"] });
+    addRule(db, { slug: "lint-agnostic", name: "Agnostic" });
+    expect(view("lint-scoped").languageIndependent).toBe(false);
+    expect(view("lint-agnostic").languageIndependent).toBe(true);
+  });
 });
 
 describe("getMeta", () => {

@@ -129,7 +129,7 @@ export const RULES: LintRule[] = [
     name: "Frozen interfaces",
     category: "api-stability",
     description: "Prevents changes to signatures marked frozen (baseline in interface-frozen.yaml).",
-    languages: JSTS,
+    languages: [],
     config: null,
     ratchetable: true,
     modes: RATCHET_MODES,

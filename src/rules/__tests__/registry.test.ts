@@ -51,9 +51,16 @@ describe("RULES registry", () => {
     }
   });
 
-  it("targets only supported languages (governance rules are language-agnostic)", () => {
+  // Language-independent rules (empty `languages`) police the repo/workflow or an
+  // artifact, not source files. Governance rules are always agnostic; other rules
+  // must opt in here so a forgotten `languages` list still fails the >0 check.
+  const LANGUAGE_INDEPENDENT = new Set(["lint-frozen-interfaces"]);
+
+  it("targets only supported languages; language-independent rules declare none", () => {
     for (const r of RULES) {
-      if (r.meta.category === "governance") {
+      const agnostic =
+        r.meta.category === "governance" || LANGUAGE_INDEPENDENT.has(r.meta.slug);
+      if (agnostic) {
         expect(r.meta.languages, r.meta.slug).toEqual([]);
         continue;
       }

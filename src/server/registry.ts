@@ -39,6 +39,13 @@ export interface RuleView {
    * render/edit the Languages column.
    */
   languages: string[];
+  /**
+   * True when the rule targets no source language (zero `rule_languages` rows) —
+   * it polices the repo/workflow, not files. Derived from `languages`, not
+   * stored. Additive field — the prebuilt panel ignores it; panelExt reads it to
+   * render the fixed "Language independent" cell instead of the language picker.
+   */
+  languageIndependent: boolean;
   stage: string | null;
   enabled: boolean;
   config: Record<string, unknown> | null;
@@ -154,13 +161,15 @@ export function listRules(db: Db): RuleView[] {
     const envActions = bindings
       .filter((b) => b.environment !== null)
       .map((b) => ({ environment: b.environment as string, type: b.type }));
+    const languages = languagesByRule.get(r.id) ?? [];
     return {
       slug: r.slug,
       name: r.name,
       description: r.description,
       category: r.category,
       categories: orderCategories(r.category, categoriesByRule.get(r.id) ?? []),
-      languages: languagesByRule.get(r.id) ?? [],
+      languages,
+      languageIndependent: languages.length === 0,
       stage: META_BY_SLUG.get(r.slug)?.stage ?? null,
       enabled: r.enabled === 1,
       config: parseConfig(r.config_json),
