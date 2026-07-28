@@ -106,12 +106,14 @@ export async function main(argv) {
       argv.slice(3).map((f) => relative(repoRoot, resolve(f))),
     );
     if (targets.size === 0) {
+      if (jsonMode()) return emitJson([]);
       process.stdout.write("lint-dead-code: no files given.\n");
       return;
     }
     const violations = knipIssuesToViolations(await runKnip(repoRoot)).filter(
       (v) => targets.has(v.path),
     );
+    if (jsonMode()) return emitJson(violations);
     printReport(violations, "the given files", false);
     return;
   }

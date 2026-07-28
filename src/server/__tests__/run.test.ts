@@ -1,4 +1,7 @@
 import { EventEmitter } from "node:events";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("node:child_process", () => ({
@@ -10,7 +13,7 @@ vi.mock("node:child_process", () => ({
 
 import { execFile, spawn } from "node:child_process";
 import { hookScriptPath } from "../../rules/dispatch.js";
-import { RUNNABLE_SLUGS, runMeta, runRules } from "../run.js";
+import { browse, RUNNABLE_SLUGS, runMeta, runRules } from "../run.js";
 
 const spawnMock = vi.mocked(spawn);
 const execFileMock = vi.mocked(execFile);
@@ -42,7 +45,18 @@ function fakeChild(opts: ChildOpts): EventEmitter {
 const jsonLine = (violations: unknown[]) => JSON.stringify({ violations }) + "\n";
 const V = { path: "a.ts", line: 1, col: 3, kind: "k", detail: "d" };
 
+let dir: string;
+let filePath: string;
+
 beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), "co-run-"));
+  mkdirSync(join(dir, "sub"));
+  mkdirSync(join(dir, "node_modules"));
+  mkdirSync(join(dir, ".hidden"));
+  filePath = join(dir, "a.ts");
+  writeFileSync(filePath, "const x = 1;\n");
+  writeFileSync(join(dir, "readme.md"), "# doc\n");
+
   spawnMock.mockImplementation(
     () => fakeChild({ stdout: jsonLine([V]), code: 0 }) as never,
   );
@@ -54,6 +68,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  rmSync(dir, { recursive: true, force: true });
   vi.restoreAllMocks();
   spawnMock.mockReset();
   execFileMock.mockReset();
@@ -68,6 +83,34 @@ describe("runMeta", () => {
   });
 });
 
+describe("browse", () => {
+  it("lists lintable files and non-hidden dirs, dirs first", async () => {
+    const v = await browse(dir);
+    expect(v.path).toBe(dir);
+    expect(v.parent).not.toBeNull();
+    // node_modules, .hidden, and readme.md (non-lintable) are all filtered out.
+    expect(v.entries.map((e) => `${e.type}:${e.name}`)).toEqual([
+      "dir:sub",
+      "file:a.ts",
+    ]);
+    expect(v.entries[1].path).toBe(filePath);
+  });
+
+  it("defaults to the process cwd when no path is given", async () => {
+    const v = await browse();
+    expect(v.path).toBe(process.cwd());
+  });
+
+  it("reports a null parent at the filesystem root", async () => {
+    const v = await browse("/");
+    expect(v.parent).toBeNull();
+  });
+
+  it("rejects when the path is not a directory", async () => {
+    await expect(browse(filePath)).rejects.toThrow();
+  });
+});
+
 describe("runRules — validation", () => {
   it("throws when slugs is missing", async () => {
     await expect(runRules({})).rejects.toThrow("slugs is required");
@@ -78,24 +121,30 @@ describe("runRules — validation", () => {
     await expect(runRules({ slugs: [] })).rejects.toThrow("slugs is required");
   });
 
-  it("throws a clean error when the target folder is not a git repo", async () => {
+  it("throws a clean error when the target does not exist", async () => {
+    await expect(
+      runRules({ slugs: ["lint-naming"], path: join(dir, "nope/x") }),
+    ).rejects.toThrow(/no such file or folder/);
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
+
+  it("throws a clean error when the folder is not a git repo", async () => {
     execFileMock.mockImplementation(((
       _cmd: string,
       _args: string[],
       cb: (e: unknown) => void,
     ) => cb(new Error("fatal: not a git repository"))) as never);
     await expect(
-      runRules({ slugs: ["lint-naming"], path: "/no/such/dir" }),
-    ).rejects.toThrow("not a git repository (or missing folder): /no/such/dir");
+      runRules({ slugs: ["lint-naming"], path: dir }),
+    ).rejects.toThrow(`not a git repository (or missing folder): ${dir}`);
     expect(spawnMock).not.toHaveBeenCalled();
   });
 });
 
-describe("runRules — per-rule outcomes", () => {
-  it("returns structured violations for a runnable rule", async () => {
-    const results = await runRules({ slugs: ["lint-naming"], path: "/repo" });
+describe("runRules — folder mode (--all)", () => {
+  it("runs each rule over the whole folder", async () => {
+    const results = await runRules({ slugs: ["lint-naming"], path: dir });
     expect(results).toEqual([{ slug: "lint-naming", ok: true, violations: [V] }]);
-
     const [cmd, args, opts] = spawnMock.mock.calls[0] as [
       string,
       string[],
@@ -103,20 +152,51 @@ describe("runRules — per-rule outcomes", () => {
     ];
     expect(cmd).toBe(process.execPath);
     expect(args).toEqual([hookScriptPath("lint-naming"), "--all"]);
-    expect(opts.cwd).toBe("/repo");
+    expect(opts.cwd).toBe(dir);
     expect(opts.env.CO_JSON).toBe("1");
   });
 
+  it("defaults the target to the process cwd", async () => {
+    await runRules({ slugs: ["lint-naming"] });
+    const opts = spawnMock.mock.calls[0][2] as { cwd: string };
+    expect(opts.cwd).toBe(process.cwd());
+  });
+
+  it("dedupes slugs and preserves request order", async () => {
+    const results = await runRules({
+      slugs: ["lint-naming", "lint-naming", "lint-max-lines"],
+      path: dir,
+    });
+    expect(results.map((r) => r.slug)).toEqual(["lint-naming", "lint-max-lines"]);
+    expect(spawnMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("runRules — file mode (--files)", () => {
+  it("runs each rule over just the chosen file, from its parent dir", async () => {
+    const results = await runRules({ slugs: ["lint-naming"], path: filePath });
+    expect(results[0]).toEqual({ slug: "lint-naming", ok: true, violations: [V] });
+    const [, args, opts] = spawnMock.mock.calls[0] as [
+      string,
+      string[],
+      { cwd: string },
+    ];
+    expect(args).toEqual([hookScriptPath("lint-naming"), "--files", filePath]);
+    expect(opts.cwd).toBe(dir);
+  });
+});
+
+describe("runRules — per-rule outcomes", () => {
   it("reports a clean rule as ok with no violations", async () => {
     spawnMock.mockImplementation(
       () => fakeChild({ stdout: jsonLine([]), code: 0 }) as never,
     );
-    const results = await runRules({ slugs: ["lint-naming"], path: "/repo" });
+    const results = await runRules({ slugs: ["lint-naming"], path: dir });
     expect(results[0]).toEqual({ slug: "lint-naming", ok: true, violations: [] });
   });
 
   it("flags an unknown slug without spawning", async () => {
-    const results = await runRules({ slugs: ["bogus"], path: "/repo" });
+    const results = await runRules({ slugs: ["bogus"], path: dir });
     expect(results[0]).toEqual({
       slug: "bogus",
       ok: false,
@@ -126,8 +206,8 @@ describe("runRules — per-rule outcomes", () => {
     expect(spawnMock).not.toHaveBeenCalled();
   });
 
-  it("flags a known-but-not-yet-wired rule without spawning", async () => {
-    const results = await runRules({ slugs: ["lint-comments"], path: "/repo" });
+  it("flags a known-but-not-wired rule without spawning", async () => {
+    const results = await runRules({ slugs: ["lint-comments"], path: dir });
     expect(results[0].ok).toBe(false);
     expect(results[0].error).toBe("rule is not runnable from the panel yet");
     expect(spawnMock).not.toHaveBeenCalled();
@@ -137,7 +217,7 @@ describe("runRules — per-rule outcomes", () => {
     spawnMock.mockImplementation(
       () => fakeChild({ stderr: "boom\n", code: 2 }) as never,
     );
-    const results = await runRules({ slugs: ["lint-naming"], path: "/repo" });
+    const results = await runRules({ slugs: ["lint-naming"], path: dir });
     expect(results[0]).toEqual({
       slug: "lint-naming",
       ok: false,
@@ -148,7 +228,7 @@ describe("runRules — per-rule outcomes", () => {
 
   it("reports a generic error when a non-zero exit has no stderr", async () => {
     spawnMock.mockImplementation(() => fakeChild({ code: 1 }) as never);
-    const results = await runRules({ slugs: ["lint-naming"], path: "/repo" });
+    const results = await runRules({ slugs: ["lint-naming"], path: dir });
     expect(results[0].error).toBe("exited 1 without JSON output");
   });
 
@@ -156,7 +236,7 @@ describe("runRules — per-rule outcomes", () => {
     spawnMock.mockImplementation(
       () => fakeChild({ stdout: "", code: 0 }) as never,
     );
-    const results = await runRules({ slugs: ["lint-naming"], path: "/repo" });
+    const results = await runRules({ slugs: ["lint-naming"], path: dir });
     expect(results[0].error).toBe("exited 0 without JSON output");
   });
 
@@ -164,7 +244,7 @@ describe("runRules — per-rule outcomes", () => {
     spawnMock.mockImplementation(
       () => fakeChild({ stdout: "not json\n", code: 0 }) as never,
     );
-    const results = await runRules({ slugs: ["lint-naming"], path: "/repo" });
+    const results = await runRules({ slugs: ["lint-naming"], path: dir });
     expect(results[0].error).toBe("exited 0 without JSON output");
   });
 
@@ -172,7 +252,7 @@ describe("runRules — per-rule outcomes", () => {
     spawnMock.mockImplementation(
       () => fakeChild({ stdout: '{"violations":5}\n', code: 0 }) as never,
     );
-    const results = await runRules({ slugs: ["lint-naming"], path: "/repo" });
+    const results = await runRules({ slugs: ["lint-naming"], path: dir });
     expect(results[0].ok).toBe(false);
   });
 
@@ -180,7 +260,7 @@ describe("runRules — per-rule outcomes", () => {
     spawnMock.mockImplementation(
       () => fakeChild({ stdout: "null\n", code: 0 }) as never,
     );
-    const results = await runRules({ slugs: ["lint-naming"], path: "/repo" });
+    const results = await runRules({ slugs: ["lint-naming"], path: dir });
     expect(results[0].ok).toBe(false);
   });
 
@@ -188,29 +268,12 @@ describe("runRules — per-rule outcomes", () => {
     spawnMock.mockImplementation(
       () => fakeChild({ err: new Error("spawnfail") }) as never,
     );
-    const results = await runRules({ slugs: ["lint-naming"], path: "/repo" });
+    const results = await runRules({ slugs: ["lint-naming"], path: dir });
     expect(results[0]).toEqual({
       slug: "lint-naming",
       ok: false,
       violations: [],
       error: "spawnfail",
     });
-  });
-});
-
-describe("runRules — folder + ordering", () => {
-  it("defaults the target folder to the process cwd", async () => {
-    await runRules({ slugs: ["lint-naming"] });
-    const opts = spawnMock.mock.calls[0][2] as { cwd: string };
-    expect(opts.cwd).toBe(process.cwd());
-  });
-
-  it("dedupes slugs and preserves request order", async () => {
-    const results = await runRules({
-      slugs: ["lint-naming", "lint-naming", "lint-max-lines"],
-      path: "/repo",
-    });
-    expect(results.map((r) => r.slug)).toEqual(["lint-naming", "lint-max-lines"]);
-    expect(spawnMock).toHaveBeenCalledTimes(2);
   });
 });

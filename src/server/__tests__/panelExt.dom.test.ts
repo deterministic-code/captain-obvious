@@ -83,6 +83,24 @@ beforeEach(() => {
     if (url === "/api/run/meta") {
       return jsonRes({ root: "/proj", runnableSlugs: ["lint-a", "lint-b"] });
     }
+    if (typeof url === "string" && url.startsWith("/api/run/browse")) {
+      const q = new URL(url, "http://x").searchParams.get("path");
+      if (q === "/proj/src") {
+        return jsonRes({
+          path: "/proj/src",
+          parent: "/proj",
+          entries: [{ name: "app.ts", type: "file", path: "/proj/src/app.ts" }],
+        });
+      }
+      return jsonRes({
+        path: "/proj",
+        parent: "/",
+        entries: [
+          { name: "src", type: "dir", path: "/proj/src" },
+          { name: "index.ts", type: "file", path: "/proj/index.ts" },
+        ],
+      });
+    }
     if (url === "/api/run") {
       runCalls.push(JSON.parse(opts?.body as string));
       return jsonRes(RUN_RESULT);
@@ -284,6 +302,39 @@ describe("panelExt injected script", () => {
     (overlay.querySelector(".co-run-back") as HTMLElement).click();
     expect(overlay.style.display).toBe("none");
     expect(root.style.display).toBe("");
+  });
+
+  it("browses the server filesystem: navigate into a dir and pick a file as target", async () => {
+    await runInjected();
+    const overlay = document.querySelector<HTMLElement>("#co-run-overlay")!;
+    const pathInput = overlay.querySelector<HTMLInputElement>("#co-run-path")!;
+    const browser = overlay.querySelector<HTMLElement>("#co-run-browser")!;
+
+    overlay.querySelector<HTMLButtonElement>(".co-run-browse-btn")!.click();
+    for (let i = 0; i < 3; i++) await flush();
+    expect(browser.style.display).toBe("block");
+    // Root listing shows the dir and file entries.
+    expect([...browser.querySelectorAll(".co-run-entry")].map((e) => e.textContent)).toEqual(
+      expect.arrayContaining([expect.stringContaining("src"), expect.stringContaining("index.ts")]),
+    );
+
+    // Navigate into src/ …
+    browser.querySelector<HTMLElement>('[data-dir="/proj/src"]')!.click();
+    for (let i = 0; i < 3; i++) await flush();
+    // … then pick a file → target set, browser closes.
+    browser.querySelector<HTMLElement>('[data-file="/proj/src/app.ts"]')!.click();
+    expect(pathInput.value).toBe("/proj/src/app.ts");
+    expect(browser.style.display).toBe("none");
+  });
+
+  it("Use-this-folder picks the current directory as the target", async () => {
+    await runInjected();
+    const overlay = document.querySelector<HTMLElement>("#co-run-overlay")!;
+    const browser = overlay.querySelector<HTMLElement>("#co-run-browser")!;
+    overlay.querySelector<HTMLButtonElement>(".co-run-browse-btn")!.click();
+    for (let i = 0; i < 3; i++) await flush();
+    browser.querySelector<HTMLButtonElement>(".co-run-use")!.click();
+    expect(overlay.querySelector<HTMLInputElement>("#co-run-path")!.value).toBe("/proj");
   });
 
   it("gates Run on a selection, then POSTs the chosen slugs and renders grouped results", async () => {

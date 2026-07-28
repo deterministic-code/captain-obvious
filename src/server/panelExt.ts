@@ -29,6 +29,7 @@ export const PANEL_EXT = `(() => {
   const selectedSlugs = new Set();
   let runActive = false;
   let running = false;
+  let browsePath = "";
 
   function esc(s) {
     return String(s).replace(/[&<>"]/g, (c) =>
@@ -366,8 +367,21 @@ export const PANEL_EXT = `(() => {
       ".co-run-title{font-size:20px;font-weight:700;color:#0f172a}" +
       ".co-run-field{margin-bottom:16px}" +
       ".co-run-field label{display:block;font-size:12px;font-weight:600;color:#64748b;margin-bottom:4px}" +
-      ".co-run-path{width:100%;box-sizing:border-box;padding:7px 10px;font-size:13px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid #cbd5e1;border-radius:6px;outline:none}" +
+      ".co-run-path-row{display:flex;gap:8px}" +
+      ".co-run-path{flex:1;box-sizing:border-box;padding:7px 10px;font-size:13px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid #cbd5e1;border-radius:6px;outline:none}" +
       ".co-run-path:focus{border-color:#94a3b8}" +
+      ".co-run-browse-btn{cursor:pointer;white-space:nowrap;font-size:13px;font-weight:600;padding:0 14px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;color:#334155}" +
+      ".co-run-browse-btn:hover{background:#f1f5f9}" +
+      ".co-run-browser{margin-top:8px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}" +
+      ".co-run-browser-loading{padding:10px 12px;font-size:13px;color:#94a3b8}" +
+      ".co-run-browser-head{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f8fafc;border-bottom:1px solid #f1f5f9}" +
+      ".co-run-browser-path{flex:1;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
+      ".co-run-use{cursor:pointer;white-space:nowrap;font-size:12px;font-weight:600;padding:4px 10px;border-radius:6px;border:1px solid #0f172a;background:#0f172a;color:#fff}" +
+      ".co-run-use:hover{background:#1e293b}" +
+      ".co-run-browser-list{max-height:260px;overflow:auto;padding:4px}" +
+      ".co-run-entry{padding:5px 10px;font-size:13px;border-radius:6px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}" +
+      ".co-run-entry:hover{background:#f1f5f9}" +
+      ".co-run-file{color:#334155}.co-run-dir,.co-run-updir{color:#0f172a;font-weight:500}" +
       ".co-run-picker{border:1px solid #e2e8f0;border-radius:8px;margin-bottom:16px}" +
       ".co-run-picker-head{display:flex;align-items:center;gap:12px;padding:8px;border-bottom:1px solid #f1f5f9}" +
       ".co-run-search{flex:1}" +
@@ -547,6 +561,81 @@ export const PANEL_EXT = `(() => {
     });
   }
 
+  async function loadBrowse(path) {
+    const q = path ? "?path=" + encodeURIComponent(path) : "";
+    const res = await fetch("/api/run/browse" + q);
+    if (!res.ok) {
+      const msg = await res.json().then((b) => b.error, () => "");
+      throw new Error(msg || "GET /api/run/browse -> " + res.status);
+    }
+    return res.json();
+  }
+
+  function toggleBrowser() {
+    const el = document.getElementById("co-run-browser");
+    if (!el) return;
+    if (el.style.display === "none") {
+      el.style.display = "block";
+      const start =
+        (document.getElementById("co-run-path").value || "").trim() || runRoot;
+      renderBrowser(start);
+    } else {
+      el.style.display = "none";
+    }
+  }
+
+  function selectTarget(path) {
+    const input = document.getElementById("co-run-path");
+    if (input) input.value = path;
+    const el = document.getElementById("co-run-browser");
+    if (el) el.style.display = "none";
+  }
+
+  async function renderBrowser(path) {
+    const el = document.getElementById("co-run-browser");
+    if (!el) return;
+    el.innerHTML = '<div class="co-run-browser-loading">Loading…</div>';
+    let view;
+    try {
+      view = await loadBrowse(path);
+    } catch (err) {
+      el.innerHTML = '<div class="co-run-error">' + esc(err.message) + "</div>";
+      return;
+    }
+    browsePath = view.path;
+    let html = '<div class="co-run-browser-head">';
+    html += '<span class="co-run-browser-path">' + esc(view.path) + "</span>";
+    html +=
+      '<button type="button" class="co-run-use" data-use="' +
+      esc(view.path) +
+      '">Use this folder</button></div>';
+    html += '<div class="co-run-browser-list">';
+    if (view.parent) {
+      html +=
+        '<div class="co-run-entry co-run-updir" data-dir="' +
+        esc(view.parent) +
+        '">📁 ..</div>';
+    }
+    for (const e of view.entries) {
+      if (e.type === "dir") {
+        html +=
+          '<div class="co-run-entry co-run-dir" data-dir="' +
+          esc(e.path) +
+          '">📁 ' +
+          esc(e.name) +
+          "</div>";
+      } else {
+        html +=
+          '<div class="co-run-entry co-run-file" data-file="' +
+          esc(e.path) +
+          '">📄 ' +
+          esc(e.name) +
+          "</div>";
+      }
+    }
+    el.innerHTML = html + "</div>";
+  }
+
   function buildRunView() {
     if (document.getElementById("co-run-overlay")) return;
     const root = document.getElementById("root");
@@ -579,13 +668,36 @@ export const PANEL_EXT = `(() => {
     const field = document.createElement("div");
     field.className = "co-run-field";
     const flabel = document.createElement("label");
-    flabel.textContent = "Target folder";
+    flabel.textContent = "Target file or folder";
+    field.appendChild(flabel);
+    const pathRow = document.createElement("div");
+    pathRow.className = "co-run-path-row";
     const pathInput = document.createElement("input");
     pathInput.className = "co-run-path";
     pathInput.id = "co-run-path";
     pathInput.value = runRoot;
-    field.appendChild(flabel);
-    field.appendChild(pathInput);
+    const browseBtn = document.createElement("button");
+    browseBtn.type = "button";
+    browseBtn.className = "co-run-browse-btn";
+    browseBtn.textContent = "Browse…";
+    browseBtn.addEventListener("click", () => {
+      toggleBrowser();
+    });
+    pathRow.appendChild(pathInput);
+    pathRow.appendChild(browseBtn);
+    field.appendChild(pathRow);
+    const browser = document.createElement("div");
+    browser.className = "co-run-browser";
+    browser.id = "co-run-browser";
+    browser.style.display = "none";
+    browser.addEventListener("click", (e) => {
+      const t = e.target.closest("[data-dir], [data-file], [data-use]");
+      if (!t) return;
+      if (t.getAttribute("data-dir")) renderBrowser(t.getAttribute("data-dir"));
+      else if (t.getAttribute("data-file")) selectTarget(t.getAttribute("data-file"));
+      else selectTarget(t.getAttribute("data-use"));
+    });
+    field.appendChild(browser);
     wrap.appendChild(field);
 
     const picker = document.createElement("div");

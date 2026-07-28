@@ -228,6 +228,33 @@ describe("lint-dead-code / main", () => {
     expect(exitSpy).not.toHaveBeenCalled();
   });
 
+  test("--files with CO_JSON emits one JSON line of matching violations", async () => {
+    const abs = `${process.cwd()}/src/b.ts`;
+    knipJson({
+      issues: [{ file: "src/b.ts", exports: [{ name: "deadExport", line: 9, col: 1 }] }],
+    });
+    process.env.CO_JSON = "1";
+    try {
+      await main(["node", "s.mjs", "--files", abs]);
+    } finally {
+      delete process.env.CO_JSON;
+    }
+    const lines = stdoutText().split("\n").filter(Boolean);
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0]).violations.length).toBeGreaterThan(0);
+    expect(exitSpy).not.toHaveBeenCalled();
+  });
+
+  test("--files with CO_JSON and no paths emits an empty JSON line", async () => {
+    process.env.CO_JSON = "1";
+    try {
+      await main(["node", "s.mjs", "--files"]);
+    } finally {
+      delete process.env.CO_JSON;
+    }
+    expect(JSON.parse(stdoutText().trim())).toEqual({ violations: [] });
+  });
+
   test("an unknown/absent mode prints usage and exits 2", async () => {
     await expect(main(["node", "s.mjs"])).rejects.toThrow(/__exit__:2/);
     expect(exitSpy).toHaveBeenCalledWith(2);

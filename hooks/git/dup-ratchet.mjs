@@ -1,7 +1,9 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import {
+  emitJson,
   formatViolation,
+  jsonMode,
   listStagedFiles,
   repoRootOf,
   sanitizedGitEnv,
@@ -17,10 +19,12 @@ const execFileAsync = promisify(execFile);
 async function runFilesMode(repoRoot, argv, { tool, fileFilter, collectFiles }) {
   const files = argv.slice(3).filter(fileFilter);
   if (files.length === 0) {
+    if (jsonMode()) return emitJson([]);
     process.stdout.write(`${tool}: no code files given.\n`);
     return;
   }
   const violations = await collectFiles(repoRoot, files);
+  if (jsonMode()) return emitJson(violations);
   if (violations.length === 0) {
     process.stdout.write(`${tool}: no violations in the given files.\n`);
     return;

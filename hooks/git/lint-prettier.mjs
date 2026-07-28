@@ -140,6 +140,7 @@ export async function main(argv) {
   const repoRoot = await repoRootOf(process.cwd());
   const targets = await selectFiles(parsed.selector, parsed.files, repoRoot);
   if (targets.length === 0) {
+    if (jsonMode()) return emitJson([]);
     process.stdout.write("lint-prettier: no lintable files.\n");
     return;
   }

@@ -5,13 +5,26 @@
  * line of violations instead, and collect that. Display-only — no fixes applied.
  */
 import { execFile, spawn } from "node:child_process";
-import { resolve } from "node:path";
+import { readdir, stat } from "node:fs/promises";
+import { dirname, extname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { hookScriptPath } from "../rules/dispatch.js";
 import { RULES } from "../rules/index.js";
 import type { Violation } from "../rules/types.js";
 
 const execFileAsync = promisify(execFile);
+
+/** Extensions the lint hooks police (mirrors SUPPORTED_EXTS in lint-shared.mjs). */
+const LINTABLE_EXTS = new Set([".ts", ".tsx", ".mjs", ".cjs", ".js", ".jsx"]);
+
+/** Directories the browser hides — build output, deps, VCS; dotfiles are skipped separately. */
+const HIDDEN_DIRS = new Set([
+  "node_modules",
+  "dist",
+  "build",
+  "target",
+  "coverage",
+]);
 
 /**
  * Slugs whose hooks emit CO_JSON structured output in `--all` mode. Every rule
@@ -69,6 +82,44 @@ export function runMeta(): RunMeta {
   return { root: process.cwd(), runnableSlugs: [...RUNNABLE_SLUGS] };
 }
 
+export interface BrowseEntry {
+  name: string;
+  type: "dir" | "file";
+  path: string;
+}
+export interface BrowseView {
+  path: string;
+  parent: string | null;
+  entries: BrowseEntry[];
+}
+
+/**
+ * GET /api/run/browse — list a directory's navigable subfolders and lintable
+ * files, so the panel can pick a target from the server's filesystem (a browser
+ * can't hand us a real path). Dirs first, then files, each alphabetical.
+ */
+export async function browse(rawPath?: string): Promise<BrowseView> {
+  const path = rawPath?.trim() ? resolve(rawPath.trim()) : process.cwd();
+  const dirents = await readdir(path, { withFileTypes: true });
+  const dirs: BrowseEntry[] = [];
+  const files: BrowseEntry[] = [];
+  for (const d of dirents) {
+    if (d.isDirectory()) {
+      if (d.name.startsWith(".") || HIDDEN_DIRS.has(d.name)) continue;
+      dirs.push({ name: d.name, type: "dir", path: join(path, d.name) });
+    } else if (d.isFile() && LINTABLE_EXTS.has(extname(d.name))) {
+      files.push({ name: d.name, type: "file", path: join(path, d.name) });
+    }
+  }
+  const byName = (a: BrowseEntry, b: BrowseEntry) => a.name.localeCompare(b.name);
+  const parent = dirname(path);
+  return {
+    path,
+    parent: parent === path ? null : parent,
+    entries: [...dirs.sort(byName), ...files.sort(byName)],
+  };
+}
+
 /** Throw a clean 400-worthy error unless `path` is inside a git work tree (the `--all` hooks need `git ls-files`). */
 async function assertGitRepo(path: string): Promise<void> {
   await execFileAsync("git", [
@@ -103,9 +154,13 @@ function parseViolations(line: string): Violation[] | null {
   return Array.isArray(violations) ? (violations as Violation[]) : null;
 }
 
-/** Spawn one rule's hook in `--all` JSON mode against `cwd` and collect its violations. */
-function runRuleCollect(slug: string, cwd: string): Promise<RunResult> {
-  const child = spawn(process.execPath, [hookScriptPath(slug), "--all"], {
+/** Spawn one rule's hook in JSON mode with `modeArgs` against `cwd` and collect its violations. */
+function runRuleCollect(
+  slug: string,
+  cwd: string,
+  modeArgs: string[],
+): Promise<RunResult> {
+  const child = spawn(process.execPath, [hookScriptPath(slug), ...modeArgs], {
     cwd,
     env: { ...process.env, CO_JSON: "1" },
   });
@@ -126,7 +181,7 @@ function runRuleCollect(slug: string, cwd: string): Promise<RunResult> {
   });
 }
 
-function runOne(slug: string, cwd: string): Promise<RunResult> {
+function runOne(slug: string, cwd: string, modeArgs: string[]): Promise<RunResult> {
   if (!KNOWN.has(slug)) {
     return Promise.resolve({ slug, ok: false, violations: [], error: "unknown rule" });
   }
@@ -138,7 +193,7 @@ function runOne(slug: string, cwd: string): Promise<RunResult> {
       error: "rule is not runnable from the panel yet",
     });
   }
-  return runRuleCollect(slug, cwd);
+  return runRuleCollect(slug, cwd, modeArgs);
 }
 
 /** Run each slug against `cwd` with a small pool — the rules re-scan the whole tree, so don't unbounded-fan-out. */
@@ -161,14 +216,24 @@ async function mapPool<T, R>(
   return results;
 }
 
-/** POST /api/run — run the requested rules against `path` (default cwd); results keep request order. */
+/**
+ * POST /api/run — run the requested rules against `path`. A folder runs every
+ * rule over its whole tree (`--all`); a single file runs them over just that
+ * file (`--files`). Results keep request order.
+ */
 export async function runRules(body: RunRequest): Promise<RunResult[]> {
   const requested = body.slugs;
   if (!Array.isArray(requested) || requested.length === 0) {
     throw new Error("slugs is required");
   }
-  const cwd = body.path?.trim() ? resolve(body.path.trim()) : process.cwd();
+  const target = body.path?.trim() ? resolve(body.path.trim()) : process.cwd();
+  const info = await stat(target).catch(() => {
+    throw new Error(`no such file or folder: ${target}`);
+  });
+  const isDir = info.isDirectory();
+  const cwd = isDir ? target : dirname(target);
   await assertGitRepo(cwd);
+  const modeArgs = isDir ? ["--all"] : ["--files", target];
   const slugs = [...new Set(requested)];
-  return mapPool(slugs, 4, (slug) => runOne(slug, cwd));
+  return mapPool(slugs, 4, (slug) => runOne(slug, cwd, modeArgs));
 }

@@ -304,6 +304,7 @@ async function runAllMode(repoRoot) {
 async function runFilesMode(repoRoot, argv) {
   const files = argv.slice(3).filter((f) => JSCPD_FORMAT_BY_EXT[extname(f)]);
   if (files.length === 0) {
+    if (jsonMode()) return emitJson([]);
     process.stdout.write("lint-dup: no code files given.\n");
     return;
   }
@@ -314,6 +315,7 @@ async function runFilesMode(repoRoot, argv) {
       targets.has(toRepoRelative(d.firstFile.name, repoRoot)) ||
       targets.has(toRepoRelative(d.secondFile.name, repoRoot)),
   );
+  if (jsonMode()) return emitJson(duplicatesToViolations(hits, repoRoot));
   if (hits.length === 0) {
     process.stdout.write("lint-dup: no duplication in the given files.\n");
     return;
