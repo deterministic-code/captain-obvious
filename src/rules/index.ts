@@ -268,6 +268,18 @@ export const RULES: LintRule[] = [
     modes: RATCHET_MODES,
     stage: "pre-push",
   }),
+  defineRule({
+    slug: "lint-tests-with-code",
+    name: "Tests move with code",
+    category: "testing",
+    description:
+      "Blocks staging a production source change (or new file) with no matching test change in the same commit — the deterministic TDD proxy.",
+    languages: JSTS,
+    config: null,
+    ratchetable: true,
+    modes: ["staged", "warn"],
+    stage: "pre-commit",
+  }),
   // Governance rules police the repo/workflow, not source files: language-agnostic
   // (languages: []) and enforced per environment via action bindings (e.g. halt on
   // github, warn on claude). The runnable ones delegate to a hooks/git/<slug>.mjs;
