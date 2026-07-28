@@ -409,7 +409,7 @@ export const PANEL_EXT = `(() => {
       ".co-caret .co-line{background:#fff5f5}" +
       ".co-caret-mark{color:#ef4444;font-weight:700}.co-caret-msg{color:#b91c1c}" +
       ".co-run-results{height:38%;flex-shrink:0;overflow:auto;border-top:1px solid #e2e8f0;padding:12px;display:flex;flex-direction:column;gap:12px}" +
-      ".co-run-rule{border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}" +
+      ".co-run-rule{flex-shrink:0;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}" +
       ".co-run-rule-head{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f8fafc;border-bottom:1px solid #f1f5f9}" +
       ".co-run-slug{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600;color:#0f172a}" +
       ".co-run-pill{font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px}" +
