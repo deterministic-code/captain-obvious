@@ -17,6 +17,7 @@ export const PANEL_EXT = `(() => {
   const KINDS = ["script", "inferred", "output"];
   let fixesBySlug = {};
   let langsBySlug = {};
+  let langIndependentBySlug = {};
   let catsBySlug = {};
   let supportedLangs = [];
   let nameBySlug = {};
@@ -191,7 +192,30 @@ export const PANEL_EXT = `(() => {
     if (!res.ok) throw new Error("PATCH /api/rules/" + slug + " -> " + res.status);
   }
 
+  function fixedLangDropdown(label) {
+    const details = document.createElement("details");
+    details.className = "co-dd co-lang-dd co-lang-independent";
+    const summary = document.createElement("summary");
+    summary.className = "co-dd-summary";
+    summary.textContent = label;
+    details.appendChild(summary);
+    const panel = document.createElement("div");
+    panel.className = "co-dd-panel";
+    const item = document.createElement("div");
+    item.className = "co-dd-item co-lang-independent-item";
+    item.textContent = label;
+    panel.appendChild(item);
+    details.appendChild(panel);
+    return details;
+  }
+
   function buildLangCell(cell, slug) {
+    if (langIndependentBySlug[slug]) {
+      cell.innerHTML = "";
+      cell.appendChild(fixedLangDropdown("Language independent"));
+      cell.setAttribute("data-langs", "");
+      return;
+    }
     const current = langsBySlug[slug] || [];
     const dd = checkboxDropdown({
       items: supportedLangs.map((l) => ({ value: l.slug, label: l.name })),
@@ -954,6 +978,7 @@ export const PANEL_EXT = `(() => {
     for (const r of rules) {
       fixesBySlug[r.slug] = r.actions || [];
       langsBySlug[r.slug] = r.languages || [];
+      langIndependentBySlug[r.slug] = !!r.languageIndependent;
       catsBySlug[r.slug] = r.categories || [];
       for (const c of r.categories || []) cats.add(c);
     }

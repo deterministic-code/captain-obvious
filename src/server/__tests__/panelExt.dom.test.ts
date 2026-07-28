@@ -10,8 +10,8 @@ import { PANEL_EXT } from "../panelExt.js";
 const RULES = [
   { slug: "lint-a", name: "A", categories: ["size"], languages: ["typescript"], actions: [] },
   { slug: "lint-b", name: "B", categories: ["naming"], languages: [], actions: [{ kind: "output" }] },
-  // No category and no languages: the filters can't exclude it, so it always shows.
-  { slug: "lint-c", name: "C", categories: [], languages: [], actions: [] },
+  // No category and language-independent: the filters can't exclude it, so it always shows.
+  { slug: "lint-c", name: "C", categories: [], languages: [], languageIndependent: true, actions: [] },
 ];
 const META = {
   languages: [
@@ -163,6 +163,19 @@ describe("panelExt injected script", () => {
       tr.querySelector(".co-lang-td .co-dd-summary")?.textContent;
     expect(summaryOf(rows[0])).toBe("TypeScript");
     expect(summaryOf(rows[1])).toBe("—");
+  });
+
+  it("renders a fixed 'Language independent' cell for language-independent rules", async () => {
+    await runInjected();
+    const cell = document.querySelectorAll(".co-lang-td")[2]; // lint-c
+    const dd = cell.querySelector(".co-lang-dd")!;
+    expect(dd.classList.contains("co-lang-independent")).toBe(true);
+    expect(dd.querySelector(".co-dd-summary")?.textContent).toBe(
+      "Language independent",
+    );
+    // Nothing to narrow: no editable checkboxes, and the filter can't exclude it.
+    expect(dd.querySelector(".co-dd-opt")).toBeNull();
+    expect(cell.getAttribute("data-langs")).toBe("");
   });
 
   it("replaces the native category filter with Category + Language multiselects", async () => {
