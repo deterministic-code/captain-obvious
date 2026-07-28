@@ -10,6 +10,8 @@ import { PANEL_EXT } from "../panelExt.js";
 const RULES = [
   { slug: "lint-a", name: "A", categories: ["size"], languages: ["typescript"], actions: [] },
   { slug: "lint-b", name: "B", categories: ["naming"], languages: [], actions: [{ kind: "output" }] },
+  // No category and no languages: the filters can't exclude it, so it always shows.
+  { slug: "lint-c", name: "C", categories: [], languages: [], actions: [] },
 ];
 const META = {
   languages: [
@@ -49,6 +51,7 @@ function buildPanelDom() {
     "</tr></thead><tbody>" +
     row("lint-a", "A", "size") +
     row("lint-b", "B", "naming") +
+    row("lint-c", "C", "") +
     "</tbody></table></div>";
 }
 
@@ -136,7 +139,7 @@ describe("panelExt injected script", () => {
     );
   });
 
-  it("search filters the option list; All + Clear toggle the whole selection", async () => {
+  it("search hides options whose label doesn't match", async () => {
     await runInjected();
     const cat = document.querySelector(".co-filter-cats")!;
     const opt = (v: string) =>
@@ -144,28 +147,48 @@ describe("panelExt injected script", () => {
         (i) => i.value === v,
       )!;
     const labelOf = (i: HTMLInputElement) => i.closest(".co-dd-item") as HTMLElement;
-
-    // Search hides non-matching options.
     const search = cat.querySelector<HTMLInputElement>(".co-dd-search")!;
     search.value = "nam";
     search.dispatchEvent(new Event("input", { bubbles: true }));
     expect(labelOf(opt("size")).style.display).toBe("none");
     expect(labelOf(opt("naming")).style.display).toBe("");
+  });
 
-    // All selects every option and reflects in the summary.
+  it("defaults to All selected; unchecking narrows, Clear empties, All restores", async () => {
+    await runInjected();
+    const cat = document.querySelector(".co-filter-cats")!;
+    const opt = (v: string) =>
+      [...cat.querySelectorAll<HTMLInputElement>(".co-dd-opt")].find(
+        (i) => i.value === v,
+      )!;
     const all = cat.querySelector<HTMLInputElement>(".co-dd-all")!;
-    all.checked = true;
-    all.dispatchEvent(new Event("change", { bubbles: true }));
-    for (let i = 0; i < 2; i++) await flush();
+    const summary = () => cat.querySelector(".co-dd-summary")!.textContent;
+
+    // Default: All checked, every option checked, summary reads "all".
+    expect(all.checked).toBe(true);
     expect(opt("size").checked).toBe(true);
     expect(opt("naming").checked).toBe(true);
-    expect(cat.querySelector(".co-dd-summary")!.textContent).toBe("Categories (2)");
+    expect(summary()).toBe("Categories: all");
 
-    // Clear empties the selection.
+    // Uncheck one option -> narrows; All reflects the partial state.
+    opt("size").checked = false;
+    opt("size").dispatchEvent(new Event("change", { bubbles: true }));
+    await flush();
+    expect(all.checked).toBe(false);
+    expect(summary()).toBe("Categories (1)");
+
+    // Clear -> nothing selected.
     cat.querySelector<HTMLButtonElement>(".co-dd-clear")!.click();
-    for (let i = 0; i < 2; i++) await flush();
-    expect(opt("size").checked).toBe(false);
-    expect(cat.querySelector(".co-dd-summary")!.textContent).toBe("Categories: all");
+    await flush();
+    expect(opt("naming").checked).toBe(false);
+    expect(summary()).toBe("Categories: none");
+
+    // All -> everything selected again.
+    all.checked = true;
+    all.dispatchEvent(new Event("change", { bubbles: true }));
+    await flush();
+    expect(opt("size").checked).toBe(true);
+    expect(summary()).toBe("Categories: all");
   });
 
   it("Close button collapses the dropdown", async () => {
@@ -194,17 +217,24 @@ describe("panelExt injected script", () => {
     ]);
   });
 
-  it("filters rows by the selected category", async () => {
+  it("shows every row by default (All selected drives the filter)", async () => {
     await runInjected();
-    const namingBox = [
+    const rows = document.querySelectorAll<HTMLTableRowElement>("tbody tr");
+    expect([...rows].map((r) => r.style.display)).toEqual(["", "", ""]);
+  });
+
+  it("narrows rows when a category is unchecked; metadata-less rows still show", async () => {
+    await runInjected();
+    const sizeBox = [
       ...document.querySelectorAll<HTMLInputElement>(".co-filter-cats .co-dd-opt"),
-    ].find((i) => i.value === "naming")!;
-    namingBox.checked = true;
-    namingBox.dispatchEvent(new Event("change", { bubbles: true }));
+    ].find((i) => i.value === "size")!;
+    sizeBox.checked = false; // leaves only "naming" selected
+    sizeBox.dispatchEvent(new Event("change", { bubbles: true }));
     for (let i = 0; i < 3; i++) await flush();
 
     const rows = document.querySelectorAll<HTMLTableRowElement>("tbody tr");
     expect(rows[0].style.display).toBe("none"); // lint-a (size) hidden
     expect(rows[1].style.display).toBe(""); // lint-b (naming) shown
+    expect(rows[2].style.display).toBe(""); // lint-c (no category) always shows
   });
 });

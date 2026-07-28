@@ -213,15 +213,17 @@ export const PANEL_EXT = `(() => {
     return null;
   }
 
-  function filterLabel(base, count) {
-    return count ? base + " (" + count + ")" : base + ": all";
+  function filterLabel(base, count, total) {
+    if (count === total) return base + ": all";
+    if (count === 0) return base + ": none";
+    return base + " (" + count + ")";
   }
 
   function buildFilterDropdown(base, options, set) {
     return checkboxDropdown({
       items: options,
       selected: Array.from(set),
-      summaryFn: (vals) => filterLabel(base, vals.length),
+      summaryFn: (vals) => filterLabel(base, vals.length, options.length),
       onChange: (vals) => {
         set.clear();
         for (const v of vals) set.add(v);
@@ -261,8 +263,11 @@ export const PANEL_EXT = `(() => {
       const slug = rowSlug(tr);
       const cats = (slug && catsBySlug[slug]) || [];
       const langs = (slug && langsBySlug[slug]) || [];
-      const okCat = selectedCats.size === 0 || cats.some((c) => selectedCats.has(c));
-      const okLang = selectedLangs.size === 0 || langs.some((l) => selectedLangs.has(l));
+      // The selection drives the filter: a row passes when one of its
+      // categories/languages is checked. A row with none of that metadata isn't
+      // something the filter can exclude, so it always passes.
+      const okCat = cats.length === 0 || cats.some((c) => selectedCats.has(c));
+      const okLang = langs.length === 0 || langs.some((l) => selectedLangs.has(l));
       tr.style.display = okCat && okLang ? "" : "none";
     }
   }
@@ -375,6 +380,12 @@ export const PANEL_EXT = `(() => {
     supportedLangs = meta.languages || [];
     nameBySlug = {};
     for (const l of supportedLangs) nameBySlug[l.slug] = l.name;
+    // Filters start with everything selected ("All"), so they show all rows
+    // until the user narrows. The selection set IS the filter.
+    selectedCats.clear();
+    for (const c of allCategories) selectedCats.add(c);
+    selectedLangs.clear();
+    for (const l of supportedLangs) selectedLangs.add(l.slug);
   }
 
   async function start() {
