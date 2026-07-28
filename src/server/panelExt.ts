@@ -4,8 +4,11 @@
  * directly). On top of the panel it adds, all from additive /api fields:
  *   - a "Fix" column (the rule's `actions`),
  *   - an editable "Languages" column (per-rule `languages`, PATCHed on change),
+ *     placed right after the native Category column,
  *   - multiselect Category + Language filters that replace the panel's native
  *     single-select category dropdown and drive row visibility.
+ * Every multiselect shares one dropdown: a search box, a leading "All" toggle,
+ * the checkbox options, and a Clear/Close footer.
  * Idempotent + MutationObserver-driven so it survives the panel's React
  * re-renders (search, filter, toggle) without re-entrant loops. Uses string
  * concatenation (no nested template literals) since it lives in one.
@@ -50,30 +53,117 @@ export const PANEL_EXT = `(() => {
 
   // A <details> dropdown of checkbox items. Returns the parts so callers can
   // wire their own change handler (filters re-filter; the row editor PATCHes).
-  function checkboxDropdown(summaryText, items) {
+  // A <details> multiselect that owns its selection state. The dropdown panel
+  // carries a search box, a leading "All" toggle, the option checkboxes, and a
+  // Clear/Close footer. opts.summaryFn(values)->text drives the closed label;
+  // opts.onChange(values) fires on every selection change.
+  function checkboxDropdown(opts) {
+    const items = opts.items;
+    const allValues = items.map((it) => it.value);
+    const selected = new Set(opts.selected || []);
+
     const details = document.createElement("details");
     details.className = "co-dd";
     const summary = document.createElement("summary");
     summary.className = "co-dd-summary";
-    summary.textContent = summaryText;
     details.appendChild(summary);
+
+    const panel = document.createElement("div");
+    panel.className = "co-dd-panel";
+
+    const search = document.createElement("input");
+    search.type = "text";
+    search.className = "co-dd-search";
+    search.placeholder = "Search…";
+    panel.appendChild(search);
+
     const list = document.createElement("div");
     list.className = "co-dd-list";
+
+    const allLabel = document.createElement("label");
+    allLabel.className = "co-dd-item co-dd-all-item";
+    const allBox = document.createElement("input");
+    allBox.type = "checkbox";
+    allBox.className = "co-dd-all";
+    allLabel.appendChild(allBox);
+    const allSpan = document.createElement("span");
+    allSpan.textContent = "All";
+    allLabel.appendChild(allSpan);
+    list.appendChild(allLabel);
+
+    const optItems = [];
     for (const it of items) {
       const label = document.createElement("label");
       label.className = "co-dd-item";
       const cb = document.createElement("input");
       cb.type = "checkbox";
+      cb.className = "co-dd-opt";
       cb.value = it.value;
-      cb.checked = it.checked;
+      cb.checked = selected.has(it.value);
       label.appendChild(cb);
       const span = document.createElement("span");
       span.textContent = it.label;
       label.appendChild(span);
       list.appendChild(label);
+      optItems.push({ label, box: cb, text: it.label.toLowerCase() });
     }
-    details.appendChild(list);
-    return { details, summary, list };
+    panel.appendChild(list);
+
+    const foot = document.createElement("div");
+    foot.className = "co-dd-foot";
+    const clearBtn = document.createElement("button");
+    clearBtn.type = "button";
+    clearBtn.className = "co-dd-clear";
+    clearBtn.textContent = "Clear";
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "co-dd-close";
+    closeBtn.textContent = "Close";
+    foot.appendChild(clearBtn);
+    foot.appendChild(closeBtn);
+    panel.appendChild(foot);
+    details.appendChild(panel);
+
+    function syncAll() {
+      allBox.checked = allValues.length > 0 && selected.size === allValues.length;
+    }
+    function emit() {
+      summary.textContent = opts.summaryFn(Array.from(selected));
+      opts.onChange(Array.from(selected));
+    }
+    syncAll();
+    summary.textContent = opts.summaryFn(Array.from(selected));
+
+    list.addEventListener("change", (e) => {
+      const t = e.target;
+      if (t === allBox) {
+        selected.clear();
+        if (t.checked) for (const v of allValues) selected.add(v);
+        for (const o of optItems) o.box.checked = t.checked;
+      } else if (t.classList.contains("co-dd-opt")) {
+        if (t.checked) selected.add(t.value);
+        else selected.delete(t.value);
+        syncAll();
+      } else {
+        return;
+      }
+      emit();
+    });
+    clearBtn.addEventListener("click", () => {
+      selected.clear();
+      for (const o of optItems) o.box.checked = false;
+      syncAll();
+      emit();
+    });
+    closeBtn.addEventListener("click", () => { details.open = false; });
+    search.addEventListener("input", () => {
+      const q = search.value.trim().toLowerCase();
+      for (const o of optItems) {
+        o.label.style.display = !q || o.text.indexOf(q) !== -1 ? "" : "none";
+      }
+    });
+
+    return { details, summary };
   }
 
   function langLabel(slugs) {
@@ -91,29 +181,24 @@ export const PANEL_EXT = `(() => {
 
   function buildLangCell(cell, slug) {
     const current = langsBySlug[slug] || [];
-    const items = supportedLangs.map((l) => ({
-      value: l.slug,
-      label: l.name,
-      checked: current.indexOf(l.slug) !== -1,
-    }));
-    const dd = checkboxDropdown(langLabel(current), items);
-    dd.details.classList.add("co-lang-dd");
-    dd.list.addEventListener("change", async () => {
-      const checked = Array.prototype.slice
-        .call(dd.list.querySelectorAll("input:checked"))
-        .map((i) => i.value);
-      try {
-        await patchLanguages(slug, checked);
-      } catch (err) {
-        window.alert("Failed to update languages for " + slug + ": " + err.message);
-        buildLangCell(cell, slug);
-        return;
-      }
-      langsBySlug[slug] = checked;
-      dd.summary.textContent = langLabel(checked);
-      cell.setAttribute("data-langs", checked.slice().sort().join(","));
-      applyFilter();
+    const dd = checkboxDropdown({
+      items: supportedLangs.map((l) => ({ value: l.slug, label: l.name })),
+      selected: current,
+      summaryFn: (vals) => langLabel(vals),
+      onChange: async (vals) => {
+        try {
+          await patchLanguages(slug, vals);
+        } catch (err) {
+          window.alert("Failed to update languages for " + slug + ": " + err.message);
+          buildLangCell(cell, slug);
+          return;
+        }
+        langsBySlug[slug] = vals;
+        cell.setAttribute("data-langs", vals.slice().sort().join(","));
+        applyFilter();
+      },
     });
+    dd.details.classList.add("co-lang-dd");
     cell.innerHTML = "";
     cell.appendChild(dd.details);
     cell.setAttribute("data-langs", current.slice().sort().join(","));
@@ -128,22 +213,21 @@ export const PANEL_EXT = `(() => {
     return null;
   }
 
-  function filterLabel(base, set) {
-    return set.size ? base + " (" + set.size + ")" : base + ": all";
+  function filterLabel(base, count) {
+    return count ? base + " (" + count + ")" : base + ": all";
   }
 
   function buildFilterDropdown(base, options, set) {
-    const dd = checkboxDropdown(
-      filterLabel(base, set),
-      options.map((o) => ({ value: o.value, label: o.label, checked: set.has(o.value) })),
-    );
-    dd.list.addEventListener("change", (e) => {
-      if (e.target.checked) set.add(e.target.value);
-      else set.delete(e.target.value);
-      dd.summary.textContent = filterLabel(base, set);
-      applyFilter();
+    return checkboxDropdown({
+      items: options,
+      selected: Array.from(set),
+      summaryFn: (vals) => filterLabel(base, vals.length),
+      onChange: (vals) => {
+        set.clear();
+        for (const v of vals) set.add(v);
+        applyFilter();
+      },
     });
-    return dd;
   }
 
   // The panel's own category <select> filters its React list; we hide it (so it
@@ -183,12 +267,13 @@ export const PANEL_EXT = `(() => {
     }
   }
 
-  function addHeader(headRow, cls, text) {
+  function addHeader(headRow, cls, text, ref) {
     if (headRow.querySelector("." + cls)) return;
     const th = document.createElement("th");
     th.className = "px-4 py-2.5 font-medium " + cls;
     th.textContent = text;
-    headRow.appendChild(th);
+    if (ref) ref.insertAdjacentElement("afterend", th);
+    else headRow.appendChild(th);
   }
 
   function decorate() {
@@ -197,7 +282,8 @@ export const PANEL_EXT = `(() => {
     const headRow = table.querySelector("thead tr");
     if (headRow) {
       addHeader(headRow, "co-fix-th", "Fix");
-      addHeader(headRow, "co-lang-th", "Languages");
+      // Languages sits right after the native Category column (index 1).
+      addHeader(headRow, "co-lang-th", "Languages", headRow.children[1]);
     }
     for (const tr of table.querySelectorAll("tbody tr")) {
       const slug = rowSlug(tr);
@@ -216,7 +302,9 @@ export const PANEL_EXT = `(() => {
       if (!lcell) {
         lcell = document.createElement("td");
         lcell.className = "px-4 py-3 co-lang-td";
-        tr.appendChild(lcell);
+        const catCell = tr.children[1];
+        if (catCell) catCell.insertAdjacentElement("afterend", lcell);
+        else tr.appendChild(lcell);
       }
       const sig = ((slug ? langsBySlug[slug] : null) || []).slice().sort().join(",");
       if (slug && lcell.getAttribute("data-langs") !== sig) buildLangCell(lcell, slug);
@@ -243,9 +331,18 @@ export const PANEL_EXT = `(() => {
       ".co-dd-summary{cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:6px;max-width:16rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid #cbd5e1;border-radius:6px;padding:4px 10px;font-size:13px;color:#334155;background:#fff}" +
       ".co-dd-summary::-webkit-details-marker{display:none}" +
       '.co-dd-summary::after{content:"▾";font-size:10px;color:#94a3b8;margin-left:auto}' +
-      ".co-dd-list{position:absolute;z-index:30;margin-top:4px;min-width:170px;max-height:260px;overflow:auto;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 8px 24px rgba(15,23,42,.12);padding:6px}" +
+      ".co-dd-panel{position:absolute;z-index:30;margin-top:4px;min-width:190px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 8px 24px rgba(15,23,42,.12);padding:6px}" +
+      ".co-dd-search{width:100%;box-sizing:border-box;margin-bottom:6px;padding:5px 8px;font-size:13px;border:1px solid #cbd5e1;border-radius:6px;outline:none}" +
+      ".co-dd-search:focus{border-color:#94a3b8}" +
+      ".co-dd-list{max-height:220px;overflow:auto}" +
       ".co-dd-item{display:flex;align-items:center;gap:8px;padding:4px 8px;font-size:13px;color:#334155;border-radius:6px;cursor:pointer;white-space:nowrap}" +
       ".co-dd-item:hover{background:#f1f5f9}" +
+      ".co-dd-all-item{font-weight:600;border-bottom:1px solid #f1f5f9;border-radius:0;margin-bottom:2px}" +
+      ".co-dd-foot{display:flex;justify-content:space-between;gap:8px;margin-top:6px;border-top:1px solid #f1f5f9;padding-top:6px}" +
+      ".co-dd-foot button{cursor:pointer;font-size:12px;font-weight:600;padding:4px 10px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;color:#334155}" +
+      ".co-dd-foot button:hover{background:#f1f5f9}" +
+      ".co-dd-close{background:#0f172a;color:#fff;border-color:#0f172a}" +
+      ".co-dd-close:hover{background:#1e293b}" +
       ".co-filter-cats,.co-filter-langs{margin-left:8px;vertical-align:middle}";
     document.head.appendChild(style);
   }

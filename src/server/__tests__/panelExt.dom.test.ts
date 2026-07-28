@@ -80,12 +80,24 @@ afterEach(() => {
 });
 
 describe("panelExt injected script", () => {
-  it("appends Fix and Languages header columns", async () => {
+  it("adds a Languages column right after Category, and Fix at the end", async () => {
     await runInjected();
     const heads = [...document.querySelectorAll("thead th")].map((t) =>
       t.textContent,
     );
-    expect(heads.slice(-2)).toEqual(["Fix", "Languages"]);
+    // Native: Rule, Category, Stage, Enabled, Action.
+    expect(heads).toEqual([
+      "Rule",
+      "Category",
+      "Languages",
+      "Stage",
+      "Enabled",
+      "Action",
+      "Fix",
+    ]);
+    // The per-row Languages cell lands in the same (third) column.
+    const firstRow = document.querySelector("tbody tr")!;
+    expect(firstRow.children[2].classList.contains("co-lang-td")).toBe(true);
   });
 
   it("renders each rule's languages by display name (— when none)", async () => {
@@ -105,15 +117,69 @@ describe("panelExt injected script", () => {
     expect(document.querySelector(".co-filter-langs")).not.toBeNull();
     // Category options come from the rules' full category sets.
     const catValues = [
-      ...document.querySelectorAll(".co-filter-cats .co-dd-item input"),
+      ...document.querySelectorAll(".co-filter-cats .co-dd-opt"),
     ].map((i) => (i as HTMLInputElement).value);
     expect(catValues.sort()).toEqual(["naming", "size"]);
+  });
+
+  it("gives each dropdown a search box, an All toggle, and Clear/Close buttons", async () => {
+    await runInjected();
+    const cat = document.querySelector(".co-filter-cats")!;
+    expect(cat.querySelector(".co-dd-search")).not.toBeNull();
+    expect(cat.querySelector(".co-dd-all")).not.toBeNull();
+    expect(cat.querySelector(".co-dd-clear")).not.toBeNull();
+    expect(cat.querySelector(".co-dd-close")).not.toBeNull();
+    // The All toggle is the first item, ahead of the options.
+    const firstItem = cat.querySelector(".co-dd-list .co-dd-item input");
+    expect((firstItem as HTMLInputElement).classList.contains("co-dd-all")).toBe(
+      true,
+    );
+  });
+
+  it("search filters the option list; All + Clear toggle the whole selection", async () => {
+    await runInjected();
+    const cat = document.querySelector(".co-filter-cats")!;
+    const opt = (v: string) =>
+      [...cat.querySelectorAll<HTMLInputElement>(".co-dd-opt")].find(
+        (i) => i.value === v,
+      )!;
+    const labelOf = (i: HTMLInputElement) => i.closest(".co-dd-item") as HTMLElement;
+
+    // Search hides non-matching options.
+    const search = cat.querySelector<HTMLInputElement>(".co-dd-search")!;
+    search.value = "nam";
+    search.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(labelOf(opt("size")).style.display).toBe("none");
+    expect(labelOf(opt("naming")).style.display).toBe("");
+
+    // All selects every option and reflects in the summary.
+    const all = cat.querySelector<HTMLInputElement>(".co-dd-all")!;
+    all.checked = true;
+    all.dispatchEvent(new Event("change", { bubbles: true }));
+    for (let i = 0; i < 2; i++) await flush();
+    expect(opt("size").checked).toBe(true);
+    expect(opt("naming").checked).toBe(true);
+    expect(cat.querySelector(".co-dd-summary")!.textContent).toBe("Categories (2)");
+
+    // Clear empties the selection.
+    cat.querySelector<HTMLButtonElement>(".co-dd-clear")!.click();
+    for (let i = 0; i < 2; i++) await flush();
+    expect(opt("size").checked).toBe(false);
+    expect(cat.querySelector(".co-dd-summary")!.textContent).toBe("Categories: all");
+  });
+
+  it("Close button collapses the dropdown", async () => {
+    await runInjected();
+    const details = document.querySelector<HTMLDetailsElement>(".co-filter-cats")!;
+    details.open = true;
+    details.querySelector<HTMLButtonElement>(".co-dd-close")!.click();
+    expect(details.open).toBe(false);
   });
 
   it("PATCHes the new language set when a row checkbox is toggled", async () => {
     await runInjected();
     const cell = document.querySelector(".co-lang-td")!; // lint-a
-    const jsBox = [...cell.querySelectorAll<HTMLInputElement>("input")].find(
+    const jsBox = [...cell.querySelectorAll<HTMLInputElement>(".co-dd-opt")].find(
       (i) => i.value === "javascript",
     )!;
     jsBox.checked = true;
@@ -131,9 +197,7 @@ describe("panelExt injected script", () => {
   it("filters rows by the selected category", async () => {
     await runInjected();
     const namingBox = [
-      ...document.querySelectorAll<HTMLInputElement>(
-        ".co-filter-cats .co-dd-item input",
-      ),
+      ...document.querySelectorAll<HTMLInputElement>(".co-filter-cats .co-dd-opt"),
     ].find((i) => i.value === "naming")!;
     namingBox.checked = true;
     namingBox.dispatchEvent(new Event("change", { bubbles: true }));
