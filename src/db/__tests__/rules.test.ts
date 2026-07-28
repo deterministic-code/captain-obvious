@@ -1,15 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { addLanguage } from "../languages.js";
 import { openDb, type Db } from "../open.js";
 import { addRule, configureRule } from "../rules.js";
 import type { RuleActionRow } from "../types.js";
 
 let db: Db;
 
+// openDb seeds the language catalog (typescript/javascript included), so rules
+// can link those slugs without an explicit addLanguage here.
 beforeEach(() => {
   db = openDb(":memory:");
-  addLanguage(db, { slug: "typescript", name: "TypeScript" });
-  addLanguage(db, { slug: "javascript", name: "JavaScript" });
 });
 
 afterEach(() => {

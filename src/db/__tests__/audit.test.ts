@@ -62,7 +62,7 @@ describe("audit logging", () => {
 
   it("records adding a language, action type, and seeding", () => {
     audit.prepare("DELETE FROM logs").run();
-    addLanguage(db, { slug: "go", name: "Go", extensions: ["go"] });
+    addLanguage(db, { slug: "haskell", name: "Haskell", extensions: ["hs"] });
     configureActionType(db, "escalate", { add: true, name: "Escalate" });
     seedRules(db, RULES, { only: "lint-naming" });
     expect(logs().map((r) => r.log_type)).toEqual([

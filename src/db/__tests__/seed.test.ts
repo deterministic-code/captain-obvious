@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { getRuleFixes } from "../fixes.js";
 import { openDb, type Db } from "../open.js";
 import { seedRules } from "../seed.js";
+import { LANGUAGES } from "../../rules/languages.js";
 import { RULES } from "../../rules/index.js";
 
 let db: Db;
@@ -35,7 +36,8 @@ describe("seedRules", () => {
     expect(summary.seeded).toHaveLength(RULES.length);
     expect(summary.languages).toEqual(["javascript", "typescript"]);
     expect(count("rules")).toBe(RULES.length);
-    expect(count("languages")).toBe(2);
+    // openDb already seeded the full catalog; seedRules only links, not inserts.
+    expect(count("languages")).toBe(LANGUAGES.length);
     expect(count("rule_languages")).toBe(LANGUAGE_LINKS);
     expect(count("rule_categories")).toBe(CATEGORY_LINKS);
   });
@@ -44,7 +46,7 @@ describe("seedRules", () => {
     seedRules(db, RULES);
     seedRules(db, RULES);
     expect(count("rules")).toBe(RULES.length);
-    expect(count("languages")).toBe(2);
+    expect(count("languages")).toBe(LANGUAGES.length);
     expect(count("rule_languages")).toBe(LANGUAGE_LINKS);
     expect(count("rule_categories")).toBe(CATEGORY_LINKS);
   });
