@@ -5,7 +5,7 @@
  * line of violations instead, and collect that. Display-only — no fixes applied.
  */
 import { execFile, spawn } from "node:child_process";
-import { readdir, stat } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { dirname, extname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { hookScriptPath } from "../rules/dispatch.js";
@@ -118,6 +118,26 @@ export async function browse(rawPath?: string): Promise<BrowseView> {
     parent: parent === path ? null : parent,
     entries: [...dirs.sort(byName), ...files.sort(byName)],
   };
+}
+
+export interface FileView {
+  path: string;
+  text: string;
+}
+
+/**
+ * GET /api/run/file — read one lintable file's text for the Run tab's split
+ * viewer, so clicking a violation can open the source and mark the line. Limited
+ * to the extensions the hooks police, matching what `browse` offers as files.
+ */
+export async function readSource(rawPath?: string): Promise<FileView> {
+  if (!rawPath?.trim()) throw new Error("path is required");
+  const path = resolve(rawPath.trim());
+  if (!LINTABLE_EXTS.has(extname(path))) {
+    throw new Error(`not a viewable file: ${path}`);
+  }
+  const text = await readFile(path, "utf8");
+  return { path, text };
 }
 
 /** Throw a clean 400-worthy error unless `path` is inside a git work tree (the `--all` hooks need `git ls-files`). */

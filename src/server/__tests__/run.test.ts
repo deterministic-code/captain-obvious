@@ -13,7 +13,7 @@ vi.mock("node:child_process", () => ({
 
 import { execFile, spawn } from "node:child_process";
 import { hookScriptPath } from "../../rules/dispatch.js";
-import { browse, RUNNABLE_SLUGS, runMeta, runRules } from "../run.js";
+import { browse, readSource, RUNNABLE_SLUGS, runMeta, runRules } from "../run.js";
 
 const spawnMock = vi.mocked(spawn);
 const execFileMock = vi.mocked(execFile);
@@ -108,6 +108,29 @@ describe("browse", () => {
 
   it("rejects when the path is not a directory", async () => {
     await expect(browse(filePath)).rejects.toThrow();
+  });
+});
+
+describe("readSource", () => {
+  it("returns the resolved path and full text of a lintable file", async () => {
+    const view = await readSource(filePath);
+    expect(view.path).toBe(filePath);
+    expect(view.text).toBe("const x = 1;\n");
+  });
+
+  it("throws when no path is given", async () => {
+    await expect(readSource()).rejects.toThrow("path is required");
+    await expect(readSource("  ")).rejects.toThrow("path is required");
+  });
+
+  it("rejects a non-lintable extension", async () => {
+    await expect(readSource(join(dir, "readme.md"))).rejects.toThrow(
+      /not a viewable file/,
+    );
+  });
+
+  it("propagates the read error for a missing file", async () => {
+    await expect(readSource(join(dir, "nope.ts"))).rejects.toThrow();
   });
 });
 

@@ -27,10 +27,14 @@ const RUN_RESULT = [
   {
     slug: "lint-a",
     ok: true,
-    violations: [{ path: "x.ts", line: 4, col: 2, kind: "size", detail: "too big" }],
+    violations: [
+      { path: "x.ts", line: 2, col: 5, kind: "size", detail: "too big" },
+      { path: "x.ts", line: 2, col: 9, kind: "size", detail: "also big" },
+    ],
   },
   { slug: "lint-b", ok: true, violations: [] },
 ];
+const FILE_TEXT = "const a = 1\nconst bad = 2\nconst c = 3\n";
 
 function jsonRes(obj: unknown) {
   return { ok: true, status: 200, json: async () => obj } as unknown as Response;
@@ -105,6 +109,13 @@ beforeEach(() => {
       runCalls.push(JSON.parse(opts?.body as string));
       return jsonRes(RUN_RESULT);
     }
+    if (typeof url === "string" && url.startsWith("/api/run/file")) {
+      const p = new URL(url, "http://x").searchParams.get("path")!;
+      if (p === "boom.ts") {
+        return { ok: false, status: 400, json: async () => ({ error: "read failed" }) } as unknown as Response;
+      }
+      return jsonRes({ path: "/proj/" + p, text: FILE_TEXT });
+    }
     if (opts?.method === "PATCH") {
       patchCalls.push({ url, body: JSON.parse(opts.body as string) });
       return jsonRes({});
@@ -112,11 +123,16 @@ beforeEach(() => {
     throw new Error("unexpected fetch: " + url);
   });
   vi.stubGlobal("alert", () => {});
+  // The panel lazy-loads highlight.js from a CDN <script>; happy-dom can't fetch
+  // it, so treat the disabled load as a no-op instead of logging a load error.
+  (window as unknown as { happyDOM: { settings: { handleDisabledFileLoadingAsSuccess: boolean } } })
+    .happyDOM.settings.handleDisabledFileLoadingAsSuccess = true;
   buildPanelDom();
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  delete (window as unknown as { hljs?: unknown }).hljs;
 });
 
 describe("panelExt injected script", () => {
@@ -297,7 +313,7 @@ describe("panelExt injected script", () => {
     const root = document.getElementById("root")!;
     const overlay = document.querySelector<HTMLElement>("#co-run-overlay")!;
     (document.querySelector(".co-run-tab") as HTMLElement).click();
-    expect(overlay.style.display).toBe("block");
+    expect(overlay.style.display).toBe("flex");
     expect(root.style.display).toBe("none");
     (overlay.querySelector(".co-run-back") as HTMLElement).click();
     expect(overlay.style.display).toBe("none");
@@ -359,5 +375,96 @@ describe("panelExt injected script", () => {
     expect(results.querySelector(".co-run-slug")!.textContent).toBe("lint-a");
     expect(results.textContent).toContain("too big");
     expect(results.textContent).toContain("no violations"); // lint-b, empty
+  });
+
+  // Run lint-a, then return the overlay with results rendered so a violation
+  // row can be clicked into the editor.
+  async function runAndSelect(): Promise<HTMLElement> {
+    await runInjected();
+    const overlay = document.querySelector<HTMLElement>("#co-run-overlay")!;
+    const box = [...overlay.querySelectorAll<HTMLInputElement>(".co-run-opt")].find(
+      (i) => i.value === "lint-a",
+    )!;
+    box.checked = true;
+    box.dispatchEvent(new Event("change", { bubbles: true }));
+    overlay.querySelector<HTMLButtonElement>("#co-run-btn")!.click();
+    for (let i = 0; i < 4; i++) await flush();
+    return overlay;
+  }
+
+  function synthVio(results: Element, path: string, line: string): HTMLElement {
+    const vio = document.createElement("div");
+    vio.className = "co-run-vio";
+    vio.setAttribute("data-path", path);
+    vio.setAttribute("data-line", line);
+    results.appendChild(vio);
+    return vio;
+  }
+
+  it("shows an editor placeholder until a result is opened", async () => {
+    await runInjected();
+    expect(document.querySelector("#co-run-editor .co-ed-empty")).not.toBeNull();
+  });
+
+  it("ignores clicks on the results background", async () => {
+    const overlay = await runAndSelect();
+    overlay.querySelector<HTMLElement>("#co-run-results")!.click();
+    await flush();
+    expect(overlay.querySelector("#co-run-editor .co-ed-empty")).not.toBeNull();
+  });
+
+  it("clicking a violation opens the file with a caret at the offending column", async () => {
+    const overlay = await runAndSelect();
+    overlay.querySelector<HTMLElement>('.co-run-vio[data-path="x.ts"]')!.click();
+    for (let i = 0; i < 4; i++) await flush();
+    const editor = overlay.querySelector("#co-run-editor")!;
+    expect(editor.querySelector(".co-ed-head")!.textContent).toBe("/proj/x.ts");
+    const active = editor.querySelector("#co-ed-active")!;
+    expect(active.querySelector(".co-gutter")!.textContent).toBe("2");
+    expect(editor.textContent).toContain("const bad = 2");
+    const carets = [...editor.querySelectorAll(".co-caret")];
+    expect(carets).toHaveLength(2); // both violations sit on line 2
+    expect(carets[0].textContent).toContain("^");
+    expect(carets[0].textContent).toContain("lint-a: too big");
+  });
+
+  it("colours code with highlight.js when it is loaded", async () => {
+    const highlight = vi.fn((code: string) => ({ value: '<em class="tok">' + code + "</em>" }));
+    (window as unknown as { hljs: unknown }).hljs = { getLanguage: () => ({}), highlight };
+    const overlay = await runAndSelect();
+    overlay.querySelector<HTMLElement>('.co-run-vio[data-path="x.ts"]')!.click();
+    for (let i = 0; i < 4; i++) await flush();
+    expect(overlay.querySelector("#co-run-editor .co-line .tok")).not.toBeNull();
+    expect(highlight).toHaveBeenCalled();
+  });
+
+  it("falls back to plain escaped text when highlight.js lacks the language", async () => {
+    const highlight = vi.fn();
+    (window as unknown as { hljs: unknown }).hljs = { getLanguage: () => null, highlight };
+    const overlay = await runAndSelect();
+    overlay.querySelector<HTMLElement>('.co-run-vio[data-path="x.ts"]')!.click();
+    for (let i = 0; i < 4; i++) await flush();
+    expect(highlight).not.toHaveBeenCalled();
+    expect(overlay.querySelector("#co-run-editor")!.textContent).toContain("const bad = 2");
+  });
+
+  it("shows an error in the editor when the file can't be read", async () => {
+    const overlay = await runAndSelect();
+    synthVio(overlay.querySelector("#co-run-results")!, "boom.ts", "1").click();
+    for (let i = 0; i < 4; i++) await flush();
+    expect(overlay.querySelector("#co-run-editor .co-run-error")!.textContent).toBe(
+      "read failed",
+    );
+  });
+
+  it("opens a file with no recorded violations and no active line", async () => {
+    const overlay = await runAndSelect();
+    // A marker line past EOF leaves no active row and no caret rows.
+    synthVio(overlay.querySelector("#co-run-results")!, "other.ts", "99").click();
+    for (let i = 0; i < 4; i++) await flush();
+    const editor = overlay.querySelector("#co-run-editor")!;
+    expect(editor.querySelector(".co-code")).not.toBeNull();
+    expect(editor.querySelector("#co-ed-active")).toBeNull();
+    expect(editor.querySelectorAll(".co-caret")).toHaveLength(0);
   });
 });
