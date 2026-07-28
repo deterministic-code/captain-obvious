@@ -92,6 +92,28 @@ describe("lint-dup-structural / main dispatch (in-process)", () => {
     expect(out).toMatch(/sibling table\(s\), \d+ clone cluster\(s\)/);
   });
 
+  test("--all with CO_JSON emits one JSON line with table + cluster violations", async () => {
+    await writeFile(join(repo, "conv.mjs"), REGEX_TABLE);
+    await writeFile(join(repo, "shapeA.mjs"), CLONE_OBJECT);
+    await writeFile(
+      join(repo, "shapeB.mjs"),
+      CLONE_OBJECT.replace("shape", "otherShape"),
+    );
+    await commitAllIn(repo, "tables + clones");
+
+    process.env.CO_JSON = "1";
+    try {
+      await main(["node", "s", "--all"]);
+    } finally {
+      delete process.env.CO_JSON;
+    }
+    expect(io.exitSpy).not.toHaveBeenCalled();
+    const lines = io.text(io.stdoutSpy).split("\n").filter(Boolean);
+    expect(lines).toHaveLength(1);
+    const violations = JSON.parse(lines[0]).violations;
+    expect(violations.some((v) => v.kind.startsWith("clone cluster"))).toBe(true);
+  });
+
   test("--files with a table in a listed file writes to stderr and exits 1", async () => {
     await writeFile(join(repo, "conv.mjs"), REGEX_TABLE);
     await commitAllIn(repo, "table");

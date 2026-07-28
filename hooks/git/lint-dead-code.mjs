@@ -3,8 +3,10 @@ import { execFile } from "node:child_process";
 import { relative, resolve } from "node:path";
 import { promisify } from "node:util";
 import {
+  emitJson,
   formatViolation,
   isInvokedAsScript,
+  jsonMode,
   repoRootOf,
   resolveToolBin,
   sanitizedGitEnv,
@@ -93,6 +95,7 @@ export async function main(argv) {
 
   if (mode === "--all") {
     const violations = knipIssuesToViolations(await runKnip(repoRoot));
+    if (jsonMode()) return emitJson(violations);
     printReport(violations, "the repo", true);
     if (violations.length > 0) process.exitCode = 1;
     return;

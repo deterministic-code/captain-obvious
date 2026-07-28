@@ -162,6 +162,22 @@ describe("lint-dup-fn / main dispatch (in-process)", () => {
     expect(out).toContain("cluster(s)");
   });
 
+  test("--all with CO_JSON emits one JSON violations line and never exits", async () => {
+    await seedTwoCloneFiles();
+    await commitAllIn(repo, "two clones");
+
+    process.env.CO_JSON = "1";
+    try {
+      await main(["node", "s", "--all"]);
+    } finally {
+      delete process.env.CO_JSON;
+    }
+    expect(io.exitSpy).not.toHaveBeenCalled();
+    const lines = io.text(io.stdoutSpy).split("\n").filter(Boolean);
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0]).violations.length).toBeGreaterThan(0);
+  });
+
   test("--files with a clone in a listed file writes to stderr and exits 1", async () => {
     await seedTwoCloneFiles();
     await commitAllIn(repo, "two clones");

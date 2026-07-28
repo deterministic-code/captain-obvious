@@ -14,15 +14,17 @@ import type { Violation } from "../rules/types.js";
 const execFileAsync = promisify(execFile);
 
 /**
- * Slugs whose hooks emit CO_JSON structured output in `--all` mode today. Grows
- * as more hooks are wired for Run — the dup/ratchet, frozen-interfaces, and the
- * bespoke/shell-out hooks are deferred (see the Run-tab plan).
+ * Slugs whose hooks emit CO_JSON structured output in `--all` mode. Every rule
+ * that supports a whole-folder scan is wired; the excluded few have no `--all`
+ * runner (lint-comments, lint-tests-with-code, gov-*) or don't emit per-line
+ * violations (lint-coverage reports regressions).
  */
 export const RUNNABLE_SLUGS = [
   "lint-naming",
   "lint-emitter-casing",
   "lint-empty-tests",
   "lint-test-determinism",
+  "lint-test-disabling-skipping",
   "lint-solid-s",
   "lint-solid-o",
   "lint-solid-l",
@@ -32,6 +34,14 @@ export const RUNNABLE_SLUGS = [
   "lint-max-lines",
   "lint-max-params",
   "lint-max-statements",
+  "lint-dup",
+  "lint-dup-fn",
+  "lint-dup-structural",
+  "lint-frozen-interfaces",
+  "lint-empty-catch",
+  "lint-sync-calls",
+  "lint-prettier",
+  "lint-dead-code",
 ] as const;
 
 const RUNNABLE = new Set<string>(RUNNABLE_SLUGS);

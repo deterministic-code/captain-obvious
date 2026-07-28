@@ -4,8 +4,10 @@ import { resolve } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import {
+  emitJson,
   formatViolation,
   isInvokedAsScript,
+  jsonMode,
   listAllFiles,
   listStagedFiles,
   sanitizedGitEnv,
@@ -433,6 +435,7 @@ export async function main(argv, opts = {}) {
   const violations = (
     await Promise.all(targets.map((p) => lintFile(p, cwd)))
   ).flat();
+  if (jsonMode()) return emitJson(violations);
   const ratchetReports =
     mode === "--staged" ? await collectRatchetReports(cwd) : [];
   if (violations.length === 0 && ratchetReports.length === 0) {

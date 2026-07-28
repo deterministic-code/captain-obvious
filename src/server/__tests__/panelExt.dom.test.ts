@@ -257,10 +257,13 @@ describe("panelExt injected script", () => {
     expect(rows[2].style.display).toBe(""); // lint-c (no category) always shows
   });
 
-  it("injects a Run tab into the nav and a hidden overlay listing only runnable rules", async () => {
+  it("injects a Run tab right after Rules and a hidden overlay listing only runnable rules", async () => {
     await runInjected();
     const tab = document.querySelector(".co-run-tab")!;
     expect(tab.textContent).toBe("Run");
+    // Positioned immediately after the Rules tab (not appended at the end).
+    const labels = [...document.querySelectorAll("nav button")].map((b) => b.textContent);
+    expect(labels).toEqual(["Rules", "Run", "Profiling"]);
     const overlay = document.querySelector<HTMLElement>("#co-run-overlay")!;
     expect(overlay.style.display).toBe("none");
     // Picker prefills the folder and lists only the runnable slugs (lint-a, lint-b).

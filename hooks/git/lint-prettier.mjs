@@ -2,9 +2,11 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import {
+  emitJson,
   formatViolation,
   isInvokedAsScript,
   isLintable,
+  jsonMode,
   listAllFiles,
   listStagedFiles,
   repoRootOf,
@@ -99,6 +101,7 @@ async function runCheck(bin, targets, repoRoot, warn) {
     }
   }
   const violations = parsePrettierCheckOutput(stdout + stderr);
+  if (jsonMode()) return emitJson(violations);
   if (violations.length === 0) {
     process.stdout.write("lint-prettier: all files formatted.\n");
     return;

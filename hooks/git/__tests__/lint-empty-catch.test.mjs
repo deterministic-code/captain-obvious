@@ -379,4 +379,25 @@ describe("main", () => {
     expect(out).toMatch(/no empty catch blocks in repo/);
     await cleanupTmp(repo);
   });
+
+  test("--all with CO_JSON emits one JSON violations line and never exits", async () => {
+    const repo = await makeTempGitRepo("lec-json-");
+    await writeFile(join(repo, "bad.ts"), `try { f(); } catch {}\n`, "utf8");
+    await commitAllIn(repo, "seed");
+    process.env.CO_JSON = "1";
+    try {
+      await main(["node", "script.mjs", "--all"], { cwd: repo });
+    } finally {
+      delete process.env.CO_JSON;
+    }
+    expect(exitSpy).not.toHaveBeenCalled();
+    const lines = stdoutSpy.mock.calls
+      .map((c) => c[0])
+      .join("")
+      .split("\n")
+      .filter(Boolean);
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0]).violations.length).toBeGreaterThan(0);
+    await cleanupTmp(repo);
+  });
 });

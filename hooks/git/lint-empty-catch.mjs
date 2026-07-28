@@ -2,9 +2,11 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
+  emitJson,
   formatViolation,
   isInvokedAsScript,
   isLintable,
+  jsonMode,
   listAllFiles,
   listStagedFiles,
   stripStringsAndComments,
@@ -89,6 +91,7 @@ export async function main(argv, opts = {}) {
   const violations = (
     await Promise.all(targets.map((p) => lintFile(p, cwd)))
   ).flat();
+  if (jsonMode()) return emitJson(violations);
   if (violations.length === 0) {
     if (mode === "--staged")
       process.stdout.write(

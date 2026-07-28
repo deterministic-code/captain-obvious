@@ -409,13 +409,19 @@ export const PANEL_EXT = `(() => {
   // The panel bundle owns the nav; we locate it by a leaf element whose text is a
   // known tab ("Rules"/"Profiling"), clone it into a "Run" tab, and re-inject
   // idempotently on every observer tick (a native tab click re-renders it away).
+  // Anchor on the "Rules" tab when present (so Run sits right beside it); fall
+  // back to the first known tab if the panel ever renames it.
   function findNav() {
     const wanted = ["rules", "profiling"];
+    let fallback = null;
     for (const el of document.querySelectorAll("button, a, [role=tab], nav *")) {
+      if (el.children.length !== 0) continue;
       const txt = (el.textContent || "").trim().toLowerCase();
-      if (wanted.indexOf(txt) !== -1 && el.children.length === 0) {
-        return { nav: el.parentElement, tmpl: el };
-      }
+      if (txt === "rules") return { nav: el.parentElement, anchor: el };
+      if (wanted.indexOf(txt) !== -1 && !fallback) fallback = el;
+    }
+    if (fallback && fallback.parentElement) {
+      return { nav: fallback.parentElement, anchor: fallback };
     }
     return null;
   }
@@ -423,16 +429,20 @@ export const PANEL_EXT = `(() => {
   function injectRunTab() {
     const found = findNav();
     if (!found || !found.nav || found.nav.querySelector(".co-run-tab")) return;
-    const tab = found.tmpl.cloneNode(true);
+    const tab = found.anchor.cloneNode(true);
     tab.classList.add("co-run-tab");
     tab.textContent = "Run";
     tab.removeAttribute("aria-selected");
+    // The panel's tabs are router <a href> links; without preventDefault the
+    // clone would navigate to the Rules route instead of opening our overlay.
+    tab.removeAttribute("href");
     tab.addEventListener("click", (e) => {
+      e.preventDefault();
       e.stopPropagation();
       runActive = true;
       syncRunView();
     });
-    found.nav.appendChild(tab);
+    found.anchor.insertAdjacentElement("afterend", tab);
   }
 
   // The overlay lives OUTSIDE #root so React never reconciles it away; showing it

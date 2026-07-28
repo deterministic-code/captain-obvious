@@ -532,4 +532,29 @@ describe("main --files mode", () => {
     expect(exit).toBe(1);
     expect(errors.join("")).toMatch(/page-request/);
   });
+
+  test("--files with CO_JSON emits one JSON violations line and never exits", async () => {
+    await writeFile(
+      join(tmp, "frontend/e2e/bad.spec.ts"),
+      `test('bad', async ({ page }) => { await page.request.get('/'); });\n`,
+    );
+    process.env.CO_JSON = "1";
+    try {
+      await main(
+        [
+          "node",
+          "lint-test-disabling-skipping.mjs",
+          "--files",
+          "frontend/e2e/bad.spec.ts",
+        ],
+        { cwd: tmp },
+      );
+    } finally {
+      delete process.env.CO_JSON;
+    }
+    expect(exit).toBe(null);
+    const lines = outs.join("").split("\n").filter(Boolean);
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0]).violations.length).toBeGreaterThan(0);
+  });
 });

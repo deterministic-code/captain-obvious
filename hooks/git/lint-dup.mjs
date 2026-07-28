@@ -12,7 +12,9 @@ import {
 } from "./dup-ratchet.mjs";
 import {
   EXCLUDED_PATH_PARTS,
+  emitJson,
   isInvokedAsScript,
+  jsonMode,
   listStagedFiles,
   repoRootOf,
   resolveToolBin,
@@ -257,6 +259,16 @@ function printDuplicatePairs(duplicates, repoRoot, write) {
   }
 }
 
+function duplicatesToViolations(duplicates, repoRoot) {
+  return duplicates.map((dup) => ({
+    path: toRepoRelative(dup.firstFile.name, repoRoot),
+    line: dup.firstFile.start,
+    col: 1,
+    kind: `duplicate code (${dup.lines} lines)`,
+    detail: `duplicates ${toRepoRelative(dup.secondFile.name, repoRoot)}:${dup.secondFile.start}-${dup.secondFile.end}. Extract a shared helper instead of copying.`,
+  }));
+}
+
 async function runStagedMode(repoRoot) {
   const staged = await listStagedFiles(repoRoot);
   await ratchetGate({
@@ -278,6 +290,7 @@ async function runAllMode(repoRoot) {
     [...new Set(Object.values(JSCPD_FORMAT_BY_EXT))],
     repoRoot,
   );
+  if (jsonMode()) return emitJson(duplicatesToViolations(duplicates, repoRoot));
   if (duplicates.length === 0) {
     process.stdout.write("lint-dup: no duplication found.\n");
     return;

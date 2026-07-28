@@ -14,8 +14,10 @@ import {
   functionClones,
 } from "./dup-fn-metrics.mjs";
 import {
+  emitJson,
   formatViolation,
   isInvokedAsScript,
+  jsonMode,
   listAllFiles,
 } from "./lint-shared.mjs";
 
@@ -70,6 +72,7 @@ async function runAllMode(repoRoot) {
   const clusters = functionClones(await allSubtrees(repoRoot));
   const violations = clusters.map((c) => clusterViolation(c, repoRoot));
   violations.sort((a, b) => a.kind.localeCompare(b.kind) || a.path.localeCompare(b.path));
+  if (jsonMode()) return emitJson(violations);
   for (const v of violations) process.stdout.write(`${formatViolation(v)}\n`);
   process.stdout.write(
     `\nlint-dup-fn: ${clusters.length} duplicate-function-body cluster(s) (report-only; --push is the ratchet gate).\n`,

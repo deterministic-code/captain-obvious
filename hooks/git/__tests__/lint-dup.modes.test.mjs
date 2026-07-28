@@ -61,6 +61,24 @@ describe("lint-dup / main dispatch (in-process, real jscpd)", () => {
     expect(out).toContain("duplicate block(s)");
   });
 
+  test("--all with CO_JSON emits one JSON line of duplicate-code violations", async () => {
+    await seedTwoCopies();
+    await commitAllIn(repo, "two copies");
+
+    process.env.CO_JSON = "1";
+    try {
+      await main(["node", "s", "--all"]);
+    } finally {
+      delete process.env.CO_JSON;
+    }
+    expect(io.exitSpy).not.toHaveBeenCalled();
+    const lines = io.text(io.stdoutSpy).split("\n").filter(Boolean);
+    expect(lines).toHaveLength(1);
+    const violations = JSON.parse(lines[0]).violations;
+    expect(violations.length).toBeGreaterThan(0);
+    expect(violations[0].kind).toMatch(/duplicate code/);
+  });
+
   // A frontend/ directory triggers the separate frontend-only jscpd scan (the
   // browser build can't import server code, so cross-boundary pairs are mirrors).
   test("--all scans frontend/ separately and flags within-frontend duplication", async () => {
