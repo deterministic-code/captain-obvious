@@ -7,10 +7,12 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import {
   emitHookReport,
+  emitJson,
   formatViolation,
   isExcluded,
   isInvokedAsScript,
   isLintable,
+  jsonMode,
   lintFileWith,
   listAllFiles,
   listStagedFiles,
@@ -196,6 +198,49 @@ describe("emitHookReport", () => {
     const out = spyOut();
     emitHookReport([], { mode: "--all", okLine: "OK", summaryLine: "S" });
     expect(out.join("")).toBe("OK.\n");
+  });
+});
+
+describe("jsonMode / emitJson", () => {
+  const saved = process.env.CO_JSON;
+  afterEach(() => {
+    if (saved === undefined) delete process.env.CO_JSON;
+    else process.env.CO_JSON = saved;
+    vi.restoreAllMocks();
+  });
+
+  test("jsonMode is true only when CO_JSON is exactly '1'", () => {
+    delete process.env.CO_JSON;
+    expect(jsonMode()).toBe(false);
+    process.env.CO_JSON = "1";
+    expect(jsonMode()).toBe(true);
+    process.env.CO_JSON = "0";
+    expect(jsonMode()).toBe(false);
+  });
+
+  test("emitJson writes one violations line to stdout", () => {
+    const out = [];
+    vi.spyOn(process.stdout, "write").mockImplementation((s) => {
+      out.push(s);
+      return true;
+    });
+    emitJson([VIOLATION]);
+    expect(out.join("")).toBe(JSON.stringify({ violations: [VIOLATION] }) + "\n");
+  });
+
+  test("emitHookReport in JSON mode emits JSON and never exits", () => {
+    process.env.CO_JSON = "1";
+    const out = [];
+    vi.spyOn(process.stdout, "write").mockImplementation((s) => {
+      out.push(s);
+      return true;
+    });
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
+      throw new Error("exit");
+    });
+    emitHookReport([VIOLATION], { mode: "--all", okLine: "OK", summaryLine: "S" });
+    expect(exitSpy).not.toHaveBeenCalled();
+    expect(JSON.parse(out.join(""))).toEqual({ violations: [VIOLATION] });
   });
 });
 

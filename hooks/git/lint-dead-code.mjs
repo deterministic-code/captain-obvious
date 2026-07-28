@@ -3,8 +3,10 @@ import { execFile } from "node:child_process";
 import { relative, resolve } from "node:path";
 import { promisify } from "node:util";
 import {
+  emitJson,
   formatViolation,
   isInvokedAsScript,
+  jsonMode,
   repoRootOf,
   resolveToolBin,
   sanitizedGitEnv,
@@ -93,6 +95,7 @@ export async function main(argv) {
 
   if (mode === "--all") {
     const violations = knipIssuesToViolations(await runKnip(repoRoot));
+    if (jsonMode()) return emitJson(violations);
     printReport(violations, "the repo", true);
     if (violations.length > 0) process.exitCode = 1;
     return;
@@ -103,12 +106,14 @@ export async function main(argv) {
       argv.slice(3).map((f) => relative(repoRoot, resolve(f))),
     );
     if (targets.size === 0) {
+      if (jsonMode()) return emitJson([]);
       process.stdout.write("lint-dead-code: no files given.\n");
       return;
     }
     const violations = knipIssuesToViolations(await runKnip(repoRoot)).filter(
       (v) => targets.has(v.path),
     );
+    if (jsonMode()) return emitJson(violations);
     printReport(violations, "the given files", false);
     return;
   }

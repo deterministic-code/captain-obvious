@@ -177,6 +177,34 @@ describe("lint-prettier / main (real prettier)", () => {
     expect(stderrText()).toMatch(/unformatted file\(s\)/);
   });
 
+  test("CO_JSON emits one JSON violations line and never exits", async () => {
+    const p = join(repo, "bad.ts");
+    await writeFile(p, UNFORMATTED, "utf8");
+    process.env.CO_JSON = "1";
+    try {
+      await main(["node", "s.mjs", "--files", p]);
+    } finally {
+      delete process.env.CO_JSON;
+    }
+    expect(exitSpy).not.toHaveBeenCalled();
+    const lines = stdoutText().split("\n").filter(Boolean);
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0]).violations.length).toBeGreaterThan(0);
+  });
+
+  test("CO_JSON with no lintable files emits an empty JSON line", async () => {
+    const p = join(repo, "notes.md");
+    await writeFile(p, "# hi\n", "utf8");
+    process.env.CO_JSON = "1";
+    try {
+      await main(["node", "s.mjs", "--files", p]);
+    } finally {
+      delete process.env.CO_JSON;
+    }
+    expect(exitSpy).not.toHaveBeenCalled();
+    expect(JSON.parse(stdoutText().trim())).toEqual({ violations: [] });
+  });
+
   test("an unformatted file under --warn is advisory and does not exit", async () => {
     const p = join(repo, "warn.ts");
     await writeFile(p, UNFORMATTED, "utf8");

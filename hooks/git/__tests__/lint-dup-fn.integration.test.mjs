@@ -162,6 +162,22 @@ describe("lint-dup-fn / main dispatch (in-process)", () => {
     expect(out).toContain("cluster(s)");
   });
 
+  test("--all with CO_JSON emits one JSON violations line and never exits", async () => {
+    await seedTwoCloneFiles();
+    await commitAllIn(repo, "two clones");
+
+    process.env.CO_JSON = "1";
+    try {
+      await main(["node", "s", "--all"]);
+    } finally {
+      delete process.env.CO_JSON;
+    }
+    expect(io.exitSpy).not.toHaveBeenCalled();
+    const lines = io.text(io.stdoutSpy).split("\n").filter(Boolean);
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0]).violations.length).toBeGreaterThan(0);
+  });
+
   test("--files with a clone in a listed file writes to stderr and exits 1", async () => {
     await seedTwoCloneFiles();
     await commitAllIn(repo, "two clones");
@@ -187,6 +203,36 @@ describe("lint-dup-fn / main dispatch (in-process)", () => {
 
     await main(["node", "s", "--files", "readme.md"]);
     expect(io.text(io.stdoutSpy)).toContain("no code files given");
+  });
+
+  test("--files with CO_JSON emits one JSON violations line for a listed clone", async () => {
+    await seedTwoCloneFiles();
+    await commitAllIn(repo, "two clones");
+
+    process.env.CO_JSON = "1";
+    try {
+      await main(["node", "s", "--files", "userstore.mjs", "vendorstore.mjs"]);
+    } finally {
+      delete process.env.CO_JSON;
+    }
+    expect(io.exitSpy).not.toHaveBeenCalled();
+    const lines = io.text(io.stdoutSpy).split("\n").filter(Boolean);
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0]).violations.length).toBeGreaterThan(0);
+  });
+
+  test("--files with CO_JSON and no candidate files emits an empty JSON line", async () => {
+    await writeFile(join(repo, "readme.md"), "# hi\n");
+    await commitAllIn(repo, "docs");
+
+    process.env.CO_JSON = "1";
+    try {
+      await main(["node", "s", "--files", "readme.md"]);
+    } finally {
+      delete process.env.CO_JSON;
+    }
+    expect(io.exitSpy).not.toHaveBeenCalled();
+    expect(JSON.parse(io.text(io.stdoutSpy).trim())).toEqual({ violations: [] });
   });
 
   // .test./.spec. files, __tests__/ dirs, and templates/ are excluded candidates:

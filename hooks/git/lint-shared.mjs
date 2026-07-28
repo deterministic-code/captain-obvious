@@ -266,7 +266,18 @@ export async function selectHookFiles(mode, args, usage) {
   process.exit(2);
 }
 
+/** True when a hook should emit machine-readable JSON instead of its human report — set by the control panel's Run runner. */
+export function jsonMode() {
+  return process.env.CO_JSON === "1";
+}
+
+/** Emit one JSON line of the violation set to stdout (the Run runner reads exactly this). */
+export function emitJson(violations) {
+  process.stdout.write(`${JSON.stringify({ violations })}\n`);
+}
+
 export function emitHookReport(violations, { mode, okLine, summaryLine }) {
+  if (jsonMode()) return emitJson(violations);
   if (violations.length === 0) {
     const where = mode === "--staged" ? " in staged diff" : "";
     process.stdout.write(`${okLine}${where}.\n`);

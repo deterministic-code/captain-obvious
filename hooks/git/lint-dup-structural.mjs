@@ -12,9 +12,11 @@ import {
   tableViolationsForFile,
 } from "./dup-structural-metrics.mjs";
 import {
+  emitJson,
   formatViolation,
   isExcluded,
   isInvokedAsScript,
+  jsonMode,
   listAllFiles,
 } from "./lint-shared.mjs";
 
@@ -81,19 +83,38 @@ async function runAllMode(repoRoot) {
     );
     subtreesByFile.push(await subtreesForFile(abs));
   }
-  for (const v of tables) process.stdout.write(`${formatViolation(v)}\n`);
   const clusters = cloneClusters(subtreesByFile, {});
+  if (jsonMode()) {
+    return emitJson([
+      ...tables,
+      ...clusters.map((c) => clusterViolation(c, repoRoot)),
+    ]);
+  }
+  for (const v of tables) process.stdout.write(`${formatViolation(v)}\n`);
   for (const cluster of clusters) {
-    const locs = cluster
-      .map((c) => `${toRepoRelative(c.path, repoRoot)}:${c.start}-${c.end}`)
-      .join(" <-> ");
     process.stdout.write(
-      `clone cluster (${cluster[0].nodeCount} nodes)  ${locs}\n`,
+      `clone cluster (${cluster[0].nodeCount} nodes)  ${clusterLocs(cluster, repoRoot)}\n`,
     );
   }
   process.stdout.write(
     `\nlint-dup-structural: ${tables.length} sibling table(s), ${clusters.length} clone cluster(s) (report-only; --push is the ratchet gate).\n`,
   );
+}
+
+function clusterLocs(cluster, repoRoot) {
+  return cluster
+    .map((c) => `${toRepoRelative(c.path, repoRoot)}:${c.start}-${c.end}`)
+    .join(" <-> ");
+}
+
+function clusterViolation(cluster, repoRoot) {
+  return {
+    path: toRepoRelative(cluster[0].path, repoRoot),
+    line: cluster[0].start,
+    col: 1,
+    kind: `clone cluster (${cluster[0].nodeCount} nodes)`,
+    detail: clusterLocs(cluster, repoRoot),
+  };
 }
 
 async function collectFiles(repoRoot, files) {

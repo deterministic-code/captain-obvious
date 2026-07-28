@@ -2,9 +2,11 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import {
+  emitJson,
   formatViolation,
   isInvokedAsScript,
   isLintable,
+  jsonMode,
   listAllFiles,
   listStagedFiles,
   repoRootOf,
@@ -99,6 +101,7 @@ async function runCheck(bin, targets, repoRoot, warn) {
     }
   }
   const violations = parsePrettierCheckOutput(stdout + stderr);
+  if (jsonMode()) return emitJson(violations);
   if (violations.length === 0) {
     process.stdout.write("lint-prettier: all files formatted.\n");
     return;
@@ -137,6 +140,7 @@ export async function main(argv) {
   const repoRoot = await repoRootOf(process.cwd());
   const targets = await selectFiles(parsed.selector, parsed.files, repoRoot);
   if (targets.length === 0) {
+    if (jsonMode()) return emitJson([]);
     process.stdout.write("lint-prettier: no lintable files.\n");
     return;
   }
