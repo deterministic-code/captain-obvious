@@ -280,6 +280,18 @@ export const RULES: LintRule[] = [
     modes: ["staged", "warn"],
     stage: "pre-commit",
   }),
+  defineRule({
+    slug: "lint-empty-tests",
+    name: "Empty tests",
+    category: "testing",
+    description:
+      "Flags it()/test() with no callback or no assertion (expect/assert) — tests that pass vacuously.",
+    languages: JSTS,
+    config: null,
+    ratchetable: false,
+    modes: FILE_MODES,
+    stage: "pre-commit",
+  }),
   // Governance rules police the repo/workflow, not source files: language-agnostic
   // (languages: []) and enforced per environment via action bindings (e.g. halt on
   // github, warn on claude). The runnable ones delegate to a hooks/git/<slug>.mjs;
