@@ -348,16 +348,45 @@ describe("panelExt injected script", () => {
     expect(opts.sort()).toEqual(["lint-a", "lint-b"]);
   });
 
-  it("Run tab shows the overlay and hides the panel; Back restores it", async () => {
+  it("Run tab shows the overlay and hides the panel; the branded nav restores it", async () => {
     await runInjected();
     const root = document.getElementById("root")!;
     const overlay = document.querySelector<HTMLElement>("#co-run-overlay")!;
     (document.querySelector(".co-run-tab") as HTMLElement).click();
     expect(overlay.style.display).toBe("flex");
     expect(root.style.display).toBe("none");
-    (overlay.querySelector(".co-run-back") as HTMLElement).click();
+    // The overlay wears the panel's branded header; its Rules tab closes the
+    // overlay and routes back into the panel.
+    (overlay.querySelector('.co-run-nav-tab[data-nav="Rules"]') as HTMLElement).click();
     expect(overlay.style.display).toBe("none");
     expect(root.style.display).toBe("");
+  });
+
+  it("hides the native Advanced tab", async () => {
+    await runInjected();
+    const nav = document.querySelector("nav")!;
+    const advanced = document.createElement("button");
+    advanced.textContent = "Advanced";
+    nav.appendChild(advanced); // triggers the observer → decorate → hideNativeTab
+    for (let i = 0; i < 3; i++) await flush();
+    expect(advanced.style.display).toBe("none");
+  });
+
+  it("gives the Run overlay the panel's branded header, whose Reporting tab exits", async () => {
+    await runInjected();
+    const overlay = document.querySelector<HTMLElement>("#co-run-overlay")!;
+    (document.querySelector(".co-run-tab") as HTMLElement).click();
+    expect(overlay.querySelector(".co-run-brand-name")!.textContent).toBe("Captain Obvious");
+    expect(overlay.querySelector(".co-run-nav-active")!.textContent).toBe("Run");
+    (overlay.querySelector('.co-run-nav-tab[data-nav="Reporting"]') as HTMLElement).click();
+    expect(overlay.style.display).toBe("none");
+    expect(document.getElementById("root")!.style.display).toBe("");
+  });
+
+  it("wraps the rules table so it scrolls instead of clipping columns", async () => {
+    await runInjected();
+    const table = document.querySelector("table")!;
+    expect(table.parentElement!.classList.contains("co-table-wrap")).toBe(true);
   });
 
   it("browses the server filesystem: navigate into a dir and pick a file as target", async () => {
