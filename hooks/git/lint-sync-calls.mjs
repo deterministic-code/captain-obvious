@@ -12,15 +12,9 @@ import {
   listStagedFiles,
   stripStringsAndComments,
 } from "./lint-shared.mjs";
+import { JS_TS_EXTS as SUPPORTED_EXTS } from "../../lib/languages.mjs";
 
-export const SUPPORTED_EXTS = new Set([
-  ".ts",
-  ".tsx",
-  ".mjs",
-  ".cjs",
-  ".js",
-  ".jsx",
-]);
+export { SUPPORTED_EXTS };
 
 export { EXCLUDED_PATH_PARTS, isExcluded, stripStringsAndComments };
 

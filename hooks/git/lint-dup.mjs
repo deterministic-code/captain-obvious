@@ -19,21 +19,14 @@ import {
   repoRootOf,
   resolveToolBin,
 } from "./lint-shared.mjs";
+import { JSCPD_FORMAT_BY_EXT } from "../../lib/languages.mjs";
 
 const execFileAsync = promisify(execFile);
 
 export const MIN_TOKENS = 50;
 export const MIN_LINES = 5;
 
-// JS/TS family only — Rust/C# duplication is out of scope for the Node hooks (they have their own toolchains).
-export const JSCPD_FORMAT_BY_EXT = {
-  ".ts": "typescript",
-  ".tsx": "tsx",
-  ".mjs": "javascript",
-  ".cjs": "javascript",
-  ".js": "javascript",
-  ".jsx": "jsx",
-};
+export { JSCPD_FORMAT_BY_EXT };
 
 const GENERATED_IGNORE_GLOBS = [
   "**/generated/**",

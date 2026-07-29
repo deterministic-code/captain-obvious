@@ -19,8 +19,7 @@ import {
   jsonMode,
   listAllFiles,
 } from "./lint-shared.mjs";
-
-const STRUCTURAL_EXTS = new Set([".ts", ".tsx", ".mjs", ".cjs", ".js", ".jsx"]);
+import { JS_TS_EXTS } from "../../lib/languages.mjs";
 
 const GENERATED_PARTS = [
   "/samples/",
@@ -30,7 +29,7 @@ const GENERATED_PARTS = [
 ];
 
 export function isStructuralFile(path) {
-  if (!STRUCTURAL_EXTS.has(extname(path))) return false;
+  if (!JS_TS_EXTS.has(extname(path))) return false;
   if (isExcluded(path)) return false;
   const normalized = `/${path.replace(/^\.?\/+/, "")}`;
   return !GENERATED_PARTS.some((p) => normalized.includes(p));

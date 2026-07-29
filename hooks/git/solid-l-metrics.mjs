@@ -4,8 +4,7 @@ import ts from "typescript";
 import { isExcluded, readSourceOrNull, runFileHook } from "./lint-shared.mjs";
 import { parseSourceFile } from "./fn-metrics.mjs";
 import { classifyMethod } from "./solid-i-metrics.mjs";
-
-const JS_EXTS = new Set([".ts", ".tsx", ".mjs", ".cjs", ".js", ".jsx"]);
+import { JS_TS_EXTS } from "../../lib/languages.mjs";
 const TEST_FILE_RE = /\.(test|spec)\.[cm]?[jt]sx?$|\/__tests__\//;
 const ALLOW_MARKER = "solid-l-allow";
 
@@ -54,7 +53,7 @@ const BUILTIN_CTORS = new Set([
 export function isAnalyzable(path) {
   if (isExcluded(path)) return false;
   if (TEST_FILE_RE.test(path)) return false;
-  return JS_EXTS.has(extname(path));
+  return JS_TS_EXTS.has(extname(path));
 }
 
 function isDomainCtor(name) {

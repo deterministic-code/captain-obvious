@@ -14,6 +14,7 @@ import {
   sanitizedGitEnv,
   stripStringsAndComments,
 } from "./lint-shared.mjs";
+import { JS_TS_EXTS } from "../../lib/languages.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -23,8 +24,6 @@ export const FN_LIMITS = {
   complexity: 15,
   params: 3,
 };
-
-const JS_EXTS = new Set([".ts", ".tsx", ".mjs", ".cjs", ".js", ".jsx"]);
 
 const TEST_FILE_RE = /\.(test|spec)\.[cm]?[jt]sx?$|\/__tests__\//;
 
@@ -70,7 +69,7 @@ const FN_KINDS = new Set([
 export function isAnalyzable(path) {
   if (isExcluded(path)) return false;
   if (TEST_FILE_RE.test(path)) return false;
-  return JS_EXTS.has(extname(path));
+  return JS_TS_EXTS.has(extname(path));
 }
 
 function isFnLike(node) {
