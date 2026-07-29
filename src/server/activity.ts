@@ -7,7 +7,7 @@
  * epoch MICROSECONDS; everything surfaced to the UI is epoch milliseconds.
  */
 import Database from "better-sqlite3";
-import { listLogs } from "../db/audit.js";
+import { listHookRuns, listLogs } from "../db/audit.js";
 import type { Db } from "../db/open.js";
 
 const US_PER_MS = 1000;
@@ -88,6 +88,21 @@ function readHookRuns(dbPath: string, sinceUs: number): HookRun[] {
   }
 }
 
+/**
+ * The git-hook dispatcher's own runs (audit DB), normalised to the same HookRun
+ * shape as the profiler's. A rule slug maps to its activity key so a dispatch run
+ * of `lint-naming` lines up with the same `lint:naming` bucket the profiler uses.
+ * Started times are already epoch ms here — no microsecond conversion.
+ */
+function readDispatchRuns(auditDb: Db, sinceMs: number): HookRun[] {
+  return listHookRuns(auditDb, { sinceMs }).map((r) => ({
+    key: slugToKey(r.slug),
+    startMs: r.started,
+    failed: r.status === "failure",
+    detail: `${r.stage} ${r.slug}`,
+  }));
+}
+
 export interface ActivityTop {
   key: string;
   runs: number;
@@ -111,16 +126,21 @@ export interface ActivityQuery {
 /**
  * GET /api/activity/summary — top rules by run count + a bucketed timeline, both
  * scoped to the optional `rules` filter. `keys` lists every activity key in the
- * window (unfiltered) so the panel's multiselect can offer them all.
+ * window (unfiltered) so the panel's multiselect can offer them all. Merges the
+ * external profiler's runs (when its DB is present) with the dispatcher's own.
  */
 export function activitySummary(
-  dbPath: string,
+  dbPath: string | undefined,
+  auditDb: Db,
   query: ActivityQuery,
 ): ActivitySummary {
   const secs = windowSeconds(query.last);
   const nowMs = Date.now();
   const startMs = nowMs - secs * 1000;
-  const runs = readHookRuns(dbPath, startMs * US_PER_MS);
+  const runs = [
+    ...(dbPath ? readHookRuns(dbPath, startMs * US_PER_MS) : []),
+    ...readDispatchRuns(auditDb, startMs),
+  ];
 
   const keys = [...new Set(runs.map((r) => r.key))].sort();
 
@@ -186,17 +206,19 @@ export function activityFeed(
 
   const events: ActivityEvent[] = [];
 
-  if (dbPath) {
-    for (const r of readHookRuns(dbPath, startMs * US_PER_MS)) {
-      if (selected.size && !selected.has(r.key)) continue;
-      events.push({
-        timeMs: r.startMs,
-        source: "hook",
-        key: r.key,
-        status: r.failed ? "failure" : "success",
-        detail: r.detail,
-      });
-    }
+  const hookRuns = [
+    ...(dbPath ? readHookRuns(dbPath, startMs * US_PER_MS) : []),
+    ...readDispatchRuns(auditDb, startMs),
+  ];
+  for (const r of hookRuns) {
+    if (selected.size && !selected.has(r.key)) continue;
+    events.push({
+      timeMs: r.startMs,
+      source: "hook",
+      key: r.key,
+      status: r.failed ? "failure" : "success",
+      detail: r.detail,
+    });
   }
 
   const selectedSlugs = [...selected].map(keyToSlug);

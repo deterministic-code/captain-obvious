@@ -105,3 +105,49 @@ export function listLogs(db: Db, opts: ListLogsOpts = {}): LogEntry[] {
     )
     .all(...params) as LogEntry[];
 }
+
+export interface HookRunRecord {
+  slug: string;
+  stage: string;
+  status: "success" | "failure";
+  /** Run start, epoch milliseconds. */
+  startedMs: number;
+  /** Run duration, milliseconds. */
+  durationMs: number;
+}
+
+/**
+ * Append one git-hook rule run. Unlike logEvent, this takes an explicit db
+ * handle: the dispatcher runs as its own short-lived process (a git hook), not
+ * under the server's module sink, so it opens the audit DB and writes directly.
+ */
+export function recordHookRun(db: Db, run: HookRunRecord): void {
+  db.prepare(
+    "INSERT INTO hook_runs (slug, stage, status, started, duration) VALUES (?, ?, ?, ?, ?)",
+  ).run(run.slug, run.stage, run.status, run.startedMs, run.durationMs);
+}
+
+export interface HookRunEntry {
+  slug: string;
+  stage: string;
+  status: string;
+  started: number;
+}
+
+/** Newest-first git-hook runs, window-filtered on `started` (epoch ms). */
+export function listHookRuns(db: Db, opts: ListLogsOpts = {}): HookRunEntry[] {
+  const clauses: string[] = [];
+  const params: number[] = [];
+  if (opts.sinceMs !== undefined) {
+    clauses.push("started >= ?");
+    params.push(opts.sinceMs);
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const limit = opts.limit !== undefined ? " LIMIT ?" : "";
+  if (opts.limit !== undefined) params.push(opts.limit);
+  return db
+    .prepare(
+      `SELECT slug, stage, status, started FROM hook_runs ${where} ORDER BY started DESC${limit}`,
+    )
+    .all(...params) as HookRunEntry[];
+}

@@ -3,8 +3,10 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  listHookRuns,
   logEvent,
   openAuditDb,
+  recordHookRun,
   resolveAuditDbPath,
   useAuditLog,
 } from "../audit.js";
@@ -95,6 +97,39 @@ describe("audit logging", () => {
     expect(logs()).toEqual([
       { log_type: "rule.disabled", message: "fresh" },
     ]);
+  });
+});
+
+describe("hook runs", () => {
+  it("records a run and lists it back newest-first", () => {
+    const base = Date.now();
+    recordHookRun(audit, {
+      slug: "lint-naming",
+      stage: "pre-commit",
+      status: "success",
+      startedMs: base - 1000,
+      durationMs: 12,
+    });
+    recordHookRun(audit, {
+      slug: "lint-dup",
+      stage: "pre-push",
+      status: "failure",
+      startedMs: base,
+      durationMs: 40,
+    });
+    expect(listHookRuns(audit)).toEqual([
+      { slug: "lint-dup", stage: "pre-push", status: "failure", started: base },
+      { slug: "lint-naming", stage: "pre-commit", status: "success", started: base - 1000 },
+    ]);
+  });
+
+  it("filters by sinceMs and caps by limit", () => {
+    const base = Date.now();
+    recordHookRun(audit, { slug: "a", stage: "pre-commit", status: "success", startedMs: base - 5000, durationMs: 1 });
+    recordHookRun(audit, { slug: "b", stage: "pre-commit", status: "success", startedMs: base - 2000, durationMs: 1 });
+    recordHookRun(audit, { slug: "c", stage: "pre-commit", status: "success", startedMs: base, durationMs: 1 });
+    expect(listHookRuns(audit, { sinceMs: base - 3000 }).map((r) => r.slug)).toEqual(["c", "b"]);
+    expect(listHookRuns(audit, { limit: 1 }).map((r) => r.slug)).toEqual(["c"]);
   });
 });
 

@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { openAuditDb, recordHookRun, resolveAuditDbPath } from "../db/audit.js";
 import { openDb, resolveDbPath, type Db } from "../db/open.js";
 import { RULES } from "./index.js";
 import type { Stage } from "./types.js";
@@ -84,8 +85,21 @@ export async function runDispatch(argv: string[]): Promise<void> {
   const db = openDb(resolveDbPath());
   const selected = selectDispatch(db, stage);
   db.close();
-  for (const { slug, advisory } of selected) {
-    const code = await runRule(slug, args);
-    if (code !== 0 && !advisory) process.exit(code);
+  const auditDb = openAuditDb(resolveAuditDbPath());
+  try {
+    for (const { slug, advisory } of selected) {
+      const startedMs = Date.now();
+      const code = await runRule(slug, args);
+      recordHookRun(auditDb, {
+        slug,
+        stage,
+        status: code === 0 ? "success" : "failure",
+        startedMs,
+        durationMs: Date.now() - startedMs,
+      });
+      if (code !== 0 && !advisory) process.exit(code);
+    }
+  } finally {
+    auditDb.close();
   }
 }
