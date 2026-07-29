@@ -417,19 +417,23 @@ export const PANEL_EXT = `(() => {
   // Reorders the tbody rows in place; the filter's display:none is untouched, so
   // hidden rows just sort among themselves. Stable for equal keys because
   // Array.sort is stable and appendChild preserves the pre-sort DOM order.
+  // Idempotent: decorate() re-runs this on every re-render tick, so when the DOM
+  // is already sorted it must NOT re-append — detaching the row that holds an
+  // open dropdown blurs its focused summary and scrolls the page to the top.
   function applySort() {
     if (!sortKey) return;
     const table = document.querySelector("table");
     const tbody = table && table.querySelector("tbody");
     if (!tbody) return;
     const numeric = !!NUMERIC_SORT[sortKey];
-    const rows = [...tbody.querySelectorAll("tr")];
-    rows.sort((a, b) => {
+    const current = [...tbody.querySelectorAll("tr")];
+    const rows = current.slice().sort((a, b) => {
       const av = sortValue(rowSlug(a), sortKey);
       const bv = sortValue(rowSlug(b), sortKey);
       const cmp = numeric ? av - bv : String(av).localeCompare(String(bv));
       return cmp * sortDir;
     });
+    if (rows.every((tr, i) => tr === current[i])) return;
     for (const tr of rows) tbody.appendChild(tr);
   }
 

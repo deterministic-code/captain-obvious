@@ -308,6 +308,23 @@ describe("panelExt injected script", () => {
     expect(slugOrder()).toEqual(["lint-a", "lint-c", "lint-b"]);
   });
 
+  it("leaves already-sorted rows untouched on a re-render tick (no churn, no scroll jump)", async () => {
+    await runInjected();
+    const header = (label: string) =>
+      [...document.querySelectorAll<HTMLElement>("thead th")].find(
+        (t) => t.textContent!.trim() === label,
+      )!;
+    header("Category").click(); // sort is now active; DOM is in sorted order
+    const tbody = document.querySelector("tbody")!;
+    const appendSpy = vi.spyOn(tbody, "appendChild");
+    // An unrelated re-render tick (a toast, a React re-render) fires decorate() →
+    // applySort(). With the DOM already sorted it must not re-append any row —
+    // re-appending would detach an open dropdown's row and scroll the page.
+    document.getElementById("root")!.appendChild(document.createElement("div"));
+    for (let i = 0; i < 2; i++) await flush();
+    expect(appendSpy).not.toHaveBeenCalled();
+  });
+
   it("renders each rule's languages by display name (— when none)", async () => {
     await runInjected();
     const rows = document.querySelectorAll("tbody tr");
