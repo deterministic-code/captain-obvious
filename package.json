@@ -27,7 +27,7 @@
   ],
   "scripts": {
     "build": "tsc",
-    "prepare": "tsc",
+    "prepare": "tsc && node bin/install.mjs",
     "test": "vitest run --coverage",
     "lint:comments": "captain-obvious-lint comments --staged",
     "lint:comments:all": "captain-obvious-lint comments --all",
