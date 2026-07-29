@@ -270,6 +270,44 @@ describe("panelExt injected script", () => {
     expect(firstRow.children[2].classList.contains("co-lang-td")).toBe(true);
   });
 
+  it("sorts rows by a clicked column and toggles asc/desc, surviving re-render", async () => {
+    await runInjected();
+    const slugOrder = () =>
+      [...document.querySelectorAll("tbody tr")].map(
+        (r) => r.querySelector(".font-mono")?.textContent,
+      );
+    const header = (label: string) =>
+      [...document.querySelectorAll<HTMLElement>("thead th")].find(
+        (t) => t.textContent!.trim() === label,
+      )!;
+    // Natural catalog order.
+    expect(slugOrder()).toEqual(["lint-a", "lint-b", "lint-c"]);
+
+    // Category asc: "" (lint-c) < "naming" (lint-b) < "size" (lint-a).
+    const cat = header("Category");
+    cat.click();
+    expect(slugOrder()).toEqual(["lint-c", "lint-b", "lint-a"]);
+    expect(cat.classList.contains("co-sort-asc")).toBe(true);
+    // A second click flips to descending.
+    cat.click();
+    expect(slugOrder()).toEqual(["lint-a", "lint-b", "lint-c"]);
+    expect(cat.classList.contains("co-sort-desc")).toBe(true);
+
+    // Fix count sorts numerically: only lint-b has an action.
+    header("Fix").click();
+    expect(slugOrder()).toEqual(["lint-a", "lint-c", "lint-b"]);
+
+    // The native Action column isn't sortable — the order holds.
+    const before = slugOrder();
+    header("Action").click();
+    expect(slugOrder()).toEqual(before);
+
+    // A React-style re-render (a MutationObserver tick) keeps the active sort.
+    document.getElementById("root")!.appendChild(document.createElement("div"));
+    for (let i = 0; i < 2; i++) await flush();
+    expect(slugOrder()).toEqual(["lint-a", "lint-c", "lint-b"]);
+  });
+
   it("renders each rule's languages by display name (— when none)", async () => {
     await runInjected();
     const rows = document.querySelectorAll("tbody tr");

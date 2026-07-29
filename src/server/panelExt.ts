@@ -44,6 +44,11 @@ export const PANEL_EXT = `(() => {
   let projects = [];
   let currentProjectId = null;
   let enabledBySlug = {};
+  // Column sort: sortKey names the active column (null = the catalog's natural
+  // category/slug order); sortDir is 1 asc / -1 desc. The sort is re-applied on
+  // every decorate() tick so a React re-render can't drop it.
+  let sortKey = null;
+  let sortDir = 1;
   // The full project-scoped rule view per slug (config, severity, languages) —
   // the source the Settings dialog reads. Severity selects pull env/action lists.
   let ruleBySlug = {};
@@ -341,6 +346,78 @@ export const PANEL_EXT = `(() => {
     catDd.details.insertAdjacentElement("afterend", langDd.details);
   }
 
+  // Maps a header cell to its sort key, or null when the column can't be sorted
+  // (the actions column and the native Action text). Injected columns key off
+  // their marker class; native ones off their label, so React re-renders that
+  // recreate the <th> still resolve to the same key.
+  const NUMERIC_SORT = { fix: 1, enabled: 1 };
+  function headerSortKey(th) {
+    if (th.classList.contains("co-fix-th")) return "fix";
+    if (th.classList.contains("co-lang-th")) return "lang";
+    if (th.classList.contains("co-act-th")) return null;
+    const label = th.textContent.trim().toLowerCase();
+    if (label === "rule") return "rule";
+    if (label === "category") return "category";
+    if (label === "stage") return "stage";
+    if (label === "enabled") return "enabled";
+    return null;
+  }
+
+  function sortValue(slug, key) {
+    const rule = slug ? ruleBySlug[slug] : null;
+    if (key === "fix") return ((slug && fixesBySlug[slug]) || []).length;
+    if (key === "enabled") return slug && enabledBySlug[slug] ? 1 : 0;
+    if (key === "lang") return ((slug && langsBySlug[slug]) || []).slice().sort().join(",");
+    if (key === "category") return ((slug && catsBySlug[slug]) || [])[0] || "";
+    if (key === "stage") return (rule && rule.stage) || "";
+    return (rule && rule.name) || slug || "";
+  }
+
+  // Reorders the tbody rows in place; the filter's display:none is untouched, so
+  // hidden rows just sort among themselves. Stable for equal keys because
+  // Array.sort is stable and appendChild preserves the pre-sort DOM order.
+  function applySort() {
+    if (!sortKey) return;
+    const table = document.querySelector("table");
+    const tbody = table && table.querySelector("tbody");
+    if (!tbody) return;
+    const numeric = !!NUMERIC_SORT[sortKey];
+    const rows = [...tbody.querySelectorAll("tr")];
+    rows.sort((a, b) => {
+      const av = sortValue(rowSlug(a), sortKey);
+      const bv = sortValue(rowSlug(b), sortKey);
+      const cmp = numeric ? av - bv : String(av).localeCompare(String(bv));
+      return cmp * sortDir;
+    });
+    for (const tr of rows) tbody.appendChild(tr);
+  }
+
+  // Marks every sortable header and flags the active one; the arrow itself is a
+  // CSS ::after so it never lands in th.textContent (headerSortKey reads that).
+  function updateSortIndicators() {
+    const table = document.querySelector("table");
+    const headRow = table && table.querySelector("thead tr");
+    if (!headRow) return;
+    for (const th of headRow.children) {
+      th.classList.remove("co-sort-asc", "co-sort-desc");
+      const key = headerSortKey(th);
+      if (!key) continue;
+      th.classList.add("co-sortable");
+      if (sortKey === key) th.classList.add(sortDir === 1 ? "co-sort-asc" : "co-sort-desc");
+    }
+  }
+
+  function onHeaderClick(e) {
+    const th = e.target.closest && e.target.closest("thead th");
+    if (!th || th.closest("table") !== document.querySelector("table")) return;
+    const key = headerSortKey(th);
+    if (!key) return;
+    if (sortKey === key) sortDir = -sortDir;
+    else { sortKey = key; sortDir = 1; }
+    updateSortIndicators();
+    applySort();
+  }
+
   function applyFilter() {
     const table = document.querySelector("table");
     if (!table) return;
@@ -382,6 +459,7 @@ export const PANEL_EXT = `(() => {
       // Languages sits right after the native Category column (index 1).
       addHeader(headRow, "co-lang-th", "Languages", headRow.children[1]);
       addHeader(headRow, "co-act-th", "");
+      updateSortIndicators();
     }
     for (const tr of table.querySelectorAll("tbody tr")) {
       const slug = rowSlug(tr);
@@ -434,6 +512,7 @@ export const PANEL_EXT = `(() => {
     }
     setupFilters();
     applyFilter();
+    applySort();
   }
 
   // The Run icon opens the overlay with just this rule preselected — but only if
@@ -482,6 +561,12 @@ export const PANEL_EXT = `(() => {
       ".max-w-6xl{max-width:100%!important}" +
       ".co-table-wrap{overflow-x:auto!important}" +
       ".co-table-wrap table{min-width:760px}" +
+      // Sortable headers: a dim ↕ affordance that resolves to a solid ↑/↓ on the
+      // active column. The arrow is ::after content so it stays out of textContent.
+      "th.co-sortable{cursor:pointer;user-select:none;white-space:nowrap}" +
+      'th.co-sortable::after{content:"↕";margin-left:5px;font-size:11px;opacity:.35}' +
+      'th.co-sort-asc::after{content:"↑";opacity:.9}' +
+      'th.co-sort-desc::after{content:"↓";opacity:.9}' +
       ".co-fix{padding:2px 0}.co-fix + .co-fix{margin-top:6px;border-top:1px solid #f1f5f9;padding-top:6px}" +
       ".co-kind{display:inline-block;font-size:11px;font-weight:600;padding:1px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:.03em}" +
       ".co-kind-script{background:#dcfce7;color:#166534}.co-kind-inferred{background:#e0e7ff;color:#3730a3}.co-kind-output{background:#f1f5f9;color:#475569}" +
@@ -2392,6 +2477,7 @@ export const PANEL_EXT = `(() => {
     // Delegate on document so a React re-render of the table can't drop the
     // handler; the actions column is re-decorated but never re-bound.
     document.addEventListener("click", onActionClick);
+    document.addEventListener("click", onHeaderClick);
     decorate();
     await maybeShowAnalyzeBanner();
   }
