@@ -3,7 +3,6 @@
     "preCommit": [
       "lint-comments --staged",
       "lint-complexity --staged",
-      "lint-dead-code --staged",
       "lint-prettier --staged",
       "lint-emitter-casing --staged",
       "lint-empty-catch --staged",
@@ -32,6 +31,11 @@
       "lint-coverage --push",
       "run: npx tsc --noEmit"
     ]
+  },
+  "npmScripts": {
+    "extraScripts": {
+      "lint:dead-code": "dead-code --all"
+    }
   },
   "claudeHooks": [
     { "event": "PreToolUse", "matcher": "Edit|Write|NotebookEdit|Bash", "hook": "main-branch-guard", "timeout": 5 },

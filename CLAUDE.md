@@ -23,9 +23,12 @@ order, and which are advisory — so one package drives a strict repo and a lax 
 - **`db/schema.sql`** — registry schema. **`web/dist/`** — the prebuilt control-panel bundle (see below).
 - Node ≥ 18, ESM (`"type": "module"`). Commands: `npm test` (`vitest run --coverage` — covers both
   `.ts` and `.mjs` tests and enforces 100% coverage via `vitest.config.ts` thresholds; thin shims are
-  excluded there), `npm run build` / `npm run prepare` (`tsc`, emits `dist/`). There is **no CI workflow,
-  no typecheck-only script, and no self-applied config** — a green `vitest` + a clean `tsc` are the
-  only automated gates. (`main` is branch-protected by `.github/rulesets/main.json`.)
+  excluded there), `npm run build` / `npm run prepare` (`tsc`, emits `dist/`). There is **no CI workflow
+  and no typecheck-only script** — a green `vitest` + a clean `tsc` are the only automated *merge* gates.
+  The repo now **self-applies its own hooks** via `captain-obvious.config.json` (run
+  `captain-obvious-install` after clone to wire the local `.git/hooks` + Claude guards); those hooks are
+  local, best-effort, and driven by the local registry DB, not a substitute for the vitest + tsc gate.
+  (`main` is branch-protected by `.github/rulesets/main.json`.)
 
 ## Domain model — rules check, actions fix
 
