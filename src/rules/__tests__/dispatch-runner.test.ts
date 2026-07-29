@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("node:child_process", () => ({ spawn: vi.fn() }));
 
 import { spawn } from "node:child_process";
+import { listHookRuns, openAuditDb } from "../../db/audit.js";
 import { openDb } from "../../db/open.js";
 import { seedRules } from "../../db/seed.js";
 import { runDispatch } from "../dispatch.js";
@@ -16,6 +17,16 @@ import { RULES } from "../index.js";
 const spawnMock = vi.mocked(spawn);
 
 const pkgRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+
+/** The hook runs the dispatcher recorded into the temp audit DB, newest-first. */
+function recordedRuns(): { slug: string; stage: string; status: string }[] {
+  const db = openAuditDb(process.env.CAPTAIN_OBVIOUS_AUDIT_DB as string);
+  try {
+    return listHookRuns(db).map(({ slug, stage, status }) => ({ slug, stage, status }));
+  } finally {
+    db.close();
+  }
+}
 
 /** A fake child that emits its outcome on the next microtask, like a real spawn. */
 function fakeChild(emit: (c: EventEmitter) => void): EventEmitter {
@@ -27,6 +38,7 @@ function fakeChild(emit: (c: EventEmitter) => void): EventEmitter {
 let dbPath: string;
 let tmpDir: string;
 const savedEnv = process.env.CAPTAIN_OBVIOUS_DB;
+const savedAuditEnv = process.env.CAPTAIN_OBVIOUS_AUDIT_DB;
 
 /** Disable every pre-commit rule except one, so selectDispatch returns exactly one. */
 function isolatePreCommit(slug: string, { advisory = false } = {}): void {
@@ -59,6 +71,7 @@ beforeEach(() => {
   seedRules(db, RULES);
   db.close();
   process.env.CAPTAIN_OBVIOUS_DB = dbPath;
+  process.env.CAPTAIN_OBVIOUS_AUDIT_DB = join(tmpDir, "audit.db");
 
   // Default: every spawn is a clean success.
   spawnMock.mockImplementation(
@@ -73,6 +86,8 @@ beforeEach(() => {
 afterEach(() => {
   if (savedEnv === undefined) delete process.env.CAPTAIN_OBVIOUS_DB;
   else process.env.CAPTAIN_OBVIOUS_DB = savedEnv;
+  if (savedAuditEnv === undefined) delete process.env.CAPTAIN_OBVIOUS_AUDIT_DB;
+  else process.env.CAPTAIN_OBVIOUS_AUDIT_DB = savedAuditEnv;
   rmSync(tmpDir, { recursive: true, force: true });
   vi.restoreAllMocks();
   spawnMock.mockReset();
@@ -91,6 +106,10 @@ describe("runDispatch", () => {
       [script, "--staged"],
       { stdio: "inherit" },
     );
+    // The clean run is recorded as a hook_run for the Activity view.
+    expect(recordedRuns()).toEqual([
+      { slug: "lint-naming", stage: "pre-commit", status: "success" },
+    ]);
   });
 
   it("passes --push for the pre-push stage", async () => {
@@ -108,6 +127,10 @@ describe("runDispatch", () => {
     await expect(runDispatch(["pre-commit"])).rejects.toThrow("process.exit:2");
     expect(exitSpy).toHaveBeenCalledWith(2);
     expect(spawnMock).toHaveBeenCalledTimes(1);
+    // The failing run is recorded before the stage aborts.
+    expect(recordedRuns()).toEqual([
+      { slug: "lint-naming", stage: "pre-commit", status: "failure" },
+    ]);
   });
 
   it("does not exit when an advisory rule fails", async () => {

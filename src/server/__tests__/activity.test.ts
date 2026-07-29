@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { openAuditDb, listLogs } from "../../db/audit.js";
+import { openAuditDb, listLogs, recordHookRun } from "../../db/audit.js";
 import type { Db } from "../../db/open.js";
 import {
   activityFeed,
@@ -58,6 +58,14 @@ function addLog(logType: string, message: string, atMs: number): void {
     .run(logType, message, new Date(atMs).toISOString().slice(0, 19).replace("T", " "));
 }
 
+function addDispatchRun(
+  slug: string,
+  atMs: number,
+  { stage = "pre-commit", status = "success" as "success" | "failure" } = {},
+): void {
+  recordHookRun(audit, { slug, stage, status, startedMs: atMs, durationMs: 5 });
+}
+
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "co-activity-"));
   profilePath = join(dir, "profile.db");
@@ -87,7 +95,7 @@ describe("activitySummary", () => {
       { subcommand: "lint:dup", startMs: now - 3 * HOUR },
       { command: "git", subcommand: null, startMs: now - 4 * HOUR },
     ]);
-    const s = activitySummary(profilePath, { last: "24h" });
+    const s = activitySummary(profilePath, audit, { last: "24h" });
     expect(s.keys).toEqual(["git", "lint:dup", "lint:naming"]);
     expect(s.top[0]).toEqual({ key: "lint:naming", runs: 2, failures: 1 });
     // Null subcommand falls back to the command as the key.
@@ -106,7 +114,7 @@ describe("activitySummary", () => {
       { subcommand: "lint:naming", startMs: now - HOUR },
       { subcommand: "lint:dup", startMs: now - HOUR },
     ]);
-    const s = activitySummary(profilePath, { last: "24h", rules: "lint:naming" });
+    const s = activitySummary(profilePath, audit, { last: "24h", rules: "lint:naming" });
     expect(s.keys).toEqual(["lint:dup", "lint:naming"]);
     expect(s.top).toEqual([{ key: "lint:naming", runs: 1, failures: 0 }]);
     expect(s.series.buckets.reduce((n, b) => n + b.runs, 0)).toBe(1);
@@ -120,27 +128,56 @@ describe("activitySummary", () => {
         startMs: now - HOUR,
       })),
     );
-    expect(activitySummary(profilePath, { last: "24h" }).top).toHaveLength(10);
+    expect(activitySummary(profilePath, audit, { last: "24h" }).top).toHaveLength(10);
   });
 
   it("clamps an event at 'now' into the last bucket and defaults an unknown window to 7d", () => {
     const now = Date.now();
     buildProfile([{ subcommand: "lint:naming", startMs: now }]);
     const sevenDayBucket = Math.round((604800 * 1000) / 24);
-    const s = activitySummary(profilePath, { last: "bogus" });
+    const s = activitySummary(profilePath, audit, { last: "bogus" });
     // 7d default → 7*24*3600*1000/24 ms per bucket.
     expect(s.series.bucketMs).toBe(sevenDayBucket);
     expect(s.series.buckets[23].runs).toBe(1);
     // Omitting `last` entirely also resolves to the 7d default.
-    expect(activitySummary(profilePath, {}).series.bucketMs).toBe(sevenDayBucket);
+    expect(activitySummary(profilePath, audit, {}).series.bucketMs).toBe(sevenDayBucket);
   });
 
   it("returns empty structures when there is no activity in the window", () => {
     buildProfile([{ subcommand: "lint:naming", startMs: Date.now() - 10 * 86400_000 }]);
-    const s = activitySummary(profilePath, { last: "1h" });
+    const s = activitySummary(profilePath, audit, { last: "1h" });
     expect(s.keys).toEqual([]);
     expect(s.top).toEqual([]);
     expect(s.series.buckets.every((b) => b.runs === 0)).toBe(true);
+  });
+
+  it("merges the dispatcher's own runs with the profiler's, keyed by slug", () => {
+    const now = Date.now();
+    buildProfile([{ subcommand: "lint:naming", startMs: now - HOUR }]);
+    // A dispatch run of lint-naming lands in the same lint:naming bucket.
+    addDispatchRun("lint-naming", now - 2 * HOUR);
+    addDispatchRun("lint-dup", now - 3 * HOUR, { status: "failure" });
+    const s = activitySummary(profilePath, audit, { last: "24h" });
+    expect(s.keys).toEqual(["lint:dup", "lint:naming"]);
+    expect(s.top.find((t) => t.key === "lint:naming")).toEqual({
+      key: "lint:naming",
+      runs: 2,
+      failures: 0,
+    });
+    expect(s.top.find((t) => t.key === "lint:dup")).toEqual({
+      key: "lint:dup",
+      runs: 1,
+      failures: 1,
+    });
+  });
+
+  it("summarises dispatch runs even when the profile DB is absent", () => {
+    const now = Date.now();
+    addDispatchRun("lint-naming", now - HOUR);
+    const s = activitySummary(undefined, audit, { last: "24h" });
+    expect(s.keys).toEqual(["lint:naming"]);
+    expect(s.top).toEqual([{ key: "lint:naming", runs: 1, failures: 0 }]);
+    expect(s.series.buckets.reduce((n, b) => n + b.runs, 0)).toBe(1);
   });
 });
 
@@ -188,6 +225,26 @@ describe("activityFeed", () => {
     expect(feed).toHaveLength(2);
     expect(feed.every((e) => e.source === "log")).toBe(true);
     expect(feed[0].detail).toBe("a");
+  });
+
+  it("includes the dispatcher's runs as hook rows, stage-detailed, without the profile DB", () => {
+    const now = Date.now();
+    addDispatchRun("lint-naming", now - HOUR, { stage: "pre-push", status: "failure" });
+    addLog("rule.enabled", "enabled lint-dup", now - 2 * HOUR);
+    const feed = activityFeed(undefined, audit, { last: "24h" });
+    expect(feed.map((e) => [e.source, e.key])).toEqual([
+      ["hook", "lint:naming"],
+      ["log", "rule.enabled"],
+    ]);
+    expect(feed[0]).toMatchObject({ status: "failure", detail: "pre-push lint-naming" });
+  });
+
+  it("filters dispatch runs by the selected key like profiler runs", () => {
+    const now = Date.now();
+    addDispatchRun("lint-naming", now - HOUR);
+    addDispatchRun("lint-dup", now - HOUR);
+    const feed = activityFeed(undefined, audit, { last: "24h", rules: "lint:naming" });
+    expect(feed.map((e) => e.key)).toEqual(["lint:naming"]);
   });
 });
 

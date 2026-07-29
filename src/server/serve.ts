@@ -269,19 +269,16 @@ async function handle(
     }));
   }
 
-  // --- activity (profiling "hooker" runs + audit-log config changes) ---
+  // --- activity (profiling "hooker" runs + dispatch runs + audit-log changes) ---
   if (pathname === "/api/activity/summary" && method === "GET") {
-    if (!existsSync(PROFILE_DB)) {
-      return sendJson(res, 200, {
-        keys: [],
-        top: [],
-        series: { bucketMs: 0, buckets: [] },
-      });
-    }
-    return sendJson(res, 200, activitySummary(PROFILE_DB, {
-      last: url.searchParams.get("last") ?? undefined,
-      rules: url.searchParams.get("rules") ?? undefined,
-    }));
+    return sendJson(res, 200, activitySummary(
+      existsSync(PROFILE_DB) ? PROFILE_DB : undefined,
+      auditDb,
+      {
+        last: url.searchParams.get("last") ?? undefined,
+        rules: url.searchParams.get("rules") ?? undefined,
+      },
+    ));
   }
   if (pathname === "/api/activity/feed" && method === "GET") {
     const limit = url.searchParams.get("limit");
