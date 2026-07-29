@@ -78,10 +78,50 @@ export const PANEL_EXT = `(() => {
   const ICON_THEME_DARK = svgIcon('<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>');
   const THEME_ICONS = { auto: ICON_THEME_AUTO, light: ICON_THEME_LIGHT, dark: ICON_THEME_DARK };
   const THEME_TITLES = { auto: "System theme", light: "Light theme", dark: "Dark theme" };
+  const ICON_COPY = svgIcon(
+    '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>' +
+    '<path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+  );
   const ACTIONS_HTML =
     '<button type="button" class="co-act-btn" data-act="run" title="Run this rule" aria-label="Run this rule">' + ICON_RUN + "</button>" +
     '<button type="button" class="co-act-btn" data-act="activity" title="Open activity" aria-label="Open activity">' + ICON_ACTIVITY + "</button>" +
-    '<button type="button" class="co-act-btn" data-act="settings" title="Project settings" aria-label="Project settings">' + ICON_SETTINGS + "</button>";
+    '<button type="button" class="co-act-btn" data-act="settings" title="Project settings" aria-label="Project settings">' + ICON_SETTINGS + "</button>" +
+    '<button type="button" class="co-act-btn" data-act="copy" title="Copy rule slug" aria-label="Copy rule slug">' + ICON_COPY + "</button>";
+
+  // Transient status toasts (bottom-right), stacked and self-dismissing. Used for
+  // the small config mutations the panel makes inline (enable, languages, save,
+  // copy) that otherwise give no visible confirmation.
+  const TOAST_ICONS = {
+    success: svgIcon('<path d="M20 6 9 17l-5-5"/>'),
+    error: svgIcon('<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>'),
+    info: svgIcon('<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>'),
+  };
+
+  function toast(message, kind) {
+    const k = TOAST_ICONS[kind] ? kind : "success";
+    let region = document.getElementById("co-toast-region");
+    if (!region) {
+      region = document.createElement("div");
+      region.id = "co-toast-region";
+      document.body.appendChild(region);
+    }
+    const el = document.createElement("div");
+    el.className = "co-toast co-toast-" + k;
+    el.innerHTML = '<span class="co-toast-icon">' + TOAST_ICONS[k] + "</span>" +
+      '<span class="co-toast-msg"></span>';
+    el.querySelector(".co-toast-msg").textContent = message;
+    let dismissed = false;
+    const dismiss = () => {
+      if (dismissed) return;
+      dismissed = true;
+      el.classList.add("co-toast-out");
+      setTimeout(() => el.remove(), 200);
+    };
+    el.addEventListener("click", dismiss);
+    region.appendChild(el);
+    setTimeout(dismiss, 3200);
+    return el;
+  }
 
   function esc(s) {
     return String(s).replace(/[&<>"]/g, (c) =>
@@ -279,13 +319,14 @@ export const PANEL_EXT = `(() => {
         try {
           await patchLanguages(slug, vals);
         } catch (err) {
-          window.alert("Failed to update languages for " + slug + ": " + err.message);
+          toast("Couldn't update languages for " + slug + ": " + err.message, "error");
           buildLangCell(cell, slug);
           return;
         }
         langsBySlug[slug] = vals;
         cell.setAttribute("data-langs", vals.slice().sort().join(","));
         applyFilter();
+        toast("Updated languages for " + slug);
       },
     });
     dd.details.classList.add("co-lang-dd");
@@ -546,6 +587,19 @@ export const PANEL_EXT = `(() => {
     if (act === "run") openRunForRule(slug);
     else if (act === "activity") openActivityForRule(slug);
     else if (act === "settings") openRuleSettingsModal(slug);
+    else if (act === "copy") copySlug(slug);
+  }
+
+  function copySlug(slug) {
+    const clip = navigator.clipboard;
+    if (!clip || !clip.writeText) {
+      toast("Clipboard unavailable in this browser", "error");
+      return;
+    }
+    clip.writeText(slug).then(
+      () => toast("Copied " + slug + " to clipboard"),
+      (err) => toast("Couldn't copy " + slug + ": " + err.message, "error"),
+    );
   }
 
   function injectStyle() {
@@ -761,6 +815,16 @@ export const PANEL_EXT = `(() => {
       ".co-act-key{flex:0 0 auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#0f172a}" +
       ".co-act-detail{flex:1;color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
       ".co-act-empty{padding:12px 4px;font-size:13px;color:#94a3b8}" +
+      // Toasts.
+      "#co-toast-region{position:fixed;z-index:60;bottom:20px;right:20px;display:flex;flex-direction:column;gap:8px;pointer-events:none}" +
+      ".co-toast{pointer-events:auto;display:flex;align-items:center;gap:10px;min-width:220px;max-width:360px;padding:10px 14px;border-radius:8px;background:#fff;border:1px solid #e2e8f0;box-shadow:0 8px 24px rgba(15,23,42,.16);font-size:13px;color:#0f172a;cursor:pointer;animation:co-toast-in .18s ease-out}" +
+      ".co-toast-icon{display:inline-flex;flex:0 0 auto}.co-toast-icon svg{width:18px;height:18px}" +
+      ".co-toast-msg{flex:1;line-height:1.35}" +
+      ".co-toast-success .co-toast-icon{color:#16a34a}" +
+      ".co-toast-error .co-toast-icon{color:#ef4444}" +
+      ".co-toast-info .co-toast-icon{color:#0ea5e9}" +
+      ".co-toast-out{opacity:0;transform:translateY(6px);transition:opacity .18s,transform .18s}" +
+      "@keyframes co-toast-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}" +
       // --- Dark theme -------------------------------------------------------
       // Two layers: (1) remap the prebuilt panel's own Tailwind utility classes
       // (bg-white, text-slate-*, border-slate-*, …) since the bundle has no dark
@@ -851,7 +915,8 @@ export const PANEL_EXT = `(() => {
       D + ".co-act-toprow-fill{background:#818cf8}" +
       D + ".co-act-bar{fill:#475569}" +
       D + ".co-act-src-hook{background:#312e81;color:#c7d2fe}" +
-      D + ".co-act-src-log{background:#334155;color:#cbd5e1}";
+      D + ".co-act-src-log{background:#334155;color:#cbd5e1}" +
+      D + ".co-toast{background:#1e293b;border-color:#334155;color:#e2e8f0}";
     document.head.appendChild(style);
   }
 
@@ -1563,12 +1628,13 @@ export const PANEL_EXT = `(() => {
       try {
         await patchProjectRule(slug, { enabled: next });
       } catch (err) {
-        window.alert("Failed to update " + slug + ": " + err.message);
+        toast("Couldn't update " + slug + ": " + err.message, "error");
         box.checked = !next;
         return;
       }
       enabledBySlug[slug] = next;
       cell.setAttribute("data-en", next ? "1" : "0");
+      toast((next ? "Enabled " : "Disabled ") + slug);
     });
     wrap.appendChild(box);
     cell.innerHTML = "";
@@ -1782,11 +1848,12 @@ export const PANEL_EXT = `(() => {
           directories: dirs,
         });
       } catch (err) {
-        window.alert("Failed to create project: " + err.message);
+        toast("Couldn't create project: " + err.message, "error");
         return;
       }
       close();
       await selectProject(created.id);
+      toast("Created project " + created.name);
     });
 
     renderDirs();
@@ -2092,7 +2159,7 @@ export const PANEL_EXT = `(() => {
         await patchProjectRule(slug, base);
         for (const op of ops) await patchProjectRule(slug, op);
       } catch (err) {
-        window.alert("Failed to save settings for " + slug + ": " + err.message);
+        toast("Couldn't save settings for " + slug + ": " + err.message, "error");
         return;
       }
       enabledBySlug[slug] = enabled;
@@ -2109,6 +2176,7 @@ export const PANEL_EXT = `(() => {
         .map((env) => ({ environment: env.slug, type: envSels[env.slug].value }));
       close();
       decorate();
+      toast("Saved settings for " + slug);
     });
   }
 

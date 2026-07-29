@@ -852,16 +852,70 @@ describe("panelExt injected script", () => {
     return tr.querySelector<HTMLButtonElement>('.co-act-td .co-act-btn[data-act="' + act + '"]')!;
   };
 
-  it("adds a trailing actions column with Run/Activity/Settings icon buttons per row", async () => {
+  it("adds a trailing actions column with Run/Activity/Settings/Copy icon buttons per row", async () => {
     await runInjected();
     const cells = document.querySelectorAll(".co-act-td");
     expect(cells).toHaveLength(3);
     const acts = [...cells[0].querySelectorAll(".co-act-btn")].map((b) =>
       b.getAttribute("data-act"),
     );
-    expect(acts).toEqual(["run", "activity", "settings"]);
+    expect(acts).toEqual(["run", "activity", "settings", "copy"]);
     // Icons are inline Lucide SVGs, not emoji or text.
     expect(cells[0].querySelector(".co-act-btn svg")).not.toBeNull();
+  });
+
+  const toasts = () => [...document.querySelectorAll("#co-toast-region .co-toast")];
+  const toastText = (el: Element) => el.querySelector(".co-toast-msg")?.textContent;
+
+  it("toasts when a rule is enabled/disabled", async () => {
+    await runInjected();
+    const box = enabledBox("lint-a");
+    box.checked = false;
+    box.dispatchEvent(new Event("change", { bubbles: true }));
+    for (let i = 0; i < 3; i++) await flush();
+    expect(toasts().map(toastText)).toContain("Disabled lint-a");
+    expect(toasts()[0].classList.contains("co-toast-success")).toBe(true);
+  });
+
+  it("toasts after saving rule settings", async () => {
+    await runInjected();
+    actBtn("lint-a", "settings").click();
+    await flush();
+    const modal = document.getElementById("co-set-modal")!;
+    modal.querySelector<HTMLButtonElement>(".co-set-save")!.click();
+    for (let i = 0; i < 4; i++) await flush();
+    expect(toasts().map(toastText)).toContain("Saved settings for lint-a");
+  });
+
+  it("copies a rule slug to the clipboard and toasts", async () => {
+    const writeText = vi.fn(async () => {});
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    await runInjected();
+    actBtn("lint-a", "copy").click();
+    for (let i = 0; i < 3; i++) await flush();
+    expect(writeText).toHaveBeenCalledWith("lint-a");
+    expect(toasts().map(toastText)).toContain("Copied lint-a to clipboard");
+  });
+
+  it("shows an error toast when the clipboard is unavailable", async () => {
+    vi.stubGlobal("navigator", {});
+    await runInjected();
+    actBtn("lint-a", "copy").click();
+    await flush();
+    const t = toasts()[0];
+    expect(t.classList.contains("co-toast-error")).toBe(true);
+    expect(toastText(t)).toContain("Clipboard unavailable");
+  });
+
+  it("dismisses a toast when it is clicked", async () => {
+    await runInjected();
+    const box = enabledBox("lint-a");
+    box.checked = false;
+    box.dispatchEvent(new Event("change", { bubbles: true }));
+    for (let i = 0; i < 3; i++) await flush();
+    const t = toasts()[0];
+    t.dispatchEvent(new Event("click", { bubbles: true }));
+    expect(t.classList.contains("co-toast-out")).toBe(true);
   });
 
   it("Run icon opens the overlay with only that rule preselected", async () => {
