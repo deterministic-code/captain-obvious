@@ -127,10 +127,12 @@ CREATE TABLE IF NOT EXISTS projects (
 
 -- Per-project enabled flag for a rule. Seeded from the rule's global `enabled`
 -- when a project is created, and backfilled for rules added later (syncProjectRules).
+-- config_json overrides the rule's global config for this project (NULL = inherit).
 CREATE TABLE IF NOT EXISTS project_rules (
-  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  rule_id    INTEGER NOT NULL REFERENCES rules(id)    ON DELETE CASCADE,
-  enabled    INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+  project_id  INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  rule_id     INTEGER NOT NULL REFERENCES rules(id)    ON DELETE CASCADE,
+  enabled     INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+  config_json TEXT,
   PRIMARY KEY (project_id, rule_id)
 ) STRICT;
 
@@ -142,6 +144,20 @@ CREATE TABLE IF NOT EXISTS project_rule_languages (
   PRIMARY KEY (project_id, rule_id, language_id)
 ) STRICT;
 
+-- Per-project severity bindings for a rule (mirrors rule_actions, scoped to a
+-- project). A rule with zero rows here inherits the global bindings; any row
+-- means the project's bindings fully replace the global set for that rule.
+-- environment_id NULL = default binding for all envs.
+CREATE TABLE IF NOT EXISTS project_rule_actions (
+  id             INTEGER PRIMARY KEY,
+  project_id     INTEGER NOT NULL REFERENCES projects(id)      ON DELETE CASCADE,
+  rule_id        INTEGER NOT NULL REFERENCES rules(id)         ON DELETE CASCADE,
+  environment_id INTEGER REFERENCES environments(id)           ON DELETE CASCADE,
+  action_type_id INTEGER NOT NULL REFERENCES action_types(id),
+  delay_ms       INTEGER,
+  UNIQUE (project_id, rule_id, environment_id)
+) STRICT;
+
 CREATE INDEX IF NOT EXISTS idx_hooks_env       ON hooks(environment_id);
 CREATE INDEX IF NOT EXISTS idx_hook_rules_rule ON hook_rules(rule_id);
 CREATE INDEX IF NOT EXISTS idx_rule_categories  ON rule_categories(rule_id);
@@ -149,3 +165,4 @@ CREATE INDEX IF NOT EXISTS idx_rule_actions    ON rule_actions(rule_id);
 CREATE INDEX IF NOT EXISTS idx_fixes_rule      ON fixes(rule_id);
 CREATE INDEX IF NOT EXISTS idx_project_rules_project ON project_rules(project_id);
 CREATE INDEX IF NOT EXISTS idx_prl_project           ON project_rule_languages(project_id);
+CREATE INDEX IF NOT EXISTS idx_pra_project_rule      ON project_rule_actions(project_id, rule_id);

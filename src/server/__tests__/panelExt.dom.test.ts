@@ -8,7 +8,16 @@ import { PANEL_EXT } from "../panelExt.js";
 // would answer.
 
 const RULES = [
-  { slug: "lint-a", name: "A", categories: ["size"], languages: ["typescript"], actions: [] },
+  {
+    slug: "lint-a",
+    name: "A",
+    categories: ["size"],
+    languages: ["typescript"],
+    actions: [],
+    config: { maxLines: 300, exclude: ["dist/**"] },
+    defaultAction: { type: "halt", delayMs: null },
+    envActions: [{ environment: "claude", type: "warn" }],
+  },
   { slug: "lint-b", name: "B", categories: ["naming"], languages: [], actions: [{ kind: "output" }] },
   // No category and language-independent: the filters can't exclude it, so it always shows.
   { slug: "lint-c", name: "C", categories: [], languages: [], languageIndependent: true, actions: [] },
@@ -18,6 +27,16 @@ const META = {
     { slug: "typescript", name: "TypeScript" },
     { slug: "javascript", name: "JavaScript" },
     { slug: "csharp", name: "C#" },
+  ],
+  environments: [
+    { slug: "claude", name: "Claude Code" },
+    { slug: "cursor", name: "Cursor" },
+    { slug: "github", name: "GitHub" },
+  ],
+  actionTypes: [
+    { slug: "warn", name: "Warn" },
+    { slug: "halt", name: "Halt" },
+    { slug: "delay_halt", name: "Delayed halt" },
   ],
 };
 
@@ -218,6 +237,7 @@ describe("panelExt injected script", () => {
       "Enabled",
       "Action",
       "Fix",
+      "",
     ]);
     // The per-row Languages cell lands in the same (third) column.
     const firstRow = document.querySelector("tbody tr")!;
@@ -726,5 +746,108 @@ describe("panelExt injected script", () => {
     sel.dispatchEvent(new Event("change", { bubbles: true }));
     for (let i = 0; i < 2; i++) await flush();
     expect(document.getElementById("co-project-modal")).not.toBeNull();
+  });
+
+  const actBtn = (slug: string, act: string) => {
+    const tr = [...document.querySelectorAll("tbody tr")].find(
+      (r) => r.querySelector(".font-mono")?.textContent === slug,
+    )!;
+    return tr.querySelector<HTMLButtonElement>('.co-act-td .co-act-btn[data-act="' + act + '"]')!;
+  };
+
+  it("adds a trailing actions column with Run/Report/Settings icon buttons per row", async () => {
+    await runInjected();
+    const cells = document.querySelectorAll(".co-act-td");
+    expect(cells).toHaveLength(3);
+    const acts = [...cells[0].querySelectorAll(".co-act-btn")].map((b) =>
+      b.getAttribute("data-act"),
+    );
+    expect(acts).toEqual(["run", "report", "settings"]);
+    // Icons are inline Lucide SVGs, not emoji or text.
+    expect(cells[0].querySelector(".co-act-btn svg")).not.toBeNull();
+  });
+
+  it("Run icon opens the overlay with only that rule preselected", async () => {
+    await runInjected();
+    const overlay = document.querySelector<HTMLElement>("#co-run-overlay")!;
+    actBtn("lint-a", "run").click();
+    await flush();
+    expect(overlay.style.display).toBe("flex");
+    const checked = [...overlay.querySelectorAll<HTMLInputElement>(".co-run-opt")]
+      .filter((b) => b.checked)
+      .map((b) => b.value);
+    expect(checked).toEqual(["lint-a"]);
+    expect(overlay.querySelector<HTMLButtonElement>("#co-run-btn")!.disabled).toBe(false);
+  });
+
+  it("Report icon routes to the native Reporting tab", async () => {
+    await runInjected();
+    const nav = document.querySelector("nav")!;
+    const reporting = document.createElement("button");
+    reporting.textContent = "Reporting";
+    let clicked = false;
+    reporting.addEventListener("click", () => { clicked = true; });
+    nav.appendChild(reporting);
+    for (let i = 0; i < 3; i++) await flush();
+    actBtn("lint-a", "report").click();
+    await flush();
+    expect(clicked).toBe(true);
+  });
+
+  it("Settings icon opens a project-scoped dialog prefilled from the rule", async () => {
+    await runInjected();
+    actBtn("lint-a", "settings").click();
+    await flush();
+    const modal = document.getElementById("co-set-modal")!;
+    expect(modal).not.toBeNull();
+    expect(modal.querySelector(".co-modal-title")!.textContent).toBe("Settings — lint-a");
+    expect(modal.querySelector(".co-set-sub")!.textContent).toBe("Project: Repo");
+    // Enabled prefilled.
+    expect(modal.querySelector<HTMLInputElement>(".co-set-enabled .co-set-check")!.checked).toBe(true);
+    // Severity: default = halt, claude override = warn.
+    const selects = [...modal.querySelectorAll<HTMLSelectElement>(".co-set-select")];
+    expect(selects[0].value).toBe("halt");
+    const claudeRow = [...modal.querySelectorAll(".co-set-row")].find(
+      (r) => r.querySelector(".co-set-label")?.textContent === "Claude Code",
+    )!;
+    expect(claudeRow.querySelector<HTMLSelectElement>(".co-set-select")!.value).toBe("warn");
+    // Config: a number field (maxLines) and an exclude list editor with a chip.
+    expect(modal.querySelector<HTMLInputElement>(".co-set-num")!.value).toBe("300");
+    expect(modal.querySelector(".co-set-chip")!.textContent).toContain("dist/**");
+  });
+
+  it("Settings Save PATCHes enabled, config, and materialised severity bindings", async () => {
+    await runInjected();
+    actBtn("lint-a", "settings").click();
+    await flush();
+    const modal = document.getElementById("co-set-modal")!;
+
+    // Disable, bump maxLines, add an exclude entry.
+    modal.querySelector<HTMLInputElement>(".co-set-enabled .co-set-check")!.checked = false;
+    modal.querySelector<HTMLInputElement>(".co-set-num")!.value = "120";
+    const listInput = modal.querySelector<HTMLInputElement>(".co-set-add-input")!;
+    listInput.value = "build/**";
+    modal.querySelector<HTMLButtonElement>(".co-set-add")!.click();
+
+    modal.querySelector<HTMLButtonElement>(".co-set-save")!.click();
+    for (let i = 0; i < 4; i++) await flush();
+
+    // First PATCH carries the scalar edits + a clean-slate removeAction.
+    const base = patchCalls.find((c) => "enabled" in c.body)!;
+    expect(base.url).toBe("/api/projects/1/rules/lint-a");
+    expect(base.body).toMatchObject({
+      enabled: false,
+      removeAction: "all",
+      config: { maxLines: 120, exclude: ["dist/**", "build/**"] },
+    });
+    // Shown severity is re-materialised as project bindings (default halt + claude warn).
+    const setActions = patchCalls
+      .map((c) => c.body.setAction as { type: string; environment?: string } | undefined)
+      .filter(Boolean);
+    expect(setActions).toEqual([
+      { type: "halt", delayMs: null },
+      { type: "warn", environment: "claude" },
+    ]);
+    expect(document.getElementById("co-set-modal")).toBeNull();
   });
 });

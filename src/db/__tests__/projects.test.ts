@@ -49,6 +49,42 @@ function projectLangs(projectId: number, ruleSlug: string): string[] {
   ).map((r) => r.slug);
 }
 
+/** project_rules.config_json for one rule in a project. */
+function projectConfig(projectId: number, ruleSlug: string): string | null {
+  const row = db
+    .prepare(
+      `SELECT pr.config_json AS configJson
+         FROM project_rules pr JOIN rules r ON r.id = pr.rule_id
+        WHERE pr.project_id = ? AND r.slug = ?`,
+    )
+    .get(projectId, ruleSlug) as { configJson: string | null };
+  return row.configJson;
+}
+
+/** project_rule_actions for one rule, keyed by environment slug ("default" for the all-env row). */
+function projectActions(
+  projectId: number,
+  ruleSlug: string,
+): Record<string, { type: string; delayMs: number | null }> {
+  const rows = db
+    .prepare(
+      `SELECT e.slug AS environment, at.slug AS type, pra.delay_ms AS delayMs
+         FROM project_rule_actions pra
+         JOIN rules r ON r.id = pra.rule_id
+         JOIN action_types at ON at.id = pra.action_type_id
+         LEFT JOIN environments e ON e.id = pra.environment_id
+        WHERE pra.project_id = ? AND r.slug = ?`,
+    )
+    .all(projectId, ruleSlug) as {
+    environment: string | null;
+    type: string;
+    delayMs: number | null;
+  }[];
+  return Object.fromEntries(
+    rows.map((r) => [r.environment ?? "default", { type: r.type, delayMs: r.delayMs }]),
+  );
+}
+
 describe("addProject", () => {
   it("inserts a project, deriving a kebab slug and JSON-encoding paths", () => {
     const row = addProject(db, {
@@ -193,6 +229,65 @@ describe("setProjectRule", () => {
   it("throws for an unknown language", () => {
     expect(() => setProjectRule(db, id, "lint-r", { languages: ["klingon"] })).toThrow(
       /unknown language/,
+    );
+  });
+
+  it("sets and clears the project config override", () => {
+    setProjectRule(db, id, "lint-r", { config: JSON.stringify({ maxLines: 50 }) });
+    expect(JSON.parse(projectConfig(id, "lint-r") as string)).toEqual({ maxLines: 50 });
+    setProjectRule(db, id, "lint-r", { config: null });
+    expect(projectConfig(id, "lint-r")).toBeNull();
+  });
+
+  it("upserts default and per-env severity bindings, with delay", () => {
+    setProjectRule(db, id, "lint-r", {
+      setAction: { type: "delay_halt", environment: null, delayMs: 500 },
+    });
+    setProjectRule(db, id, "lint-r", {
+      setAction: { type: "warn", environment: "claude", delayMs: null },
+    });
+    expect(projectActions(id, "lint-r")).toEqual({
+      default: { type: "delay_halt", delayMs: 500 },
+      claude: { type: "warn", delayMs: null },
+    });
+    // Re-setting the default replaces it rather than duplicating the NULL-env row.
+    setProjectRule(db, id, "lint-r", {
+      setAction: { type: "halt", environment: null, delayMs: null },
+    });
+    expect(projectActions(id, "lint-r").default).toEqual({ type: "halt", delayMs: null });
+  });
+
+  it("removes a single env binding, the default, or all bindings", () => {
+    setProjectRule(db, id, "lint-r", {
+      setAction: { type: "halt", environment: null, delayMs: null },
+    });
+    setProjectRule(db, id, "lint-r", {
+      setAction: { type: "warn", environment: "claude", delayMs: null },
+    });
+    setProjectRule(db, id, "lint-r", { removeAction: "claude" });
+    expect(Object.keys(projectActions(id, "lint-r"))).toEqual(["default"]);
+    setProjectRule(db, id, "lint-r", {
+      setAction: { type: "warn", environment: "cursor", delayMs: null },
+    });
+    setProjectRule(db, id, "lint-r", { removeAction: "default" });
+    expect(Object.keys(projectActions(id, "lint-r"))).toEqual(["cursor"]);
+    setProjectRule(db, id, "lint-r", { removeAction: "all" });
+    expect(projectActions(id, "lint-r")).toEqual({});
+  });
+
+  it("throws for an unknown action type or environment", () => {
+    expect(() =>
+      setProjectRule(db, id, "lint-r", {
+        setAction: { type: "nope", environment: null, delayMs: null },
+      }),
+    ).toThrow(/unknown action type/);
+    expect(() =>
+      setProjectRule(db, id, "lint-r", {
+        setAction: { type: "warn", environment: "ghost", delayMs: null },
+      }),
+    ).toThrow(/unknown environment/);
+    expect(() => setProjectRule(db, id, "lint-r", { removeAction: "ghost" })).toThrow(
+      /unknown environment/,
     );
   });
 });

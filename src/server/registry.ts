@@ -396,15 +396,43 @@ export function listProjectRules(db: Db, projectId: number): RuleView[] {
   syncProjectRules(db, projectId);
 
   const enabledBySlug = new Map<string, number>();
+  const configBySlug = new Map<string, string | null>();
   for (const row of db
     .prepare(
-      `SELECT r.slug AS slug, pr.enabled AS enabled
+      `SELECT r.slug AS slug, pr.enabled AS enabled, pr.config_json AS configJson
          FROM project_rules pr
          JOIN rules r ON r.id = pr.rule_id
         WHERE pr.project_id = ?`,
     )
-    .all(projectId) as { slug: string; enabled: number }[]) {
+    .all(projectId) as { slug: string; enabled: number; configJson: string | null }[]) {
     enabledBySlug.set(row.slug, row.enabled);
+    configBySlug.set(row.slug, row.configJson);
+  }
+
+  // Project severity bindings: a rule with any row here fully replaces the
+  // global bindings; a rule with none inherits them.
+  const actionsBySlug = new Map<
+    string,
+    { environment: string | null; type: string; delayMs: number | null }[]
+  >();
+  for (const row of db
+    .prepare(
+      `SELECT r.slug AS slug, e.slug AS environment, at.slug AS type, pra.delay_ms AS delayMs
+         FROM project_rule_actions pra
+         JOIN rules r ON r.id = pra.rule_id
+         JOIN action_types at ON at.id = pra.action_type_id
+         LEFT JOIN environments e ON e.id = pra.environment_id
+        WHERE pra.project_id = ?`,
+    )
+    .all(projectId) as {
+    slug: string;
+    environment: string | null;
+    type: string;
+    delayMs: number | null;
+  }[]) {
+    const list = actionsBySlug.get(row.slug) ?? [];
+    list.push({ environment: row.environment, type: row.type, delayMs: row.delayMs });
+    actionsBySlug.set(row.slug, list);
   }
 
   const langsBySlug = new Map<string, string[]>();
@@ -427,11 +455,25 @@ export function listProjectRules(db: Db, projectId: number): RuleView[] {
   // entry reads as disabled rather than needing an unreachable fallback branch.
   return listRules(db).map((rule) => {
     const languages = langsBySlug.get(rule.slug) ?? [];
+    const configJson = configBySlug.get(rule.slug);
+    const projectActions = actionsBySlug.get(rule.slug);
+    const def = projectActions?.find((a) => a.environment === null);
     return {
       ...rule,
       enabled: enabledBySlug.get(rule.slug) === 1,
       languages,
       languageIndependent: languages.length === 0,
+      config: configJson ? parseConfig(configJson) : rule.config,
+      defaultAction: projectActions
+        ? def
+          ? { type: def.type, delayMs: def.delayMs }
+          : null
+        : rule.defaultAction,
+      envActions: projectActions
+        ? projectActions
+            .filter((a) => a.environment !== null)
+            .map((a) => ({ environment: a.environment as string, type: a.type }))
+        : rule.envActions,
     };
   });
 }
@@ -439,16 +481,37 @@ export function listProjectRules(db: Db, projectId: number): RuleView[] {
 export interface ProjectRulePatch {
   enabled?: boolean;
   languages?: string[];
+  /** This project's config override; null clears it (inherit the global config). */
+  config?: Record<string, unknown> | null;
+  setAction?: { type: string; environment?: string; delayMs?: number | null };
+  removeAction?: string;
 }
 
-/** PATCH /api/projects/:id/rules/:slug — set this project's enabled/languages for a rule. */
+/** PATCH /api/projects/:id/rules/:slug — set this project's config for a rule. */
 export function patchProjectRule(
   db: Db,
   projectId: number,
   slug: string,
   patch: ProjectRulePatch,
 ): RuleView {
-  setProjectRule(db, projectId, slug, patch);
+  setProjectRule(db, projectId, slug, {
+    enabled: patch.enabled,
+    languages: patch.languages,
+    config:
+      patch.config === undefined
+        ? undefined
+        : patch.config === null
+          ? null
+          : JSON.stringify(patch.config),
+    setAction: patch.setAction
+      ? {
+          type: patch.setAction.type,
+          environment: patch.setAction.environment ?? null,
+          delayMs: patch.setAction.delayMs ?? null,
+        }
+      : undefined,
+    removeAction: patch.removeAction,
+  });
   // setProjectRule validated the slug, so the rule is always in the list.
   return listProjectRules(db, projectId).find((r) => r.slug === slug)!;
 }

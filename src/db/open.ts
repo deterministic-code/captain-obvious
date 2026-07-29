@@ -56,21 +56,20 @@ export function openDb(dbPath: string): Db {
   const db = new Database(dbPath);
   db.pragma("foreign_keys = ON");
   db.exec(readFileSync(SCHEMA_PATH, "utf8"));
-  migrateLanguages(db);
+  migrateColumn(db, "languages", "is_supported", "INTEGER NOT NULL DEFAULT 0");
+  migrateColumn(db, "project_rules", "config_json", "TEXT");
   seedLookups(db);
   return db;
 }
 
 // `CREATE TABLE IF NOT EXISTS` won't add columns to a table that predates them,
-// so a DB created before is_supported keeps the old shape — add it in place.
-function migrateLanguages(db: Db): void {
-  const cols = db.prepare("PRAGMA table_info(languages)").all() as {
+// so a DB created before a column keeps the old shape — add it in place.
+function migrateColumn(db: Db, table: string, column: string, decl: string): void {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as {
     name: string;
   }[];
-  if (!cols.some((c) => c.name === "is_supported")) {
-    db.exec(
-      "ALTER TABLE languages ADD COLUMN is_supported INTEGER NOT NULL DEFAULT 0",
-    );
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${decl}`);
   }
 }
 

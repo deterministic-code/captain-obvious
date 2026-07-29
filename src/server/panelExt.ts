@@ -37,10 +37,32 @@ export const PANEL_EXT = `(() => {
   let projects = [];
   let currentProjectId = null;
   let enabledBySlug = {};
+  // The full project-scoped rule view per slug (config, severity, languages) —
+  // the source the Settings dialog reads. Severity selects pull env/action lists.
+  let ruleBySlug = {};
+  let environments = [];
+  let actionTypes = [];
   const EXT_LANG = {
     ts: "typescript", tsx: "typescript",
     js: "javascript", jsx: "javascript", mjs: "javascript", cjs: "javascript",
   };
+
+  // Lucide (MIT) icons, inline so the column needs no font or network fetch.
+  const svgIcon = (body) =>
+    '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"' +
+    ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"' +
+    ' stroke-linejoin="round" aria-hidden="true">' + body + "</svg>";
+  const ICON_RUN = svgIcon('<polygon points="6 3 20 12 6 21 6 3"/>');
+  const ICON_REPORT = svgIcon(
+    '<path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
+  );
+  const ICON_SETTINGS = svgIcon(
+    '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+  );
+  const ACTIONS_HTML =
+    '<button type="button" class="co-act-btn" data-act="run" title="Run this rule" aria-label="Run this rule">' + ICON_RUN + "</button>" +
+    '<button type="button" class="co-act-btn" data-act="report" title="Open reporting" aria-label="Open reporting">' + ICON_REPORT + "</button>" +
+    '<button type="button" class="co-act-btn" data-act="settings" title="Project settings" aria-label="Project settings">' + ICON_SETTINGS + "</button>";
 
   function esc(s) {
     return String(s).replace(/[&<>"]/g, (c) =>
@@ -343,6 +365,7 @@ export const PANEL_EXT = `(() => {
       addHeader(headRow, "co-fix-th", "Fix");
       // Languages sits right after the native Category column (index 1).
       addHeader(headRow, "co-lang-th", "Languages", headRow.children[1]);
+      addHeader(headRow, "co-act-th", "");
     }
     for (const tr of table.querySelectorAll("tbody tr")) {
       const slug = rowSlug(tr);
@@ -381,9 +404,53 @@ export const PANEL_EXT = `(() => {
       }
       const ensig = slug ? (enabledBySlug[slug] ? "1" : "0") : "";
       if (slug && encell.getAttribute("data-en") !== ensig) buildEnabledCell(encell, slug);
+
+      let acell = tr.querySelector(".co-act-td");
+      if (!acell) {
+        acell = document.createElement("td");
+        acell.className = "px-4 py-3 co-act-td";
+        tr.appendChild(acell);
+      }
+      if (acell.getAttribute("data-co") !== ACTIONS_HTML) {
+        acell.innerHTML = ACTIONS_HTML;
+        acell.setAttribute("data-co", ACTIONS_HTML);
+      }
     }
     setupFilters();
     applyFilter();
+  }
+
+  // The Run icon opens the overlay with just this rule preselected — but only if
+  // it's runnable (--all mode); other rules stay as-is so we never queue a rule
+  // the runner can't execute.
+  function openRunForRule(slug) {
+    if (runnableRules().some((r) => r.slug === slug)) {
+      selectedSlugs.clear();
+      selectedSlugs.add(slug);
+      const overlay = document.getElementById("co-run-overlay");
+      if (overlay) {
+        for (const cb of overlay.querySelectorAll(".co-run-opt")) {
+          cb.checked = cb.value === slug;
+        }
+        const allBox = overlay.querySelector(".co-run-all");
+        if (allBox) allBox.checked = false;
+      }
+    }
+    runActive = true;
+    syncRunView();
+    updateRunGate();
+  }
+
+  function onActionClick(e) {
+    const btn = e.target.closest && e.target.closest(".co-act-btn");
+    if (!btn) return;
+    const tr = btn.closest("tr");
+    const slug = tr ? rowSlug(tr) : null;
+    if (!slug) return;
+    const act = btn.getAttribute("data-act");
+    if (act === "run") openRunForRule(slug);
+    else if (act === "report") gotoNative("Reporting");
+    else if (act === "settings") openRuleSettingsModal(slug);
   }
 
   function injectStyle() {
@@ -526,7 +593,32 @@ export const PANEL_EXT = `(() => {
       ".co-modal-btn{cursor:pointer;font-size:13px;font-weight:600;padding:7px 16px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;color:#334155}" +
       ".co-modal-btn:hover{background:#f8fafc}" +
       ".co-modal-btn-primary{background:#0f172a;color:#fff;border-color:#0f172a}" +
-      ".co-modal-btn-primary:hover{background:#1e293b}";
+      ".co-modal-btn-primary:hover{background:#1e293b}" +
+      // Rules table actions column (Run / Report / Settings icons).
+      ".co-act-td{white-space:nowrap;text-align:right}" +
+      ".co-act-btn{cursor:pointer;border:0;background:none;border-radius:6px;padding:5px;margin-left:2px;color:#64748b;display:inline-flex;align-items:center;vertical-align:middle}" +
+      ".co-act-btn:hover{background:#f1f5f9;color:#0f172a}" +
+      // Project settings dialog.
+      ".co-set-card{gap:14px;max-height:calc(100vh - 48px);overflow:auto}" +
+      ".co-set-sub{margin-top:-6px}" +
+      ".co-set-section{display:flex;flex-direction:column;gap:8px;border-top:1px solid #f1f5f9;padding-top:12px}" +
+      ".co-set-heading{font-size:13px;font-weight:700;color:#0f172a}" +
+      ".co-set-row{display:flex;align-items:center;gap:10px}" +
+      ".co-set-label{flex:0 0 120px;font-size:13px;color:#475569}" +
+      ".co-set-enabled{cursor:pointer;font-size:14px;font-weight:500;color:#0f172a}" +
+      ".co-set-check{width:16px;height:16px;cursor:pointer;accent-color:#0f172a}" +
+      ".co-set-select{flex:1;padding:6px 10px;font-size:13px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#0f172a}" +
+      ".co-set-delay{flex:0 0 110px}" +
+      ".co-set-num{flex:1}" +
+      ".co-set-json{flex:1;min-height:72px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}" +
+      ".co-set-lang{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#334155;margin-right:14px}" +
+      ".co-set-list{flex:1;display:flex;flex-direction:column;gap:6px}" +
+      ".co-set-chips{display:flex;flex-wrap:wrap;gap:6px}" +
+      ".co-set-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#f1f5f9;border-radius:6px;padding:3px 8px;color:#0f172a}" +
+      ".co-set-chip-x{cursor:pointer;border:0;background:none;color:#94a3b8;font-size:14px;line-height:1;padding:0}" +
+      ".co-set-chip-x:hover{color:#ef4444}" +
+      ".co-set-add-row{display:flex;gap:6px}" +
+      ".co-set-add{flex:0 0 auto}";
     document.head.appendChild(style);
   }
 
@@ -1429,6 +1521,325 @@ export const PANEL_EXT = `(() => {
     renderBrowser();
   }
 
+  // An add/remove editor for an array config value (e.g. an exclude glob list).
+  // Returns the element plus a read() that yields the current entries.
+  function buildListEditor(values) {
+    const wrap = document.createElement("div");
+    wrap.className = "co-set-list";
+    const chips = document.createElement("div");
+    chips.className = "co-set-chips";
+    const items = Array.isArray(values) ? values.slice() : [];
+    function render() {
+      chips.innerHTML = "";
+      items.forEach((v, i) => {
+        const chip = document.createElement("span");
+        chip.className = "co-set-chip";
+        chip.textContent = String(v);
+        const x = document.createElement("button");
+        x.type = "button";
+        x.className = "co-set-chip-x";
+        x.textContent = "×";
+        x.addEventListener("click", () => {
+          items.splice(i, 1);
+          render();
+        });
+        chip.appendChild(x);
+        chips.appendChild(chip);
+      });
+    }
+    render();
+    const row = document.createElement("div");
+    row.className = "co-set-add-row";
+    const input = document.createElement("input");
+    input.className = "co-modal-input co-set-add-input";
+    input.placeholder = "Add entry…";
+    const add = document.createElement("button");
+    add.type = "button";
+    add.className = "co-modal-btn co-set-add";
+    add.textContent = "Add";
+    function commit() {
+      const v = input.value.trim();
+      if (!v) return;
+      items.push(v);
+      input.value = "";
+      render();
+    }
+    add.addEventListener("click", commit);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); commit(); }
+    });
+    row.appendChild(input);
+    row.appendChild(add);
+    wrap.appendChild(chips);
+    wrap.appendChild(row);
+    return { el: wrap, read: () => items.slice() };
+  }
+
+  // One control per config key, typed from the current value. Arrays become a
+  // list editor (the common exclude-list pattern); objects fall back to JSON.
+  function buildConfigField(key, value) {
+    const row = document.createElement("div");
+    row.className = "co-set-row";
+    const label = document.createElement("label");
+    label.className = "co-set-label";
+    label.textContent = key;
+    row.appendChild(label);
+    if (Array.isArray(value)) {
+      const ed = buildListEditor(value);
+      row.appendChild(ed.el);
+      return { row, read: ed.read };
+    }
+    if (typeof value === "boolean") {
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.className = "co-set-check";
+      box.checked = value;
+      row.appendChild(box);
+      return { row, read: () => box.checked };
+    }
+    if (typeof value === "number") {
+      const input = document.createElement("input");
+      input.type = "number";
+      input.className = "co-modal-input co-set-num";
+      input.value = String(value);
+      row.appendChild(input);
+      return { row, read: () => Number(input.value) };
+    }
+    if (value !== null && typeof value === "object") {
+      const ta = document.createElement("textarea");
+      ta.className = "co-modal-input co-set-json";
+      ta.value = JSON.stringify(value, null, 2);
+      row.appendChild(ta);
+      return { row, read: () => JSON.parse(ta.value) };
+    }
+    const input = document.createElement("input");
+    input.className = "co-modal-input";
+    input.value = value == null ? "" : String(value);
+    row.appendChild(input);
+    return { row, read: () => input.value };
+  }
+
+  function severitySelect(current, inheritLabel) {
+    const sel = document.createElement("select");
+    sel.className = "co-set-select";
+    const none = document.createElement("option");
+    none.value = "";
+    none.textContent = inheritLabel;
+    sel.appendChild(none);
+    for (const at of actionTypes) {
+      const opt = document.createElement("option");
+      opt.value = at.slug;
+      opt.textContent = at.name;
+      sel.appendChild(opt);
+    }
+    sel.value = current || "";
+    return sel;
+  }
+
+  // Project-scoped rule settings: enabled, languages, severity, and the rule's
+  // own config knobs. Saving materialises the shown severity as project bindings
+  // (any project binding fully replaces the global set), so the dialog is WYSIWYG.
+  function openRuleSettingsModal(slug) {
+    if (document.getElementById("co-set-modal")) return;
+    const rule = ruleBySlug[slug];
+    if (!rule) return;
+    const project = projects.find((p) => p.id === currentProjectId);
+
+    const overlay = document.createElement("div");
+    overlay.id = "co-set-modal";
+    overlay.className = "co-modal";
+    const card = document.createElement("div");
+    card.className = "co-modal-card co-set-card";
+    overlay.appendChild(card);
+
+    const title = document.createElement("div");
+    title.className = "co-modal-title";
+    title.textContent = "Settings — " + slug;
+    card.appendChild(title);
+    const sub = document.createElement("div");
+    sub.className = "co-modal-hint co-set-sub";
+    sub.textContent = "Project: " + (project ? project.name : "—");
+    card.appendChild(sub);
+
+    const enRow = document.createElement("label");
+    enRow.className = "co-set-row co-set-enabled";
+    const enBox = document.createElement("input");
+    enBox.type = "checkbox";
+    enBox.className = "co-set-check";
+    enBox.checked = !!enabledBySlug[slug];
+    const enLabel = document.createElement("span");
+    enLabel.textContent = "Enabled";
+    enRow.appendChild(enBox);
+    enRow.appendChild(enLabel);
+    card.appendChild(enRow);
+
+    let readLanguages = null;
+    if (!langIndependentBySlug[slug]) {
+      const section = document.createElement("div");
+      section.className = "co-set-section";
+      const heading = document.createElement("div");
+      heading.className = "co-set-heading";
+      heading.textContent = "Languages";
+      section.appendChild(heading);
+      const boxes = [];
+      const current = new Set(langsBySlug[slug] || []);
+      for (const l of supportedLangs) {
+        const lab = document.createElement("label");
+        lab.className = "co-set-lang";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.value = l.slug;
+        cb.checked = current.has(l.slug);
+        const span = document.createElement("span");
+        span.textContent = l.name;
+        lab.appendChild(cb);
+        lab.appendChild(span);
+        section.appendChild(lab);
+        boxes.push(cb);
+      }
+      card.appendChild(section);
+      readLanguages = () => boxes.filter((b) => b.checked).map((b) => b.value);
+    }
+
+    const sevSection = document.createElement("div");
+    sevSection.className = "co-set-section";
+    const sevHeading = document.createElement("div");
+    sevHeading.className = "co-set-heading";
+    sevHeading.textContent = "Severity";
+    sevSection.appendChild(sevHeading);
+    const defRow = document.createElement("div");
+    defRow.className = "co-set-row";
+    const defLabel = document.createElement("label");
+    defLabel.className = "co-set-label";
+    defLabel.textContent = "Default";
+    const defSel = severitySelect(
+      rule.defaultAction ? rule.defaultAction.type : "",
+      "No default binding",
+    );
+    const delayInput = document.createElement("input");
+    delayInput.type = "number";
+    delayInput.className = "co-modal-input co-set-delay";
+    delayInput.placeholder = "delay ms";
+    delayInput.value =
+      rule.defaultAction && rule.defaultAction.delayMs != null
+        ? String(rule.defaultAction.delayMs)
+        : "";
+    function syncDelay() {
+      delayInput.style.display = defSel.value === "delay_halt" ? "" : "none";
+    }
+    syncDelay();
+    defSel.addEventListener("change", syncDelay);
+    defRow.appendChild(defLabel);
+    defRow.appendChild(defSel);
+    defRow.appendChild(delayInput);
+    sevSection.appendChild(defRow);
+    const envSels = {};
+    const envByName = {};
+    for (const a of rule.envActions || []) envByName[a.environment] = a.type;
+    for (const env of environments) {
+      const row = document.createElement("div");
+      row.className = "co-set-row";
+      const label = document.createElement("label");
+      label.className = "co-set-label";
+      label.textContent = env.name;
+      const sel = severitySelect(envByName[env.slug] || "", "Inherit default");
+      row.appendChild(label);
+      row.appendChild(sel);
+      sevSection.appendChild(row);
+      envSels[env.slug] = sel;
+    }
+    card.appendChild(sevSection);
+
+    const configFields = [];
+    const config = rule.config && typeof rule.config === "object" ? rule.config : {};
+    const configKeys = Object.keys(config);
+    if (configKeys.length) {
+      const section = document.createElement("div");
+      section.className = "co-set-section";
+      const heading = document.createElement("div");
+      heading.className = "co-set-heading";
+      heading.textContent = "Config";
+      section.appendChild(heading);
+      for (const key of configKeys) {
+        const field = buildConfigField(key, config[key]);
+        section.appendChild(field.row);
+        configFields.push({ key, read: field.read });
+      }
+      card.appendChild(section);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "co-modal-actions";
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "co-modal-btn co-set-cancel";
+    cancel.textContent = "Cancel";
+    const save = document.createElement("button");
+    save.type = "button";
+    save.className = "co-modal-btn co-modal-btn-primary co-set-save";
+    save.textContent = "Save";
+    actions.appendChild(cancel);
+    actions.appendChild(save);
+    card.appendChild(actions);
+
+    document.body.appendChild(overlay);
+
+    function close() {
+      overlay.remove();
+    }
+    cancel.addEventListener("click", close);
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close();
+    });
+
+    save.addEventListener("click", async () => {
+      const enabled = enBox.checked;
+      const languages = readLanguages ? readLanguages() : undefined;
+      let config2;
+      if (configFields.length) {
+        config2 = {};
+        for (const f of configFields) config2[f.key] = f.read();
+      }
+      const base = { enabled, removeAction: "all" };
+      if (languages !== undefined) base.languages = languages;
+      if (config2 !== undefined) base.config = config2;
+      const ops = [];
+      if (defSel.value) {
+        ops.push({
+          setAction: {
+            type: defSel.value,
+            delayMs: defSel.value === "delay_halt" ? Number(delayInput.value) || 0 : null,
+          },
+        });
+      }
+      for (const env of environments) {
+        const v = envSels[env.slug].value;
+        if (v) ops.push({ setAction: { type: v, environment: env.slug } });
+      }
+      try {
+        await patchProjectRule(slug, base);
+        for (const op of ops) await patchProjectRule(slug, op);
+      } catch (err) {
+        window.alert("Failed to save settings for " + slug + ": " + err.message);
+        return;
+      }
+      enabledBySlug[slug] = enabled;
+      if (languages !== undefined) langsBySlug[slug] = languages;
+      if (config2 !== undefined) rule.config = config2;
+      rule.defaultAction = defSel.value
+        ? {
+            type: defSel.value,
+            delayMs: defSel.value === "delay_halt" ? Number(delayInput.value) || 0 : null,
+          }
+        : null;
+      rule.envActions = environments
+        .filter((env) => envSels[env.slug].value)
+        .map((env) => ({ environment: env.slug, type: envSels[env.slug].value }));
+      close();
+      decorate();
+    });
+  }
+
   async function loadData() {
     const projRes = await fetch("/api/projects");
     if (!projRes.ok) throw new Error("GET /api/projects -> " + projRes.status);
@@ -1448,6 +1859,7 @@ export const PANEL_EXT = `(() => {
     langsBySlug = {};
     catsBySlug = {};
     enabledBySlug = {};
+    ruleBySlug = {};
     const cats = new Set();
     for (const r of rules) {
       fixesBySlug[r.slug] = r.actions || [];
@@ -1455,8 +1867,11 @@ export const PANEL_EXT = `(() => {
       langIndependentBySlug[r.slug] = !!r.languageIndependent;
       catsBySlug[r.slug] = r.categories || [];
       enabledBySlug[r.slug] = !!r.enabled;
+      ruleBySlug[r.slug] = r;
       for (const c of r.categories || []) cats.add(c);
     }
+    environments = meta.environments || [];
+    actionTypes = meta.actionTypes || [];
     slugList = rules.map((r) => ({
       slug: r.slug,
       name: r.name,
@@ -1484,6 +1899,9 @@ export const PANEL_EXT = `(() => {
     buildRunView();
     const root = document.getElementById("root") || document.body;
     new MutationObserver(schedule).observe(root, { childList: true, subtree: true });
+    // Delegate on document so a React re-render of the table can't drop the
+    // handler; the actions column is re-decorated but never re-bound.
+    document.addEventListener("click", onActionClick);
     decorate();
     await maybeShowAnalyzeBanner();
   }
