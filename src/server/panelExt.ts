@@ -455,6 +455,9 @@ export const PANEL_EXT = `(() => {
 
   function injectStyle() {
     const style = document.createElement("style");
+    // Descendant prefix for the dark overrides: every rule keys off the
+    // data-co-theme="dark" attribute the theme controller sets on <html>.
+    const D = "html[data-co-theme=dark] ";
     style.textContent =
       // Fluid full-width layout: drop the panel's centered max-width cap so the
       // header and tables span the window. The rules table wrapper ships as
@@ -567,8 +570,9 @@ export const PANEL_EXT = `(() => {
       // Header project selector (top-right).
       ".co-project-wrap{display:flex;align-items:center;gap:8px;margin-left:auto}" +
       ".co-project-label{font-size:12px;font-weight:600;color:#64748b}" +
-      ".co-project-select{font-size:13px;padding:5px 10px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#0f172a;cursor:pointer;outline:none}" +
-      ".co-project-select:focus{border-color:#94a3b8}" +
+      ":is(.co-project-select,.co-theme-select){font-size:13px;padding:5px 10px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#0f172a;cursor:pointer;outline:none}" +
+      ":is(.co-project-select,.co-theme-select):focus{border-color:#94a3b8}" +
+      ".co-theme-select{margin-right:6px}" +
       ".co-enabled-td{text-align:center}" +
       ".co-enabled{display:inline-flex;align-items:center;cursor:pointer}" +
       ".co-enabled-box{width:16px;height:16px;cursor:pointer;accent-color:#0f172a}" +
@@ -618,7 +622,80 @@ export const PANEL_EXT = `(() => {
       ".co-set-chip-x{cursor:pointer;border:0;background:none;color:#94a3b8;font-size:14px;line-height:1;padding:0}" +
       ".co-set-chip-x:hover{color:#ef4444}" +
       ".co-set-add-row{display:flex;gap:6px}" +
-      ".co-set-add{flex:0 0 auto}";
+      ".co-set-add{flex:0 0 auto}" +
+      // --- Dark theme -------------------------------------------------------
+      // Two layers: (1) remap the prebuilt panel's own Tailwind utility classes
+      // (bg-white, text-slate-*, border-slate-*, …) since the bundle has no dark
+      // styles; (2) restyle our injected co-* components. Light mode is untouched
+      // (these rules only match under data-co-theme="dark"), so it stays exact.
+      "html[data-co-theme=dark]{color-scheme:dark}" +
+      "html[data-co-theme=light]{color-scheme:light}" +
+      D + "body{background:#0b1220}" +
+      // Native panel utilities.
+      D + ".bg-white{background-color:#0f172a}" +
+      D + ".bg-slate-50{background-color:#1e293b}" +
+      D + ".bg-slate-100{background-color:#334155}" +
+      D + ".bg-slate-300{background-color:#475569}" +
+      D + ".bg-slate-900{background-color:#475569}" +
+      D + ".bg-red-50{background-color:#3f1d1d}" +
+      D + ".text-slate-900{color:#f1f5f9}" +
+      D + ":is(.text-slate-700,.text-slate-600){color:#cbd5e1}" +
+      D + ".text-slate-500{color:#94a3b8}" +
+      D + ".text-slate-400{color:#64748b}" +
+      D + ".text-red-600{color:#f87171}" +
+      D + ".text-red-700{color:#fca5a5}" +
+      D + ".text-amber-600{color:#fbbf24}" +
+      D + ".text-emerald-600{color:#34d399}" +
+      D + ".border-slate-200{border-color:#334155}" +
+      D + ".border-slate-300{border-color:#475569}" +
+      D + ".border-red-200{border-color:#7f1d1d}" +
+      D + ".divide-slate-100 > :not([hidden]) ~ :not([hidden]){border-color:#334155}" +
+      // Our co-* components: surfaces.
+      D + "#co-run-overlay{background:#0b1220}" +
+      D + ".co-run-editor{background:#0f172a}" +
+      D + ".co-modal{background:rgba(0,0,0,.6)}" +
+      D + ":is(.co-dd-panel,.co-run-browser,.co-modal-card,.co-modal-browser){background:#1e293b;border-color:#334155}" +
+      D + ":is(.co-run-navbar,.co-run-subbar,.co-run-browser-head,.co-run-rule-head,.co-ed-head,.co-modal-browser-head){background:#0f172a}" +
+      D + ":is(.co-dd-search,.co-run-path,.co-modal-input,.co-set-select,.co-project-select,.co-theme-select){background:#0f172a;border-color:#475569;color:#e2e8f0}" +
+      D + ":is(.co-fix-summary,.co-dd-summary,.co-dd-foot button,.co-run-browse-btn,.co-modal-btn,.co-analyze-ignore){background:#1e293b;border-color:#475569;color:#cbd5e1}" +
+      // Primary (accent) buttons and the active nav pill.
+      D + ":is(.co-dd-close,.co-run-use,.co-run-btn,.co-run-nav-active,.co-modal-use,.co-modal-btn-primary,.co-analyze-run){background:#475569;border-color:#475569;color:#fff}" +
+      D + ":is(.co-dd-close,.co-run-use,.co-run-btn,.co-modal-use,.co-modal-btn-primary,.co-analyze-run):hover{background:#334155}" +
+      // Hover surfaces for list items, entries, tabs, action icons.
+      D + ":is(.co-dd-item,.co-run-entry,.co-modal-entry,.co-run-vio,.co-run-nav-tab):hover{background:#334155}" +
+      D + ":is(.co-dd-foot button,.co-run-browse-btn,.co-modal-btn,.co-analyze-ignore):hover{background:#334155}" +
+      D + ".co-act-btn:hover{background:#334155;color:#f1f5f9}" +
+      // Borders.
+      D + ":is(.co-run-navbar,.co-run-subbar,.co-run-browser-head,.co-run-rule-head,.co-ed-head,.co-modal-browser-head,.co-run-picker-head,.co-dd-all-item,.co-dd-foot,.co-run-rule,.co-run-results,.co-run-sidebar,.co-run-sidebar-foot,.co-set-section){border-color:#334155}" +
+      D + ".co-fix + .co-fix{border-color:#334155}" +
+      D + ".co-run-resfile + .co-run-resfile{border-color:#334155}" +
+      // Text.
+      D + ":is(.co-run-brand-name,.co-run-slug,.co-modal-title,.co-set-heading,.co-set-enabled){color:#f1f5f9}" +
+      D + ":is(.co-line,.co-fix-path,.co-run-dir,.co-run-updir,.co-modal-dir,.co-modal-updir,.co-set-chip){color:#e2e8f0}" +
+      D + ":is(.co-dd-item,.co-run-file,.co-run-browser-path,.co-run-file-name,.co-run-detail,.co-run-nav-tab,.co-set-label,.co-set-lang,.co-modal-dirs,.co-ed-head){color:#cbd5e1}" +
+      D + ":is(.co-fix-desc,.co-run-target-label,.co-run-status,.co-project-label,.co-act-btn,.co-run-empty){color:#94a3b8}" +
+      D + ":is(.co-fix-none,.co-gutter){color:#475569}" +
+      D + ".co-run-error{color:#fca5a5}" +
+      // Badges, pills, chips.
+      D + ".co-kind-script{background:#064e3b;color:#6ee7b7}" +
+      D + ".co-kind-inferred{background:#312e81;color:#c7d2fe}" +
+      D + ".co-kind-output{background:#334155;color:#cbd5e1}" +
+      D + ".co-run-pill-ok{background:#064e3b;color:#6ee7b7}" +
+      D + ".co-run-pill-n{background:#7f1d1d;color:#fecaca}" +
+      D + ".co-run-pill-err{background:#78350f;color:#fde68a}" +
+      D + ".co-run-badge{background:#334155;color:#94a3b8}" +
+      D + ".co-set-chip{background:#334155}" +
+      // Code viewer issue lines and carets.
+      D + ".co-ln-issue .co-gutter{color:#f87171}" +
+      D + ".co-ln-issue .co-line{background:#450a0a}" +
+      D + ".co-ln-active .co-line{background:#7f1d1d}" +
+      D + ".co-caret .co-line{background:#450a0a}" +
+      D + ".co-caret-msg{color:#fca5a5}" +
+      // Analyze banners.
+      D + ".co-analyze{background:#78350f;border-bottom-color:#92400e;color:#fde68a}" +
+      D + ".co-analyze-done{background:#064e3b;border-bottom-color:#166534;color:#6ee7b7}" +
+      // Checkbox accents.
+      D + ":is(.co-enabled-box,.co-set-check){accent-color:#818cf8}";
     document.head.appendChild(style);
   }
 
@@ -1372,6 +1449,9 @@ export const PANEL_EXT = `(() => {
     }
     const wrap = document.createElement("div");
     wrap.className = "co-project-wrap";
+    const theme = buildThemeSelect();
+    wrap.appendChild(theme.label);
+    wrap.appendChild(theme.sel);
     const label = document.createElement("span");
     label.className = "co-project-label";
     label.textContent = "Project";
@@ -1890,7 +1970,59 @@ export const PANEL_EXT = `(() => {
     applyProjectRunRoot();
   }
 
+  // Theme (Auto/Light/Dark). "auto" tracks the OS via prefers-color-scheme; the
+  // choice persists per browser. We only set data-co-theme on <html> — the dark
+  // stylesheet keys off it. The prebuilt panel ships no dark styles, so this
+  // graft is the only place theming can live. matchMedia is guarded because the
+  // happy-dom test env doesn't provide it; a real browser always does.
+  const THEME_KEY = "co-theme";
+  const THEMES = ["auto", "light", "dark"];
+  const darkMedia = () =>
+    window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+
+  function storedTheme() {
+    const v = localStorage.getItem(THEME_KEY);
+    return THEMES.indexOf(v) !== -1 ? v : "auto";
+  }
+  function effectiveTheme(pref) {
+    if (pref !== "auto") return pref;
+    const mq = darkMedia();
+    return mq && mq.matches ? "dark" : "light";
+  }
+  function applyTheme() {
+    document.documentElement.setAttribute("data-co-theme", effectiveTheme(storedTheme()));
+  }
+  function watchSystemTheme() {
+    const mq = darkMedia();
+    if (mq && mq.addEventListener) {
+      mq.addEventListener("change", () => {
+        if (storedTheme() === "auto") applyTheme();
+      });
+    }
+  }
+  function buildThemeSelect() {
+    const label = document.createElement("span");
+    label.className = "co-project-label co-theme-label";
+    label.textContent = "Theme";
+    const sel = document.createElement("select");
+    sel.className = "co-theme-select";
+    for (const t of THEMES) {
+      const o = document.createElement("option");
+      o.value = t;
+      o.textContent = t.charAt(0).toUpperCase() + t.slice(1);
+      sel.appendChild(o);
+    }
+    sel.value = storedTheme();
+    sel.addEventListener("change", () => {
+      localStorage.setItem(THEME_KEY, sel.value);
+      applyTheme();
+    });
+    return { label, sel };
+  }
+
   async function start() {
+    applyTheme();
+    watchSystemTheme();
     injectStyle();
     loadHighlighter();
     await loadData();

@@ -662,6 +662,31 @@ describe("panelExt injected script", () => {
     return tr.querySelector<HTMLInputElement>(".co-enabled-td .co-enabled-box")!;
   };
 
+  it("renders a header Theme selector defaulting to Auto (resolved to light)", async () => {
+    await runInjected();
+    const sel = document.querySelector<HTMLSelectElement>(".co-theme-select")!;
+    expect([...sel.options].map((o) => o.textContent)).toEqual(["Auto", "Light", "Dark"]);
+    expect(sel.value).toBe("auto");
+    // No stored preference and no OS dark signal in happy-dom → resolves to light.
+    expect(document.documentElement.getAttribute("data-co-theme")).toBe("light");
+  });
+
+  it("choosing Dark flips the document theme and remembers the choice", async () => {
+    await runInjected();
+    const sel = document.querySelector<HTMLSelectElement>(".co-theme-select")!;
+    sel.value = "dark";
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(document.documentElement.getAttribute("data-co-theme")).toBe("dark");
+    expect(lsStore.get("co-theme")).toBe("dark");
+  });
+
+  it("restores the stored theme on load", async () => {
+    lsStore.set("co-theme", "dark");
+    await runInjected();
+    expect(document.querySelector<HTMLSelectElement>(".co-theme-select")!.value).toBe("dark");
+    expect(document.documentElement.getAttribute("data-co-theme")).toBe("dark");
+  });
+
   it("renders a header project selector defaulting to the installed project", async () => {
     await runInjected();
     const sel = document.querySelector<HTMLSelectElement>(".co-project-select")!;
