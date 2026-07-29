@@ -94,4 +94,18 @@ describe("seedRules", () => {
     seedRules(db, RULES);
     expect(count("fixes")).toBe(before);
   });
+
+  it("seeds settings_controls as JSON (and null when the rule declares none)", () => {
+    seedRules(db, RULES);
+    const controls = (slug: string) =>
+      (
+        db
+          .prepare("SELECT settings_controls FROM rules WHERE slug = ?")
+          .get(slug) as { settings_controls: string | null }
+      ).settings_controls;
+    expect(JSON.parse(controls("lint-protected-paths") as string)).toEqual([
+      "protected-paths",
+    ]);
+    expect(controls("lint-naming")).toBeNull();
+  });
 });

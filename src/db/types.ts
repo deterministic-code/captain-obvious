@@ -24,6 +24,8 @@ export interface RuleRow {
   category: string | null;
   description: string | null;
   config_json: string | null;
+  /** JSON array of custom panel control keys, or null (default dialog only). */
+  settings_controls: string | null;
   enabled: number;
 }
 

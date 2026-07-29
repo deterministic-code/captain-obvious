@@ -337,6 +337,7 @@ export const RULES: LintRule[] = [
     ratchetable: false,
     modes: ["staged", "all", "files"],
     stages: ["pre-commit", "claude-tool"],
+    settingsControls: ["protected-paths"],
   }),
   // Governance rules police the repo/workflow, not source files: language-agnostic
   // (languages: []) and enforced per environment via action bindings (e.g. halt on

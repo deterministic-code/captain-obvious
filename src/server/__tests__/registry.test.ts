@@ -308,6 +308,15 @@ describe("seed", () => {
     const rules = listRules(db);
     expect(rules.length).toBe(summary.seeded.length);
   });
+
+  it("exposes a rule's custom settingsControls (and [] when it has none)", () => {
+    seed(db);
+    const rules = listRules(db);
+    const pp = rules.find((r) => r.slug === "lint-protected-paths");
+    const naming = rules.find((r) => r.slug === "lint-naming");
+    expect(pp?.settingsControls).toEqual(["protected-paths"]);
+    expect(naming?.settingsControls).toEqual([]);
+  });
 });
 
 describe("listProjectRules / patchProjectRule overlay", () => {
