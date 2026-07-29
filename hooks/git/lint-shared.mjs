@@ -4,19 +4,12 @@ import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { basename, dirname, extname, resolve } from "node:path";
 import { promisify } from "node:util";
+import { JS_TS_EXTS as SUPPORTED_EXTS } from "../../lib/languages.mjs";
 
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
 
-// JS/TS family only. Rust (.rs) and C# (.cs) have their own toolchains (rustfmt/clippy, dotnet format) and conventions, so the Node lint hooks do not police them.
-export const SUPPORTED_EXTS = new Set([
-  ".ts",
-  ".tsx",
-  ".mjs",
-  ".cjs",
-  ".js",
-  ".jsx",
-]);
+export { SUPPORTED_EXTS };
 
 export const EXCLUDED_PATH_PARTS = [
   "/node_modules/",

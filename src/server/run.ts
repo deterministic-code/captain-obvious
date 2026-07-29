@@ -11,11 +11,9 @@ import { promisify } from "node:util";
 import { hookScriptPath } from "../rules/dispatch.js";
 import { RULES } from "../rules/index.js";
 import type { Violation } from "../rules/types.js";
+import { JS_TS_EXTS as LINTABLE_EXTS } from "../../lib/languages.mjs";
 
 const execFileAsync = promisify(execFile);
-
-/** Extensions the lint hooks police (mirrors SUPPORTED_EXTS in lint-shared.mjs). */
-const LINTABLE_EXTS = new Set([".ts", ".tsx", ".mjs", ".cjs", ".js", ".jsx"]);
 
 /** Directories the browser hides — build output, deps, VCS; dotfiles are skipped separately. */
 const HIDDEN_DIRS = new Set([

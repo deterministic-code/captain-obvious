@@ -4,13 +4,13 @@ import { extname } from "node:path";
 import ts from "typescript";
 import { isExcluded, runFileHook } from "./lint-shared.mjs";
 import { parseSourceFile, stagedAddedLines } from "./fn-metrics.mjs";
+import { JS_TS_EXTS } from "../../lib/languages.mjs";
 
 export const CLASS_LIMITS = {
   lcom4: 1,
   deps: 8,
 };
 
-const JS_EXTS = new Set([".ts", ".tsx", ".mjs", ".cjs", ".js", ".jsx"]);
 const TEST_FILE_RE = /\.(test|spec)\.[cm]?[jt]sx?$|\/__tests__\//;
 const ALLOW_MARKER = "solid-s-allow";
 const METHOD_FLOOR = 2;
@@ -18,7 +18,7 @@ const METHOD_FLOOR = 2;
 export function isAnalyzable(path) {
   if (isExcluded(path)) return false;
   if (TEST_FILE_RE.test(path)) return false;
-  return JS_EXTS.has(extname(path));
+  return JS_TS_EXTS.has(extname(path));
 }
 
 function importedBindings(sf) {

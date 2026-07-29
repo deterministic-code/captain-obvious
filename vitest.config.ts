@@ -20,7 +20,7 @@ export default defineConfig({
       include: ["src/**", "hooks/**", "lib/**"],
       exclude: [
         "**/__tests__/**",
-        "**/*.d.ts",
+        "**/*.d.{ts,mts,cts}",
         "**/types.ts", // type-only declarations, no runtime code
         "bin/**", // install/lint process shims (spawn + exit)
         "src/bin/**", // CLI entry: dispatches to already-tested db/* helpers
