@@ -444,7 +444,15 @@ export const PANEL_EXT = `(() => {
       ".co-run-vio:hover{background:#f1f5f9}" +
       ".co-run-loc{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#94a3b8;min-width:44px}" +
       ".co-run-detail{color:#334155}" +
-      ".co-run-empty,.co-run-error{font-size:13px;color:#64748b;padding:8px}.co-run-error{color:#991b1b}";
+      ".co-run-empty,.co-run-error{font-size:13px;color:#64748b;padding:8px}.co-run-error{color:#991b1b}" +
+      ".co-analyze{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 16px;background:#fef3c7;border-bottom:1px solid #fde68a;font-size:13px;color:#92400e}" +
+      ".co-analyze-done{background:#dcfce7;border-bottom-color:#bbf7d0;color:#166534}" +
+      ".co-analyze-msg{flex:1}" +
+      ".co-analyze-actions{display:flex;gap:8px;flex-shrink:0}" +
+      ".co-analyze-run{cursor:pointer;font-size:13px;font-weight:600;padding:5px 12px;border-radius:6px;border:1px solid #0f172a;background:#0f172a;color:#fff}" +
+      ".co-analyze-run:hover{background:#1e293b}.co-analyze-run:disabled{opacity:.5;cursor:not-allowed}" +
+      ".co-analyze-ignore{cursor:pointer;font-size:13px;font-weight:600;padding:5px 12px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;color:#334155}" +
+      ".co-analyze-ignore:hover{background:#f8fafc}";
     document.head.appendChild(style);
   }
 
@@ -957,6 +965,104 @@ export const PANEL_EXT = `(() => {
     }
   }
 
+  function removeAnalyzeBanner() {
+    const el = document.getElementById("co-analyze");
+    if (el) el.remove();
+  }
+
+  function analyzeSummary(data) {
+    const langs = data.languages || [];
+    if (langs.length === 0) return "No recognized source files found.";
+    return "Detected " + langs.map((l) => l.name + " (" + l.files + ")").join(", ") + ".";
+  }
+
+  function showAnalyzeResult(data) {
+    const banner = document.getElementById("co-analyze");
+    if (!banner) return;
+    banner.className = "co-analyze co-analyze-done";
+    banner.innerHTML = "";
+    const msg = document.createElement("span");
+    msg.className = "co-analyze-msg";
+    msg.textContent = analyzeSummary(data);
+    const dismiss = document.createElement("button");
+    dismiss.type = "button";
+    dismiss.className = "co-analyze-ignore";
+    dismiss.textContent = "Dismiss";
+    dismiss.addEventListener("click", removeAnalyzeBanner);
+    banner.appendChild(msg);
+    banner.appendChild(dismiss);
+  }
+
+  async function doAnalyze() {
+    const banner = document.getElementById("co-analyze");
+    if (!banner) return;
+    const runBtn = document.getElementById("co-analyze-run");
+    const msg = banner.querySelector(".co-analyze-msg");
+    if (runBtn) runBtn.disabled = true;
+    if (msg) msg.textContent = "Analyzing…";
+    let data;
+    try {
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+      if (!res.ok) {
+        const m = await res.json().then((b) => b.error, () => "");
+        throw new Error(m || "POST /api/analyze -> " + res.status);
+      }
+      data = await res.json();
+    } catch (err) {
+      if (msg) msg.textContent = err.message;
+      if (runBtn) runBtn.disabled = false;
+      return;
+    }
+    showAnalyzeResult(data);
+  }
+
+  function buildAnalyzeBanner() {
+    const banner = document.createElement("div");
+    banner.id = "co-analyze";
+    banner.className = "co-analyze";
+    const msg = document.createElement("span");
+    msg.className = "co-analyze-msg";
+    msg.textContent =
+      "This project hasn't been analyzed yet — detect its languages before configuring rules.";
+    const actions = document.createElement("div");
+    actions.className = "co-analyze-actions";
+    const runBtn = document.createElement("button");
+    runBtn.type = "button";
+    runBtn.className = "co-analyze-run";
+    runBtn.id = "co-analyze-run";
+    runBtn.textContent = "Analyze project";
+    runBtn.addEventListener("click", () => { doAnalyze(); });
+    const ignoreBtn = document.createElement("button");
+    ignoreBtn.type = "button";
+    ignoreBtn.className = "co-analyze-ignore";
+    ignoreBtn.textContent = "Ignore";
+    ignoreBtn.addEventListener("click", () => {
+      localStorage.setItem("co-analyze-ignored", "1");
+      removeAnalyzeBanner();
+    });
+    actions.appendChild(runBtn);
+    actions.appendChild(ignoreBtn);
+    banner.appendChild(msg);
+    banner.appendChild(actions);
+    document.body.insertBefore(banner, document.body.firstChild);
+  }
+
+  // Server-driven: prompt to analyze until a project.analyzed event exists, unless
+  // this browser has chosen to Ignore it.
+  async function maybeShowAnalyzeBanner() {
+    if (document.getElementById("co-analyze")) return;
+    if (localStorage.getItem("co-analyze-ignored") === "1") return;
+    const res = await fetch("/api/analyze/status");
+    if (!res.ok) throw new Error("GET /api/analyze/status -> " + res.status);
+    const status = await res.json();
+    if (status.analyzed) return;
+    buildAnalyzeBanner();
+  }
+
   let scheduled = false;
   function schedule() {
     if (scheduled) return;
@@ -1008,6 +1114,7 @@ export const PANEL_EXT = `(() => {
     const root = document.getElementById("root") || document.body;
     new MutationObserver(schedule).observe(root, { childList: true, subtree: true });
     decorate();
+    await maybeShowAnalyzeBanner();
   }
 
   if (document.readyState === "loading") {

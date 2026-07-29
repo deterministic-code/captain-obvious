@@ -16,7 +16,7 @@ import { JS_TS_EXTS as LINTABLE_EXTS } from "../../lib/languages.mjs";
 const execFileAsync = promisify(execFile);
 
 /** Directories the browser hides — build output, deps, VCS; dotfiles are skipped separately. */
-const HIDDEN_DIRS = new Set([
+export const HIDDEN_DIRS = new Set([
   "node_modules",
   "dist",
   "build",

@@ -55,3 +55,18 @@ export function logEvent(logType: string, message: string): void {
     .prepare("INSERT INTO logs (log_type, message) VALUES (?, ?)")
     .run(logType, message);
 }
+
+export interface LogRow {
+  message: string;
+  created: string;
+}
+
+/** The most recent event of a type, or undefined when there are none (or the log is disabled). */
+export function latestEvent(logType: string): LogRow | undefined {
+  if (!sink) return undefined;
+  return sink
+    .prepare(
+      "SELECT message, created FROM logs WHERE log_type = ? ORDER BY id DESC LIMIT 1",
+    )
+    .get(logType) as LogRow | undefined;
+}
