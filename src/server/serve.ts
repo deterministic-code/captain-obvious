@@ -5,19 +5,25 @@
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
-import { dirname, extname, join, normalize, resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { basename, dirname, extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { openDb, resolveDbPath } from "../db/open.js";
 import { openAuditDb, resolveAuditDbPath, useAuditLog } from "../db/audit.js";
+import { ensureDefaultProject } from "../db/projects.js";
 import {
   addActionType,
+  createProject,
   getMeta,
   getStats,
+  listProjectRules,
+  listProjects,
   listRules,
+  patchProjectRule,
   patchRule,
   seed,
+  updateProject,
 } from "./registry.js";
 import { profilingMeta, profilingReport } from "./profiling.js";
 import { browse, readSource, runMeta, runRules, type RunRequest } from "./run.js";
@@ -56,6 +62,19 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
     "content-length": Buffer.byteLength(payload),
   });
   res.end(payload);
+}
+
+/**
+ * Name for the default project (the repo the hook is installed in): the
+ * install repo's package.json `name`, or its folder name when absent.
+ */
+function resolveDefaultProjectName(root: string): string {
+  const pkgPath = join(root, "package.json");
+  if (existsSync(pkgPath)) {
+    const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as { name?: string };
+    if (pkg.name) return pkg.name;
+  }
+  return basename(root);
 }
 
 async function readBody(req: IncomingMessage): Promise<unknown> {
@@ -108,6 +127,8 @@ export function startServer(opts: ServeOptions = {}): Promise<void> {
   const dbPath = resolveDbPath({ db: opts.dbPath });
   const db = openDb(dbPath);
   useAuditLog(openAuditDb(resolveAuditDbPath()));
+  const cwd = process.cwd();
+  ensureDefaultProject(db, cwd, resolveDefaultProjectName(cwd));
 
   const server = createServer((req, res) => {
     handle(req, res, db).catch((err) => {
@@ -170,6 +191,34 @@ async function handle(
   if (pathname === "/api/action-types" && method === "POST") {
     const body = (await readBody(req)) as Parameters<typeof addActionType>[1];
     return sendJson(res, 200, addActionType(db, body));
+  }
+
+  // --- projects (per-project rule config) ---
+  if (pathname === "/api/projects" && method === "GET") {
+    return sendJson(res, 200, listProjects(db));
+  }
+  if (pathname === "/api/projects" && method === "POST") {
+    const body = (await readBody(req)) as Parameters<typeof createProject>[1];
+    return sendJson(res, 200, createProject(db, body));
+  }
+  if (pathname.startsWith("/api/projects/")) {
+    const rest = pathname.slice("/api/projects/".length);
+    const ruleMatch = rest.match(/^([^/]+)\/rules\/(.+)$/);
+    if (ruleMatch && method === "PATCH") {
+      const id = Number(decodeURIComponent(ruleMatch[1]));
+      const slug = decodeURIComponent(ruleMatch[2]);
+      const body = (await readBody(req)) as Parameters<typeof patchProjectRule>[3];
+      return sendJson(res, 200, patchProjectRule(db, id, slug, body));
+    }
+    if (rest.endsWith("/rules") && method === "GET") {
+      const id = Number(decodeURIComponent(rest.slice(0, -"/rules".length)));
+      return sendJson(res, 200, listProjectRules(db, id));
+    }
+    if (!rest.includes("/") && method === "PATCH") {
+      const id = Number(decodeURIComponent(rest));
+      const body = (await readBody(req)) as Parameters<typeof updateProject>[2];
+      return sendJson(res, 200, updateProject(db, id, body));
+    }
   }
 
   // --- run (execute rules against a folder) ---

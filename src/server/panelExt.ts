@@ -32,6 +32,11 @@ export const PANEL_EXT = `(() => {
   let running = false;
   let browsePath = "";
   let violationsByPath = {};
+  // Projects overlay the global catalog with their own enabled + language set;
+  // the header selector switches which project the rules table reflects/edits.
+  let projects = [];
+  let currentProjectId = null;
+  let enabledBySlug = {};
   const EXT_LANG = {
     ts: "typescript", tsx: "typescript",
     js: "javascript", jsx: "javascript", mjs: "javascript", cjs: "javascript",
@@ -183,13 +188,21 @@ export const PANEL_EXT = `(() => {
     return slugs.length ? slugs.map((s) => nameBySlug[s] || s).join(", ") : "—";
   }
 
-  async function patchLanguages(slug, languages) {
-    const res = await fetch("/api/rules/" + encodeURIComponent(slug), {
+  // Rule edits are project-scoped: they write project_rules / project_rule_languages
+  // for the selected project, never the global catalog.
+  async function patchProjectRule(slug, patch) {
+    const url =
+      "/api/projects/" + currentProjectId + "/rules/" + encodeURIComponent(slug);
+    const res = await fetch(url, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ languages }),
+      body: JSON.stringify(patch),
     });
-    if (!res.ok) throw new Error("PATCH /api/rules/" + slug + " -> " + res.status);
+    if (!res.ok) throw new Error("PATCH " + url + " -> " + res.status);
+  }
+
+  async function patchLanguages(slug, languages) {
+    await patchProjectRule(slug, { languages });
   }
 
   function fixedLangDropdown(label) {
@@ -321,6 +334,7 @@ export const PANEL_EXT = `(() => {
     injectRunTab();
     hideNativeTab("Advanced");
     syncRunView();
+    ensureProjectSelect();
     const table = document.querySelector("table");
     if (!table) return;
     if (table.parentElement) table.parentElement.classList.add("co-table-wrap");
@@ -353,6 +367,20 @@ export const PANEL_EXT = `(() => {
       }
       const sig = ((slug ? langsBySlug[slug] : null) || []).slice().sort().join(",");
       if (slug && lcell.getAttribute("data-langs") !== sig) buildLangCell(lcell, slug);
+
+      // The native enabled cell (the only text-center td) toggles the GLOBAL
+      // catalog; hide it and render our project-scoped toggle in its place.
+      const nativeEn = tr.querySelector("td.text-center");
+      if (nativeEn) nativeEn.style.display = "none";
+      let encell = tr.querySelector(".co-enabled-td");
+      if (!encell) {
+        encell = document.createElement("td");
+        encell.className = "px-4 py-3 co-enabled-td";
+        if (nativeEn) nativeEn.insertAdjacentElement("beforebegin", encell);
+        else tr.appendChild(encell);
+      }
+      const ensig = slug ? (enabledBySlug[slug] ? "1" : "0") : "";
+      if (slug && encell.getAttribute("data-en") !== ensig) buildEnabledCell(encell, slug);
     }
     setupFilters();
     applyFilter();
@@ -468,7 +496,37 @@ export const PANEL_EXT = `(() => {
       ".co-analyze-run{cursor:pointer;font-size:13px;font-weight:600;padding:5px 12px;border-radius:6px;border:1px solid #0f172a;background:#0f172a;color:#fff}" +
       ".co-analyze-run:hover{background:#1e293b}.co-analyze-run:disabled{opacity:.5;cursor:not-allowed}" +
       ".co-analyze-ignore{cursor:pointer;font-size:13px;font-weight:600;padding:5px 12px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;color:#334155}" +
-      ".co-analyze-ignore:hover{background:#f8fafc}";
+      ".co-analyze-ignore:hover{background:#f8fafc}" +
+      // Header project selector (top-right).
+      ".co-project-wrap{display:flex;align-items:center;gap:8px;margin-left:auto}" +
+      ".co-project-label{font-size:12px;font-weight:600;color:#64748b}" +
+      ".co-project-select{font-size:13px;padding:5px 10px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#0f172a;cursor:pointer;outline:none}" +
+      ".co-project-select:focus{border-color:#94a3b8}" +
+      ".co-enabled-td{text-align:center}" +
+      ".co-enabled{display:inline-flex;align-items:center;cursor:pointer}" +
+      ".co-enabled-box{width:16px;height:16px;cursor:pointer;accent-color:#0f172a}" +
+      // New-project modal.
+      ".co-modal{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:rgba(15,23,42,.45)}" +
+      ".co-modal-card{width:520px;max-width:calc(100vw - 32px);background:#fff;border-radius:12px;box-shadow:0 20px 60px rgba(15,23,42,.3);padding:20px;display:flex;flex-direction:column;gap:10px}" +
+      ".co-modal-title{font-size:16px;font-weight:700;color:#0f172a}" +
+      ".co-modal-input{box-sizing:border-box;width:100%;padding:8px 10px;font-size:14px;border:1px solid #cbd5e1;border-radius:6px;outline:none}" +
+      ".co-modal-input:focus{border-color:#94a3b8}" +
+      ".co-modal-dirs{font-size:13px;color:#334155}" +
+      ".co-modal-hint{color:#94a3b8}" +
+      ".co-modal-browser{border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}" +
+      ".co-modal-browser-head{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f8fafc;border-bottom:1px solid #f1f5f9}" +
+      ".co-modal-browser-path{flex:1;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
+      ".co-modal-use{cursor:pointer;white-space:nowrap;font-size:12px;font-weight:600;padding:4px 10px;border-radius:6px;border:1px solid #0f172a;background:#0f172a;color:#fff}" +
+      ".co-modal-use:hover{background:#1e293b}" +
+      ".co-modal-browser-list{max-height:240px;overflow:auto;padding:4px}" +
+      ".co-modal-entry{padding:5px 10px;font-size:13px;border-radius:6px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}" +
+      ".co-modal-entry:hover{background:#f1f5f9}" +
+      ".co-modal-dir,.co-modal-updir{color:#0f172a;font-weight:500}" +
+      ".co-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}" +
+      ".co-modal-btn{cursor:pointer;font-size:13px;font-weight:600;padding:7px 16px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;color:#334155}" +
+      ".co-modal-btn:hover{background:#f8fafc}" +
+      ".co-modal-btn-primary{background:#0f172a;color:#fff;border-color:#0f172a}" +
+      ".co-modal-btn-primary:hover{background:#1e293b}";
     document.head.appendChild(style);
   }
 
@@ -1128,9 +1186,251 @@ export const PANEL_EXT = `(() => {
     setTimeout(() => { scheduled = false; decorate(); }, 0);
   }
 
+  // The project-scoped Enabled toggle. The native panel's toggle writes the
+  // global catalog, so we hide its column (decorate) and render this in its place.
+  function buildEnabledCell(cell, slug) {
+    const wrap = document.createElement("label");
+    wrap.className = "co-enabled";
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    box.className = "co-enabled-box";
+    box.checked = !!enabledBySlug[slug];
+    box.addEventListener("change", async () => {
+      const next = box.checked;
+      try {
+        await patchProjectRule(slug, { enabled: next });
+      } catch (err) {
+        window.alert("Failed to update " + slug + ": " + err.message);
+        box.checked = !next;
+        return;
+      }
+      enabledBySlug[slug] = next;
+      cell.setAttribute("data-en", next ? "1" : "0");
+    });
+    wrap.appendChild(box);
+    cell.innerHTML = "";
+    cell.appendChild(wrap);
+    cell.setAttribute("data-en", box.checked ? "1" : "0");
+  }
+
+  function pickCurrentProject() {
+    const stored = localStorage.getItem("co-project");
+    let current = null;
+    if (stored) {
+      const n = Number(stored);
+      if (projects.some((p) => p.id === n)) current = n;
+    }
+    if (current === null) {
+      const def = projects.find((p) => p.isDefault);
+      current = def ? def.id : projects.length ? projects[0].id : null;
+    }
+    currentProjectId = current;
+  }
+
+  function applyProjectRunRoot() {
+    const proj = projects.find((p) => p.id === currentProjectId);
+    if (proj && proj.directories && proj.directories.length) {
+      runRoot = proj.directories[0];
+    }
+  }
+
+  function renderProjectOptions() {
+    const sel = document.querySelector(".co-project-select");
+    if (!sel) return;
+    sel.innerHTML = "";
+    for (const p of projects) {
+      const o = document.createElement("option");
+      o.value = String(p.id);
+      o.textContent = p.name + (p.isDefault ? " (default)" : "");
+      sel.appendChild(o);
+    }
+    const nw = document.createElement("option");
+    nw.value = "__new__";
+    nw.textContent = "＋ New project…";
+    sel.appendChild(nw);
+    if (currentProjectId !== null) sel.value = String(currentProjectId);
+  }
+
+  async function selectProject(id) {
+    currentProjectId = id;
+    localStorage.setItem("co-project", String(id));
+    await loadData();
+    applyProjectRunRoot();
+    decorate();
+  }
+
+  // Injected into the panel's header bar (top-right). Idempotent: React re-renders
+  // the header, so we re-attach on every decorate tick.
+  function ensureProjectSelect() {
+    const found = findNav();
+    if (!found || !found.nav) return;
+    const bar = found.nav.parentElement || found.nav;
+    if (bar.querySelector(".co-project-wrap")) {
+      renderProjectOptions();
+      return;
+    }
+    const wrap = document.createElement("div");
+    wrap.className = "co-project-wrap";
+    const label = document.createElement("span");
+    label.className = "co-project-label";
+    label.textContent = "Project";
+    const sel = document.createElement("select");
+    sel.className = "co-project-select";
+    sel.addEventListener("change", () => {
+      if (sel.value === "__new__") {
+        sel.value = currentProjectId !== null ? String(currentProjectId) : "";
+        openCreateProjectModal();
+        return;
+      }
+      selectProject(Number(sel.value));
+    });
+    wrap.appendChild(label);
+    wrap.appendChild(sel);
+    bar.appendChild(wrap);
+    renderProjectOptions();
+  }
+
+  async function createProjectReq(body) {
+    const res = await fetch("/api/projects", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || "POST /api/projects -> " + res.status);
+    }
+    return res.json();
+  }
+
+  // A modal to create a project: name, description, and directories picked from
+  // the server filesystem via /api/run/browse (the same tree the Run tab walks).
+  function openCreateProjectModal() {
+    if (document.getElementById("co-project-modal")) return;
+    const dirs = [];
+    let path = runRoot || "";
+
+    const overlay = document.createElement("div");
+    overlay.id = "co-project-modal";
+    overlay.className = "co-modal";
+    const card = document.createElement("div");
+    card.className = "co-modal-card";
+    card.innerHTML =
+      '<div class="co-modal-title">New project</div>' +
+      '<input class="co-modal-input co-modal-name" placeholder="Name" />' +
+      '<input class="co-modal-input co-modal-desc" placeholder="Description (optional)" />' +
+      '<div class="co-modal-dirs"></div>' +
+      '<div class="co-modal-browser"></div>' +
+      '<div class="co-modal-actions">' +
+      '<button type="button" class="co-modal-btn co-modal-cancel">Cancel</button>' +
+      '<button type="button" class="co-modal-btn co-modal-btn-primary co-modal-create">Create</button>' +
+      "</div>";
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+
+    const dirsEl = card.querySelector(".co-modal-dirs");
+    const browserEl = card.querySelector(".co-modal-browser");
+
+    function renderDirs() {
+      dirsEl.innerHTML = dirs.length
+        ? "Directories: " + dirs.map((d) => esc(d)).join(", ")
+        : '<span class="co-modal-hint">No directories chosen — the whole repo is used.</span>';
+    }
+
+    async function renderBrowser() {
+      browserEl.textContent = "Loading…";
+      const res = await fetch("/api/run/browse?path=" + encodeURIComponent(path));
+      if (!res.ok) {
+        browserEl.textContent = "Cannot browse " + path;
+        return;
+      }
+      const view = await res.json();
+      path = view.path;
+      browserEl.innerHTML = "";
+      const head = document.createElement("div");
+      head.className = "co-modal-browser-head";
+      head.innerHTML =
+        '<span class="co-modal-browser-path">' + esc(path) + "</span>";
+      const useBtn = document.createElement("button");
+      useBtn.type = "button";
+      useBtn.className = "co-modal-use";
+      useBtn.textContent = "Add this folder";
+      useBtn.addEventListener("click", () => {
+        if (dirs.indexOf(path) === -1) dirs.push(path);
+        renderDirs();
+      });
+      head.appendChild(useBtn);
+      browserEl.appendChild(head);
+      const list = document.createElement("div");
+      list.className = "co-modal-browser-list";
+      if (view.parent) {
+        const up = document.createElement("div");
+        up.className = "co-modal-entry co-modal-updir";
+        up.textContent = "../";
+        up.addEventListener("click", () => {
+          path = view.parent;
+          renderBrowser();
+        });
+        list.appendChild(up);
+      }
+      for (const e of view.entries) {
+        if (e.type !== "dir") continue;
+        const row = document.createElement("div");
+        row.className = "co-modal-entry co-modal-dir";
+        row.textContent = e.name + "/";
+        row.addEventListener("click", () => {
+          path = e.path;
+          renderBrowser();
+        });
+        list.appendChild(row);
+      }
+      browserEl.appendChild(list);
+    }
+
+    function close() {
+      overlay.remove();
+    }
+    card.querySelector(".co-modal-cancel").addEventListener("click", close);
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close();
+    });
+    card.querySelector(".co-modal-create").addEventListener("click", async () => {
+      const name = card.querySelector(".co-modal-name").value.trim();
+      if (!name) {
+        window.alert("A project name is required.");
+        return;
+      }
+      const description = card.querySelector(".co-modal-desc").value.trim();
+      let created;
+      try {
+        created = await createProjectReq({
+          name,
+          description: description || undefined,
+          directories: dirs,
+        });
+      } catch (err) {
+        window.alert("Failed to create project: " + err.message);
+        return;
+      }
+      close();
+      await selectProject(created.id);
+    });
+
+    renderDirs();
+    renderBrowser();
+  }
+
   async function loadData() {
-    const rulesRes = await fetch("/api/rules");
-    if (!rulesRes.ok) throw new Error("GET /api/rules -> " + rulesRes.status);
+    const projRes = await fetch("/api/projects");
+    if (!projRes.ok) throw new Error("GET /api/projects -> " + projRes.status);
+    projects = await projRes.json();
+    pickCurrentProject();
+    const rulesUrl =
+      currentProjectId !== null
+        ? "/api/projects/" + currentProjectId + "/rules"
+        : "/api/rules";
+    const rulesRes = await fetch(rulesUrl);
+    if (!rulesRes.ok) throw new Error("GET " + rulesUrl + " -> " + rulesRes.status);
     const metaRes = await fetch("/api/meta");
     if (!metaRes.ok) throw new Error("GET /api/meta -> " + metaRes.status);
     const rules = await rulesRes.json();
@@ -1138,12 +1438,14 @@ export const PANEL_EXT = `(() => {
     fixesBySlug = {};
     langsBySlug = {};
     catsBySlug = {};
+    enabledBySlug = {};
     const cats = new Set();
     for (const r of rules) {
       fixesBySlug[r.slug] = r.actions || [];
       langsBySlug[r.slug] = r.languages || [];
       langIndependentBySlug[r.slug] = !!r.languageIndependent;
       catsBySlug[r.slug] = r.categories || [];
+      enabledBySlug[r.slug] = !!r.enabled;
       for (const c of r.categories || []) cats.add(c);
     }
     slugList = rules.map((r) => ({
@@ -1161,6 +1463,7 @@ export const PANEL_EXT = `(() => {
     for (const c of allCategories) selectedCats.add(c);
     selectedLangs.clear();
     for (const l of supportedLangs) selectedLangs.add(l.slug);
+    applyProjectRunRoot();
   }
 
   async function start() {
@@ -1168,6 +1471,7 @@ export const PANEL_EXT = `(() => {
     loadHighlighter();
     await loadData();
     await loadRunMeta();
+    applyProjectRunRoot();
     buildRunView();
     const root = document.getElementById("root") || document.body;
     new MutationObserver(schedule).observe(root, { childList: true, subtree: true });
