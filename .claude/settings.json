@@ -11,6 +11,17 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "_captainObvious": true,
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PROJECT_DIR}/hooks/claude/protected-paths-guard.sh",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "Stop": [

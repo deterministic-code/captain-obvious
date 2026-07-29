@@ -2002,6 +2002,36 @@ export const PANEL_EXT = `(() => {
   // Project-scoped rule settings: enabled, languages, severity, and the rule's
   // own config knobs. Saving materialises the shown severity as project bindings
   // (any project binding fully replaces the global set), so the dialog is WYSIWYG.
+  // Reusable settings controls keyed by a rule's settingsControls (datasource): build(ctx) appends a section to the default dialog and returns { save }, run after the default save; unknown keys ignored.
+  const CUSTOM_CONTROLS = {
+    "protected-paths": (ctx) => {
+      const section = document.createElement("div");
+      section.className = "co-set-section";
+      const heading = document.createElement("div");
+      heading.className = "co-set-heading";
+      heading.textContent = "Protected paths";
+      section.appendChild(heading);
+      const hint = document.createElement("div");
+      hint.className = "co-modal-hint";
+      hint.textContent =
+        "Glob patterns (e.g. db/schema.sql, .github/**) that block git commits and Claude edits. An empty list protects nothing.";
+      section.appendChild(hint);
+      const project = ctx.project;
+      const editor = buildListEditor(project ? project.protected || [] : []);
+      section.appendChild(editor.el);
+      ctx.card.appendChild(section);
+      return {
+        save: async () => {
+          if (!project) return;
+          const next = editor.read();
+          const updated = await patchProject(project.id, { protected: next });
+          project.protected =
+            updated && updated.protected ? updated.protected : next;
+        },
+      };
+    },
+  };
+
   function openRuleSettingsModal(slug) {
     if (document.getElementById("co-set-modal")) return;
     const rule = ruleBySlug[slug];
@@ -2131,6 +2161,12 @@ export const PANEL_EXT = `(() => {
       card.appendChild(section);
     }
 
+    const customControls = [];
+    for (const key of rule.settingsControls || []) {
+      const make = CUSTOM_CONTROLS[key];
+      if (make) customControls.push(make({ card, rule, slug, project }));
+    }
+
     const actions = document.createElement("div");
     actions.className = "co-modal-actions";
     const cancel = document.createElement("button");
@@ -2182,6 +2218,7 @@ export const PANEL_EXT = `(() => {
       try {
         await patchProjectRule(slug, base);
         for (const op of ops) await patchProjectRule(slug, op);
+        for (const c of customControls) await c.save();
       } catch (err) {
         toast("Couldn't save settings for " + slug + ": " + err.message, "error");
         return;

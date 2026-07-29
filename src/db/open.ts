@@ -59,6 +59,7 @@ export function openDb(dbPath: string): Db {
   migrateColumn(db, "languages", "is_supported", "INTEGER NOT NULL DEFAULT 0");
   migrateColumn(db, "project_rules", "config_json", "TEXT");
   migrateColumn(db, "projects", "protected", "TEXT");
+  migrateColumn(db, "rules", "settings_controls", "TEXT");
   seedLookups(db);
   return db;
 }

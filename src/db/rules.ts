@@ -261,18 +261,30 @@ function removeRuleAction(db: Db, ruleId: number, target: string): void {
  */
 export function upsertRule(db: Db, meta: RuleMeta): void {
   const configJson = meta.config ? JSON.stringify(meta.config) : null;
+  const controlsJson =
+    meta.settingsControls && meta.settingsControls.length > 0
+      ? JSON.stringify(meta.settingsControls)
+      : null;
   const languageIds = meta.languages.map((s) => requireLanguageId(db, s));
 
   const tx = db.transaction(() => {
     db.prepare(
-      `INSERT INTO rules (slug, name, category, description, config_json)
-       VALUES (?, ?, ?, ?, ?)
+      `INSERT INTO rules (slug, name, category, description, config_json, settings_controls)
+       VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(slug) DO UPDATE SET
          name = excluded.name,
          category = excluded.category,
          description = excluded.description,
-         config_json = excluded.config_json`,
-    ).run(meta.slug, meta.name, meta.category, meta.description, configJson);
+         config_json = excluded.config_json,
+         settings_controls = excluded.settings_controls`,
+    ).run(
+      meta.slug,
+      meta.name,
+      meta.category,
+      meta.description,
+      configJson,
+      controlsJson,
+    );
 
     const ruleId = (
       db.prepare("SELECT id FROM rules WHERE slug = ?").get(meta.slug) as {

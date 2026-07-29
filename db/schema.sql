@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS rules (
   category    TEXT,                       -- 'duplication','solid','size','hygiene'
   description TEXT,
   config_json TEXT,                       -- thresholds: {"maxLines":300}
+  settings_controls TEXT,                 -- JSON array of custom panel control keys (optional)
   enabled     INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1))
 ) STRICT;
 

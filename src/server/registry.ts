@@ -64,6 +64,12 @@ export interface RuleView {
    * prebuilt panel ignores it; CLI (`show-rule`) and API consumers read it.
    */
   actions: RuleAction[];
+  /**
+   * Custom panel-control keys appended to this rule's settings dialog (on top of
+   * the default controls). Additive field — the prebuilt panel ignores it;
+   * panelExt resolves each key against its control registry.
+   */
+  settingsControls: string[];
 }
 
 function parseConfig(json: string | null): Record<string, unknown> | null {
@@ -184,6 +190,7 @@ export function listRules(db: Db): RuleView[] {
       defaultAction: def ? { type: def.type, delayMs: def.delayMs } : null,
       envActions,
       actions: fixesByRule.get(r.id) ?? [],
+      settingsControls: parsePaths(r.settings_controls),
     };
   });
 }
