@@ -63,6 +63,10 @@ let analyzeCalls: unknown[];
 let analyzeFails: boolean;
 let analyzeStatusResult: { analyzed: boolean; lastAnalyzed: string | null };
 let lsStore: Map<string, string>;
+let activitySummaryResult: unknown;
+let activityFeedResult: unknown[];
+let activityCalls: string[];
+let activityFeedCalls: string[];
 const RUN_RESULT = [
   {
     slug: "lint-a",
@@ -129,6 +133,20 @@ beforeEach(() => {
   analyzeCalls = [];
   analyzeFails = false;
   analyzeStatusResult = { analyzed: true, lastAnalyzed: "2026-01-01T00:00:00Z" };
+  activityCalls = [];
+  activityFeedCalls = [];
+  activitySummaryResult = {
+    keys: ["commit", "lint:dup", "lint:naming"],
+    top: [
+      { key: "lint:naming", runs: 5, failures: 2 },
+      { key: "lint:dup", runs: 3, failures: 0 },
+    ],
+    series: { bucketMs: 1000, buckets: [{ t: 1, runs: 2, failures: 1 }, { t: 2, runs: 3, failures: 0 }] },
+  };
+  activityFeedResult = [
+    { timeMs: 2000, source: "hook", key: "lint:naming", status: "failure", detail: "npm lint:naming" },
+    { timeMs: 1000, source: "log", key: "rule.enabled", detail: "enabled lint-naming" },
+  ];
   // This happy-dom build ships no Storage, so stub localStorage the way the panel
   // uses it (get/set), Map-backed and fresh per test.
   lsStore = new Map();
@@ -202,6 +220,14 @@ beforeEach(() => {
         return { ok: false, status: 400, json: async () => ({ error: "read failed" }) } as unknown as Response;
       }
       return jsonRes({ path: "/proj/" + p, text: FILE_TEXT });
+    }
+    if (typeof url === "string" && url.startsWith("/api/activity/summary")) {
+      activityCalls.push(url);
+      return jsonRes(activitySummaryResult);
+    }
+    if (typeof url === "string" && url.startsWith("/api/activity/feed")) {
+      activityFeedCalls.push(url);
+      return jsonRes(activityFeedResult);
     }
     if (opts?.method === "PATCH") {
       patchCalls.push({ url, body: JSON.parse(opts.body as string) });
@@ -398,7 +424,7 @@ describe("panelExt injected script", () => {
     expect(tab.textContent).toBe("Run");
     // Positioned immediately after the Rules tab (not appended at the end).
     const labels = [...document.querySelectorAll("nav button")].map((b) => b.textContent);
-    expect(labels).toEqual(["Rules", "Run", "Profiling"]);
+    expect(labels).toEqual(["Rules", "Run", "Activity", "Profiling"]);
     const overlay = document.querySelector<HTMLElement>("#co-run-overlay")!;
     expect(overlay.style.display).toBe("none");
     // Picker prefills the folder and lists only the runnable slugs (lint-a, lint-b).
@@ -424,24 +450,25 @@ describe("panelExt injected script", () => {
   });
 
   it("hides the native Advanced tab", async () => {
-    await runInjected();
     const nav = document.querySelector("nav")!;
     const advanced = document.createElement("button");
     advanced.textContent = "Advanced";
-    nav.appendChild(advanced); // triggers the observer → decorate → hideNativeTab
-    for (let i = 0; i < 3; i++) await flush();
+    nav.appendChild(advanced); // decorate() hides it on the first pass
+    await runInjected();
     expect(advanced.style.display).toBe("none");
   });
 
-  it("gives the Run overlay the panel's branded header, whose Reporting tab exits", async () => {
+  it("gives the Run overlay a branded header whose Activity tab switches overlays", async () => {
     await runInjected();
-    const overlay = document.querySelector<HTMLElement>("#co-run-overlay")!;
+    const runOverlay = document.querySelector<HTMLElement>("#co-run-overlay")!;
     (document.querySelector(".co-run-tab") as HTMLElement).click();
-    expect(overlay.querySelector(".co-run-brand-name")!.textContent).toBe("Captain Obvious");
-    expect(overlay.querySelector(".co-run-nav-active")!.textContent).toBe("Run");
-    (overlay.querySelector('.co-run-nav-tab[data-nav="Reporting"]') as HTMLElement).click();
-    expect(overlay.style.display).toBe("none");
-    expect(document.getElementById("root")!.style.display).toBe("");
+    expect(runOverlay.querySelector(".co-run-brand-name")!.textContent).toBe("Captain Obvious");
+    expect(runOverlay.querySelector(".co-run-nav-active")!.textContent).toBe("Run");
+    // The Activity tab in the Run overlay's nav swaps to the Activity overlay.
+    (runOverlay.querySelector('.co-run-nav-tab[data-nav="Activity"]') as HTMLElement).click();
+    for (let i = 0; i < 3; i++) await flush();
+    expect(runOverlay.style.display).toBe("none");
+    expect(document.querySelector<HTMLElement>("#co-activity-overlay")!.style.display).toBe("flex");
   });
 
   it("wraps the rules table so it scrolls instead of clipping columns", async () => {
@@ -787,14 +814,14 @@ describe("panelExt injected script", () => {
     return tr.querySelector<HTMLButtonElement>('.co-act-td .co-act-btn[data-act="' + act + '"]')!;
   };
 
-  it("adds a trailing actions column with Run/Report/Settings icon buttons per row", async () => {
+  it("adds a trailing actions column with Run/Activity/Settings icon buttons per row", async () => {
     await runInjected();
     const cells = document.querySelectorAll(".co-act-td");
     expect(cells).toHaveLength(3);
     const acts = [...cells[0].querySelectorAll(".co-act-btn")].map((b) =>
       b.getAttribute("data-act"),
     );
-    expect(acts).toEqual(["run", "report", "settings"]);
+    expect(acts).toEqual(["run", "activity", "settings"]);
     // Icons are inline Lucide SVGs, not emoji or text.
     expect(cells[0].querySelector(".co-act-btn svg")).not.toBeNull();
   });
@@ -812,18 +839,76 @@ describe("panelExt injected script", () => {
     expect(overlay.querySelector<HTMLButtonElement>("#co-run-btn")!.disabled).toBe(false);
   });
 
-  it("Report icon routes to the native Reporting tab", async () => {
-    await runInjected();
+  const openActivityTab = async () => {
+    (document.querySelector(".co-activity-tab") as HTMLElement).click();
+    for (let i = 0; i < 3; i++) await flush();
+    return document.querySelector<HTMLElement>("#co-activity-overlay")!;
+  };
+
+  it("hides the native Reporting tab", async () => {
     const nav = document.querySelector("nav")!;
     const reporting = document.createElement("button");
     reporting.textContent = "Reporting";
-    let clicked = false;
-    reporting.addEventListener("click", () => { clicked = true; });
-    nav.appendChild(reporting);
+    nav.appendChild(reporting); // decorate() hides it on the first pass
+    await runInjected();
+    expect(reporting.style.display).toBe("none");
+  });
+
+  it("Activity tab opens the overlay and renders the top list, chart, and feed", async () => {
+    await runInjected();
+    const overlay = await openActivityTab();
+    expect(overlay.style.display).toBe("flex");
+    expect(document.getElementById("root")!.style.display).toBe("none");
+    // Top-rules list, ranked, with the busiest first.
+    const rows = [...overlay.querySelectorAll(".co-act-toprow")].map((r) =>
+      r.querySelector(".co-act-toprow-key")!.textContent,
+    );
+    expect(rows).toEqual(["lint:naming", "lint:dup"]);
+    // SVG chart drew a bar per bucket.
+    expect(overlay.querySelectorAll(".co-act-chart svg rect.co-act-bar").length).toBe(2);
+    // Feed shows both a hook run (with a failure pill) and a config log entry.
+    const feed = overlay.querySelector("#co-act-feed")!;
+    expect(feed.querySelectorAll(".co-act-row")).toHaveLength(2);
+    expect(feed.textContent).toContain("npm lint:naming");
+    expect(feed.querySelector(".co-run-pill-n")!.textContent).toBe("failure");
+    expect(feed.textContent).toContain("enabled lint-naming");
+  });
+
+  it("Activity icon on a rule row opens the overlay pre-filtered to that rule", async () => {
+    await runInjected();
+    actBtn("lint-a", "activity").click();
     for (let i = 0; i < 3; i++) await flush();
-    actBtn("lint-a", "report").click();
-    await flush();
-    expect(clicked).toBe(true);
+    const overlay = document.querySelector<HTMLElement>("#co-activity-overlay")!;
+    expect(overlay.style.display).toBe("flex");
+    // Both summary and feed were fetched scoped to the mapped key lint:a.
+    expect(activityCalls.some((u) => u.includes("rules=lint%3Aa"))).toBe(true);
+    expect(activityFeedCalls.some((u) => u.includes("rules=lint%3Aa"))).toBe(true);
+  });
+
+  it("the rule multiselect re-fetches the feed scoped to the chosen keys", async () => {
+    await runInjected();
+    const overlay = await openActivityTab();
+    activityFeedCalls.length = 0;
+    // Narrow to a strict subset (uncheck two of the three keys).
+    const dd = overlay.querySelector(".co-act-filter")!;
+    const opt = (v: string) =>
+      [...dd.querySelectorAll<HTMLInputElement>(".co-dd-opt")].find((i) => i.value === v)!;
+    opt("commit").checked = false;
+    opt("commit").dispatchEvent(new Event("change", { bubbles: true }));
+    opt("lint:dup").checked = false;
+    opt("lint:dup").dispatchEvent(new Event("change", { bubbles: true }));
+    for (let i = 0; i < 3; i++) await flush();
+    expect(activityFeedCalls.at(-1)).toContain("rules=lint%3Anaming");
+  });
+
+  it("switching the time window re-fetches for that span", async () => {
+    await runInjected();
+    const overlay = await openActivityTab();
+    activityCalls.length = 0;
+    (overlay.querySelector('.co-act-win[data-win="1h"]') as HTMLElement).click();
+    for (let i = 0; i < 3; i++) await flush();
+    expect(overlay.querySelector(".co-act-win-active")!.textContent).toBe("1h");
+    expect(activityCalls.at(-1)).toContain("last=1h");
   });
 
   it("Settings icon opens a project-scoped dialog prefilled from the rule", async () => {

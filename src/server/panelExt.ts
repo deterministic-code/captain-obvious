@@ -32,6 +32,13 @@ export const PANEL_EXT = `(() => {
   let running = false;
   let browsePath = "";
   let violationsByPath = {};
+  // Activity overlay: a global (not project-scoped) view of hook runs + config
+  // changes. activityKeys drives the rule multiselect; activitySelectedRules is
+  // the current filter; activityWindow is the time span.
+  let activityActive = false;
+  let activityKeys = [];
+  const activitySelectedRules = new Set();
+  let activityWindow = "7d";
   // Projects overlay the global catalog with their own enabled + language set;
   // the header selector switches which project the rules table reflects/edits.
   let projects = [];
@@ -53,9 +60,7 @@ export const PANEL_EXT = `(() => {
     ' fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"' +
     ' stroke-linejoin="round" aria-hidden="true">' + body + "</svg>";
   const ICON_RUN = svgIcon('<polygon points="6 3 20 12 6 21 6 3"/>');
-  const ICON_REPORT = svgIcon(
-    '<path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
-  );
+  const ICON_ACTIVITY = svgIcon('<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>');
   const ICON_SETTINGS = svgIcon(
     '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
   );
@@ -70,7 +75,7 @@ export const PANEL_EXT = `(() => {
   const THEME_TITLES = { auto: "System theme", light: "Light theme", dark: "Dark theme" };
   const ACTIONS_HTML =
     '<button type="button" class="co-act-btn" data-act="run" title="Run this rule" aria-label="Run this rule">' + ICON_RUN + "</button>" +
-    '<button type="button" class="co-act-btn" data-act="report" title="Open reporting" aria-label="Open reporting">' + ICON_REPORT + "</button>" +
+    '<button type="button" class="co-act-btn" data-act="activity" title="Open activity" aria-label="Open activity">' + ICON_ACTIVITY + "</button>" +
     '<button type="button" class="co-act-btn" data-act="settings" title="Project settings" aria-label="Project settings">' + ICON_SETTINGS + "</button>";
 
   function esc(s) {
@@ -363,8 +368,10 @@ export const PANEL_EXT = `(() => {
 
   function decorate() {
     injectRunTab();
+    injectActivityTab();
     hideNativeTab("Advanced");
-    syncRunView();
+    hideNativeTab("Reporting");
+    syncOverlays();
     ensureProjectSelect();
     const table = document.querySelector("table");
     if (!table) return;
@@ -446,7 +453,7 @@ export const PANEL_EXT = `(() => {
       }
     }
     runActive = true;
-    syncRunView();
+    syncOverlays();
     updateRunGate();
   }
 
@@ -458,7 +465,7 @@ export const PANEL_EXT = `(() => {
     if (!slug) return;
     const act = btn.getAttribute("data-act");
     if (act === "run") openRunForRule(slug);
-    else if (act === "report") gotoNative("Reporting");
+    else if (act === "activity") openActivityForRule(slug);
     else if (act === "settings") openRuleSettingsModal(slug);
   }
 
@@ -638,6 +645,37 @@ export const PANEL_EXT = `(() => {
       ".co-set-chip-x:hover{color:#ef4444}" +
       ".co-set-add-row{display:flex;gap:6px}" +
       ".co-set-add{flex:0 0 auto}" +
+      // Activity overlay (reuses the co-run-* navbar chrome).
+      ".co-act-subbar{gap:12px}" +
+      ".co-act-windows{display:inline-flex;gap:4px}" +
+      ".co-act-win{cursor:pointer;border:1px solid #cbd5e1;background:#fff;color:#475569;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600}" +
+      ".co-act-win:hover{background:#f1f5f9}" +
+      ".co-act-win-active,.co-act-win-active:hover{background:#0f172a;color:#fff;border-color:#0f172a}" +
+      ".co-act-body{flex:1;display:flex;flex-direction:column;min-height:0;overflow:auto}" +
+      ".co-act-top{display:flex;gap:16px;padding:16px 24px;border-bottom:1px solid #e2e8f0}" +
+      ".co-act-toplist{flex:0 0 300px;display:flex;flex-direction:column;gap:4px}" +
+      ".co-act-toplist-head,.co-act-bottom-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#94a3b8}" +
+      ".co-act-toprow{display:flex;align-items:center;gap:8px;cursor:pointer;border:0;background:none;padding:3px 4px;border-radius:6px;text-align:left}" +
+      ".co-act-toprow:hover{background:#f1f5f9}" +
+      ".co-act-toprow-key{flex:0 0 120px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
+      ".co-act-toprow-bar{flex:1;height:8px;background:#f1f5f9;border-radius:4px;overflow:hidden}" +
+      ".co-act-toprow-fill{display:block;height:100%;background:#0f172a}" +
+      ".co-act-toprow-n{flex:0 0 auto;font-size:12px;color:#64748b;min-width:56px;text-align:right}" +
+      ".co-act-chart{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}" +
+      ".co-act-svg{width:100%;height:150px;display:block}" +
+      ".co-act-bar{fill:#cbd5e1}.co-act-bar-fail{fill:#ef4444}" +
+      ".co-act-chart-cap{font-size:12px;color:#94a3b8}" +
+      ".co-act-bottom{flex:1;display:flex;flex-direction:column;min-height:0;padding:12px 24px}" +
+      ".co-act-bottom-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}" +
+      ".co-act-feed{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:2px}" +
+      ".co-act-row{display:flex;align-items:baseline;gap:10px;padding:5px 6px;border-radius:6px;font-size:13px}" +
+      ".co-act-row:hover{background:#f8fafc}" +
+      ".co-act-time{flex:0 0 auto;font-size:12px;color:#94a3b8;min-width:150px}" +
+      ".co-act-src{flex:0 0 auto;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;border-radius:4px;padding:1px 6px}" +
+      ".co-act-src-hook{background:#e0e7ff;color:#3730a3}.co-act-src-log{background:#f1f5f9;color:#475569}" +
+      ".co-act-key{flex:0 0 auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#0f172a}" +
+      ".co-act-detail{flex:1;color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
+      ".co-act-empty{padding:12px 4px;font-size:13px;color:#94a3b8}" +
       // --- Dark theme -------------------------------------------------------
       // Two layers: (1) remap the prebuilt panel's own Tailwind utility classes
       // (bg-white, text-slate-*, border-slate-*, …) since the bundle has no dark
@@ -713,7 +751,22 @@ export const PANEL_EXT = `(() => {
       D + ".co-analyze{background:#78350f;border-bottom-color:#92400e;color:#fde68a}" +
       D + ".co-analyze-done{background:#064e3b;border-bottom-color:#166534;color:#6ee7b7}" +
       // Checkbox accents.
-      D + ":is(.co-enabled-box,.co-set-check){accent-color:#818cf8}";
+      D + ":is(.co-enabled-box,.co-set-check){accent-color:#818cf8}" +
+      // Activity overlay.
+      D + ".co-act-top{border-bottom-color:#334155}" +
+      D + ".co-act-win{background:#1e293b;border-color:#475569;color:#cbd5e1}" +
+      D + ".co-act-win:hover{background:#334155}" +
+      D + ":is(.co-act-win-active,.co-act-win-active:hover){background:#475569;border-color:#475569;color:#fff}" +
+      D + ":is(.co-act-toprow-key,.co-act-key){color:#e2e8f0}" +
+      D + ":is(.co-act-toplist-head,.co-act-bottom-title,.co-act-chart-cap,.co-act-time,.co-act-empty){color:#94a3b8}" +
+      D + ".co-act-toprow-n{color:#94a3b8}" +
+      D + ".co-act-detail{color:#cbd5e1}" +
+      D + ":is(.co-act-toprow:hover,.co-act-row:hover){background:#334155}" +
+      D + ":is(.co-act-toprow-bar){background:#334155}" +
+      D + ".co-act-toprow-fill{background:#818cf8}" +
+      D + ".co-act-bar{fill:#475569}" +
+      D + ".co-act-src-hook{background:#312e81;color:#c7d2fe}" +
+      D + ".co-act-src-log{background:#334155;color:#cbd5e1}";
     document.head.appendChild(style);
   }
 
@@ -771,18 +824,21 @@ export const PANEL_EXT = `(() => {
   // NavLink: close the overlay (revealing #root), then click the native tab.
   function gotoNative(label) {
     runActive = false;
-    syncRunView();
+    activityActive = false;
+    syncOverlays();
     forEachNavLeaf((el, txt) => {
       if (txt === label) el.click();
     });
   }
 
-  function injectRunTab() {
+  // Clone a native nav leaf into an injected overlay tab (idempotent — a native
+  // tab click re-renders it away, so decorate() re-injects on each tick).
+  function injectNavTab(cls, label, onOpen) {
     const found = findNav();
-    if (!found || !found.nav || found.nav.querySelector(".co-run-tab")) return;
+    if (!found || !found.nav || found.nav.querySelector("." + cls)) return;
     const tab = found.anchor.cloneNode(true);
-    tab.classList.add("co-run-tab");
-    tab.textContent = "Run";
+    tab.classList.add(cls);
+    tab.textContent = label;
     tab.removeAttribute("aria-selected");
     // The panel's tabs are router <a href> links; without preventDefault the
     // clone would navigate to the Rules route instead of opening our overlay.
@@ -790,22 +846,86 @@ export const PANEL_EXT = `(() => {
     tab.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      runActive = true;
-      syncRunView();
+      onOpen();
     });
-    found.anchor.insertAdjacentElement("afterend", tab);
+    // Insert after the last injected tab (or Rules) so decorate()'s Run-then-
+    // Activity order yields Rules · Run · Activity.
+    const ref =
+      found.nav.querySelector(".co-activity-tab") ||
+      found.nav.querySelector(".co-run-tab") ||
+      found.anchor;
+    ref.insertAdjacentElement("afterend", tab);
   }
 
-  // The overlay lives OUTSIDE #root so React never reconciles it away; showing it
-  // hides #root wholesale (nav included) and a Back button returns to the panel.
-  function syncRunView() {
+  function injectRunTab() {
+    injectNavTab("co-run-tab", "Run", () => {
+      runActive = true;
+      activityActive = false;
+      syncOverlays();
+    });
+  }
+
+  function injectActivityTab() {
+    injectNavTab("co-activity-tab", "Activity", () => openActivity());
+  }
+
+  function openRun() {
+    runActive = true;
+    activityActive = false;
+    syncOverlays();
+  }
+
+  // The branded header shared by the Run and Activity overlays. Rules routes back
+  // to the native panel; Run/Activity switch between the two injected overlays.
+  function buildOverlayNav(active) {
+    const navbar = document.createElement("div");
+    navbar.className = "co-run-navbar";
+    const brand = document.createElement("div");
+    brand.className = "co-run-brand";
+    brand.innerHTML =
+      '<span class="co-run-brand-mark">🧭</span>' +
+      '<span class="co-run-brand-name">Captain Obvious</span>' +
+      '<span class="co-run-badge">control panel</span>';
+    const nav = document.createElement("div");
+    nav.className = "co-run-nav";
+    for (const label of ["Rules", "Run", "Activity"]) {
+      const navTab = document.createElement("button");
+      navTab.type = "button";
+      navTab.className =
+        "co-run-nav-tab" + (label === active ? " co-run-nav-active" : "");
+      navTab.setAttribute("data-nav", label);
+      navTab.textContent = label;
+      nav.appendChild(navTab);
+    }
+    nav.addEventListener("click", (e) => {
+      const t = e.target.closest(".co-run-nav-tab[data-nav]");
+      if (!t) return;
+      const label = t.getAttribute("data-nav");
+      if (label === active) return;
+      if (label === "Run") openRun();
+      else if (label === "Activity") openActivity();
+      else gotoNative(label);
+    });
+    navbar.appendChild(brand);
+    navbar.appendChild(nav);
+    return navbar;
+  }
+
+  // Both overlays live OUTSIDE #root so React never reconciles them away. At most
+  // one shows at a time; whichever is active hides #root wholesale (nav included),
+  // and its branded nav returns to the panel or the sibling overlay.
+  function syncOverlays() {
     const root = document.getElementById("root");
-    const overlay = document.getElementById("co-run-overlay");
-    if (!root || !overlay) return;
-    overlay.style.display = runActive ? "flex" : "none";
-    root.style.display = runActive ? "none" : "";
-    const tab = document.querySelector(".co-run-tab");
-    if (tab) tab.classList.toggle("co-run-tab-active", runActive);
+    const runOverlay = document.getElementById("co-run-overlay");
+    const actOverlay = document.getElementById("co-activity-overlay");
+    if (!root) return;
+    if (runOverlay) runOverlay.style.display = runActive ? "flex" : "none";
+    if (actOverlay) actOverlay.style.display = activityActive ? "flex" : "none";
+    root.style.display = runActive || activityActive ? "none" : "";
+    const runTab = document.querySelector(".co-run-tab");
+    if (runTab) runTab.classList.toggle("co-run-tab-active", runActive);
+    const actTab = document.querySelector(".co-activity-tab");
+    if (actTab) actTab.classList.toggle("co-run-tab-active", activityActive);
   }
 
   function updateRunGate() {
@@ -1067,36 +1187,7 @@ export const PANEL_EXT = `(() => {
     overlay.id = "co-run-overlay";
     overlay.style.display = "none";
 
-    const navbar = document.createElement("div");
-    navbar.className = "co-run-navbar";
-    const brand = document.createElement("div");
-    brand.className = "co-run-brand";
-    brand.innerHTML =
-      '<span class="co-run-brand-mark">🧭</span>' +
-      '<span class="co-run-brand-name">Captain Obvious</span>' +
-      '<span class="co-run-badge">control panel</span>';
-    const nav = document.createElement("div");
-    nav.className = "co-run-nav";
-    for (const label of ["Rules", "Reporting"]) {
-      const navTab = document.createElement("button");
-      navTab.type = "button";
-      navTab.className = "co-run-nav-tab";
-      navTab.setAttribute("data-nav", label);
-      navTab.textContent = label;
-      nav.appendChild(navTab);
-    }
-    const runTab = document.createElement("button");
-    runTab.type = "button";
-    runTab.className = "co-run-nav-tab co-run-nav-active";
-    runTab.textContent = "Run";
-    nav.appendChild(runTab);
-    nav.addEventListener("click", (e) => {
-      const t = e.target.closest(".co-run-nav-tab[data-nav]");
-      if (t) gotoNative(t.getAttribute("data-nav"));
-    });
-    navbar.appendChild(brand);
-    navbar.appendChild(nav);
-    overlay.appendChild(navbar);
+    overlay.appendChild(buildOverlayNav("Run"));
 
     const subbar = document.createElement("div");
     subbar.className = "co-run-subbar";
@@ -2053,6 +2144,239 @@ export const PANEL_EXT = `(() => {
     return group;
   }
 
+  // The row 'lint-naming' → the profiling key 'lint:naming' (best-effort; the
+  // profiling stream carries no rule slug — see activity.ts slugToKey).
+  function slugToKey(slug) {
+    return slug.indexOf("lint-") === 0 ? "lint:" + slug.slice(5) : slug;
+  }
+
+  function activityQuery() {
+    const rules = Array.from(activitySelectedRules);
+    return (
+      "?last=" +
+      encodeURIComponent(activityWindow) +
+      (rules.length ? "&rules=" + encodeURIComponent(rules.join(",")) : "")
+    );
+  }
+
+  function buildActivityView() {
+    if (document.getElementById("co-activity-overlay")) return;
+    const root = document.getElementById("root");
+    if (!root || !root.parentElement) return;
+
+    const overlay = document.createElement("div");
+    overlay.id = "co-activity-overlay";
+    overlay.style.display = "none";
+    overlay.appendChild(buildOverlayNav("Activity"));
+
+    const subbar = document.createElement("div");
+    subbar.className = "co-run-subbar co-act-subbar";
+    const wlabel = document.createElement("span");
+    wlabel.className = "co-run-target-label";
+    wlabel.textContent = "Window";
+    const windows = document.createElement("div");
+    windows.className = "co-act-windows";
+    for (const w of ["1h", "24h", "7d", "30d"]) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "co-act-win" + (w === activityWindow ? " co-act-win-active" : "");
+      b.setAttribute("data-win", w);
+      b.textContent = w;
+      windows.appendChild(b);
+    }
+    windows.addEventListener("click", (e) => {
+      const t = e.target.closest(".co-act-win[data-win]");
+      if (!t) return;
+      activityWindow = t.getAttribute("data-win");
+      for (const btn of windows.querySelectorAll(".co-act-win")) {
+        btn.classList.toggle(
+          "co-act-win-active",
+          btn.getAttribute("data-win") === activityWindow,
+        );
+      }
+      loadActivity(true);
+    });
+    subbar.appendChild(wlabel);
+    subbar.appendChild(windows);
+    overlay.appendChild(subbar);
+
+    const body = document.createElement("div");
+    body.className = "co-act-body";
+
+    const top = document.createElement("div");
+    top.className = "co-act-top";
+    const toplist = document.createElement("div");
+    toplist.className = "co-act-toplist";
+    toplist.id = "co-act-toplist";
+    toplist.addEventListener("click", (e) => {
+      const t = e.target.closest(".co-act-toprow[data-key]");
+      if (!t) return;
+      activitySelectedRules.clear();
+      activitySelectedRules.add(t.getAttribute("data-key"));
+      loadActivity(true);
+    });
+    const chart = document.createElement("div");
+    chart.className = "co-act-chart";
+    chart.id = "co-act-chart";
+    top.appendChild(toplist);
+    top.appendChild(chart);
+    body.appendChild(top);
+
+    const bottom = document.createElement("div");
+    bottom.className = "co-act-bottom";
+    const bhead = document.createElement("div");
+    bhead.className = "co-act-bottom-head";
+    const btitle = document.createElement("span");
+    btitle.className = "co-act-bottom-title";
+    btitle.textContent = "Recent activity";
+    const filter = document.createElement("div");
+    filter.className = "co-act-filter";
+    filter.id = "co-act-filter";
+    bhead.appendChild(btitle);
+    bhead.appendChild(filter);
+    const feed = document.createElement("div");
+    feed.className = "co-act-feed";
+    feed.id = "co-act-feed";
+    bottom.appendChild(bhead);
+    bottom.appendChild(feed);
+    body.appendChild(bottom);
+
+    overlay.appendChild(body);
+    root.parentElement.insertBefore(overlay, root.nextSibling);
+  }
+
+  function openActivity() {
+    runActive = false;
+    activityActive = true;
+    syncOverlays();
+    loadActivity(true);
+  }
+
+  function openActivityForRule(slug) {
+    activitySelectedRules.clear();
+    activitySelectedRules.add(slugToKey(slug));
+    openActivity();
+  }
+
+  // The rule multiselect. Empty selection means "no filter" (all); an all-checked
+  // dropdown collapses back to that, so only a strict subset actually narrows.
+  function renderActivityFilter() {
+    const slot = document.getElementById("co-act-filter");
+    if (!slot) return;
+    const allChecked = activitySelectedRules.size === 0;
+    const selected = allChecked ? activityKeys.slice() : Array.from(activitySelectedRules);
+    const dd = checkboxDropdown({
+      items: activityKeys.map((k) => ({ value: k, label: k })),
+      selected,
+      summaryFn: (vals) => filterLabel("Rules", vals.length, activityKeys.length),
+      onChange: (vals) => {
+        activitySelectedRules.clear();
+        if (vals.length !== activityKeys.length) {
+          for (const v of vals) activitySelectedRules.add(v);
+        }
+        loadActivity(false);
+      },
+    });
+    slot.innerHTML = "";
+    slot.appendChild(dd.details);
+  }
+
+  function renderActivityTop(top) {
+    const el = document.getElementById("co-act-toplist");
+    if (!el) return;
+    if (!top.length) {
+      el.innerHTML = '<div class="co-act-empty">No activity in this window.</div>';
+      return;
+    }
+    const max = Math.max(1, ...top.map((t) => t.runs));
+    let html = '<div class="co-act-toplist-head">Top rules</div>';
+    for (const t of top) {
+      const pct = Math.round((t.runs / max) * 100);
+      const fails = t.failures ? " · " + t.failures + " ✗" : "";
+      html +=
+        '<button type="button" class="co-act-toprow" data-key="' + esc(t.key) + '">' +
+        '<span class="co-act-toprow-key">' + esc(t.key) + "</span>" +
+        '<span class="co-act-toprow-bar"><span class="co-act-toprow-fill" style="width:' +
+        pct + '%"></span></span>' +
+        '<span class="co-act-toprow-n">' + t.runs + fails + "</span></button>";
+    }
+    el.innerHTML = html;
+  }
+
+  // A dependency-free SVG column chart: runs per time bucket, failures overlaid.
+  function renderActivityChart(series) {
+    const el = document.getElementById("co-act-chart");
+    if (!el) return;
+    const buckets = (series && series.buckets) || [];
+    const max = Math.max(1, ...buckets.map((b) => b.runs));
+    const W = 600, H = 150, base = H - 4;
+    const bw = buckets.length ? (W - 8) / buckets.length : 0;
+    let bars = "";
+    buckets.forEach((b, i) => {
+      const h = Math.round((b.runs / max) * (base - 6));
+      const x = (4 + i * bw).toFixed(1);
+      const w = Math.max(1, bw - 1).toFixed(1);
+      bars +=
+        '<rect class="co-act-bar" x="' + x + '" y="' + (base - h) +
+        '" width="' + w + '" height="' + h + '"><title>' + b.runs +
+        " runs</title></rect>";
+      if (b.failures) {
+        const fh = Math.round((b.failures / max) * (base - 6));
+        bars +=
+          '<rect class="co-act-bar-fail" x="' + x + '" y="' + (base - fh) +
+          '" width="' + w + '" height="' + fh + '"><title>' + b.failures +
+          " failures</title></rect>";
+      }
+    });
+    el.innerHTML =
+      '<svg class="co-act-svg" viewBox="0 0 ' + W + " " + H +
+      '" preserveAspectRatio="none">' + bars + "</svg>" +
+      '<div class="co-act-chart-cap">Runs over the last ' + esc(activityWindow) + "</div>";
+  }
+
+  function renderActivityFeed(events) {
+    const el = document.getElementById("co-act-feed");
+    if (!el) return;
+    if (!events.length) {
+      el.innerHTML = '<div class="co-act-empty">No recent activity.</div>';
+      return;
+    }
+    let html = "";
+    for (const ev of events) {
+      const when = new Date(ev.timeMs).toLocaleString();
+      const badge =
+        '<span class="co-act-src co-act-src-' + (ev.source === "hook" ? "hook" : "log") +
+        '">' + ev.source + "</span>";
+      let pill = "";
+      if (ev.status === "failure") pill = '<span class="co-run-pill co-run-pill-n">failure</span>';
+      else if (ev.status === "success") pill = '<span class="co-run-pill co-run-pill-ok">success</span>';
+      html +=
+        '<div class="co-act-row"><span class="co-act-time">' + esc(when) + "</span>" +
+        badge + '<span class="co-act-key">' + esc(ev.key) + "</span>" + pill +
+        '<span class="co-act-detail">' + esc(ev.detail) + "</span></div>";
+    }
+    el.innerHTML = html;
+  }
+
+  async function loadActivityFeed() {
+    const res = await fetch("/api/activity/feed" + activityQuery());
+    if (!res.ok) throw new Error("GET /api/activity/feed -> " + res.status);
+    renderActivityFeed(await res.json());
+  }
+
+  // rebuildFilter is false when the multiselect itself drove the reload, so its
+  // open dropdown isn't torn down mid-interaction.
+  async function loadActivity(rebuildFilter) {
+    const res = await fetch("/api/activity/summary" + activityQuery());
+    if (!res.ok) throw new Error("GET /api/activity/summary -> " + res.status);
+    const data = await res.json();
+    activityKeys = data.keys || [];
+    if (rebuildFilter) renderActivityFilter();
+    renderActivityTop(data.top || []);
+    renderActivityChart(data.series || { bucketMs: 0, buckets: [] });
+    await loadActivityFeed();
+  }
+
   async function start() {
     applyTheme();
     watchSystemTheme();
@@ -2062,6 +2386,7 @@ export const PANEL_EXT = `(() => {
     await loadRunMeta();
     applyProjectRunRoot();
     buildRunView();
+    buildActivityView();
     const root = document.getElementById("root") || document.body;
     new MutationObserver(schedule).observe(root, { childList: true, subtree: true });
     // Delegate on document so a React re-render of the table can't drop the
