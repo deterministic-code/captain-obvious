@@ -1234,9 +1234,17 @@ export const PANEL_EXT = `(() => {
     }
   }
 
+  // decorate() runs on every panel re-render (a MutationObserver tick), so this
+  // must NOT rebuild the <select> unless the project set or selection actually
+  // changed — clobbering options while the native dropdown is open dismisses it,
+  // leaving it "stuck" so a pick (e.g. "New project") never registers.
   function renderProjectOptions() {
     const sel = document.querySelector(".co-project-select");
     if (!sel) return;
+    const sig =
+      projects.map((p) => p.id + ":" + p.name + ":" + (p.isDefault ? 1 : 0)).join("|") +
+      "#" + currentProjectId;
+    if (sel.getAttribute("data-sig") === sig) return;
     sel.innerHTML = "";
     for (const p of projects) {
       const o = document.createElement("option");
@@ -1249,6 +1257,7 @@ export const PANEL_EXT = `(() => {
     nw.textContent = "＋ New project…";
     sel.appendChild(nw);
     if (currentProjectId !== null) sel.value = String(currentProjectId);
+    sel.setAttribute("data-sig", sig);
   }
 
   async function selectProject(id) {
