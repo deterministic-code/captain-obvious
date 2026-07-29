@@ -395,10 +395,10 @@ describe("PANEL_EXT", () => {
     expect(PANEL_EXT.trim().startsWith("(()")).toBe(true);
   });
 
-  it("renders the Run/Report/Settings actions column and settings dialog", () => {
+  it("renders the Run/Activity/Settings actions column and settings dialog", () => {
     expect(PANEL_EXT).toContain('addHeader(headRow, "co-act-th"');
     expect(PANEL_EXT).toContain('data-act="run"');
-    expect(PANEL_EXT).toContain('data-act="report"');
+    expect(PANEL_EXT).toContain('data-act="activity"');
     expect(PANEL_EXT).toContain('data-act="settings"');
     expect(PANEL_EXT).toContain("openRuleSettingsModal");
     expect(PANEL_EXT).toContain("<svg");

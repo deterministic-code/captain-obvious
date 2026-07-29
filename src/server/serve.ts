@@ -26,6 +26,7 @@ import {
   updateProject,
 } from "./registry.js";
 import { profilingMeta, profilingReport } from "./profiling.js";
+import { activityFeed, activitySummary } from "./activity.js";
 import { browse, readSource, runMeta, runRules, type RunRequest } from "./run.js";
 import { analyzeProject, analyzeStatus } from "./analyze.js";
 import { PANEL_EXT } from "./panelExt.js";
@@ -126,12 +127,13 @@ export function startServer(opts: ServeOptions = {}): Promise<void> {
   const host = opts.host ?? "127.0.0.1";
   const dbPath = resolveDbPath({ db: opts.dbPath });
   const db = openDb(dbPath);
-  useAuditLog(openAuditDb(resolveAuditDbPath()));
+  const auditDb = openAuditDb(resolveAuditDbPath());
+  useAuditLog(auditDb);
   const cwd = process.cwd();
   ensureDefaultProject(db, cwd, resolveDefaultProjectName(cwd));
 
   const server = createServer((req, res) => {
-    handle(req, res, db).catch((err) => {
+    handle(req, res, db, auditDb).catch((err) => {
       const message = err instanceof Error ? err.message : String(err);
       if (!res.headersSent) sendJson(res, 400, { error: message });
       else res.end();
@@ -155,6 +157,7 @@ async function handle(
   req: IncomingMessage,
   res: ServerResponse,
   db: ReturnType<typeof openDb>,
+  auditDb: ReturnType<typeof openAuditDb>,
 ): Promise<void> {
   const url = new URL(req.url ?? "/", "http://localhost");
   const { pathname } = url;
@@ -264,6 +267,33 @@ async function handle(
       last: url.searchParams.get("last") ?? undefined,
       group: url.searchParams.get("group") ?? undefined,
     }));
+  }
+
+  // --- activity (profiling "hooker" runs + audit-log config changes) ---
+  if (pathname === "/api/activity/summary" && method === "GET") {
+    if (!existsSync(PROFILE_DB)) {
+      return sendJson(res, 200, {
+        keys: [],
+        top: [],
+        series: { bucketMs: 0, buckets: [] },
+      });
+    }
+    return sendJson(res, 200, activitySummary(PROFILE_DB, {
+      last: url.searchParams.get("last") ?? undefined,
+      rules: url.searchParams.get("rules") ?? undefined,
+    }));
+  }
+  if (pathname === "/api/activity/feed" && method === "GET") {
+    const limit = url.searchParams.get("limit");
+    return sendJson(res, 200, activityFeed(
+      existsSync(PROFILE_DB) ? PROFILE_DB : undefined,
+      auditDb,
+      {
+        last: url.searchParams.get("last") ?? undefined,
+        rules: url.searchParams.get("rules") ?? undefined,
+        limit: limit ? Number(limit) : undefined,
+      },
+    ));
   }
 
   return sendJson(res, 404, { error: `no route: ${method} ${pathname}` });

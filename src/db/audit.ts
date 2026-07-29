@@ -70,3 +70,38 @@ export function latestEvent(logType: string): LogRow | undefined {
     )
     .get(logType) as LogRow | undefined;
 }
+
+export interface LogEntry {
+  logType: string;
+  message: string;
+  created: string;
+}
+export interface ListLogsOpts {
+  /** Keep rows created at/after this epoch-ms instant (omit for no lower bound). */
+  sinceMs?: number;
+  /** Cap the number of newest rows returned (omit for no cap). */
+  limit?: number;
+}
+
+/**
+ * Newest-first config-activity rows. Takes an explicit db handle (not the module
+ * sink) so the Activity feed reads whichever audit DB the server opened, and so
+ * it stays unit-testable. `created` is 'YYYY-MM-DD HH:MM:SS' UTC — compared as a
+ * lexicographically-sortable string against the same format from `sinceMs`.
+ */
+export function listLogs(db: Db, opts: ListLogsOpts = {}): LogEntry[] {
+  const clauses: string[] = [];
+  const params: (string | number)[] = [];
+  if (opts.sinceMs !== undefined) {
+    clauses.push("created >= ?");
+    params.push(new Date(opts.sinceMs).toISOString().slice(0, 19).replace("T", " "));
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const limit = opts.limit !== undefined ? " LIMIT ?" : "";
+  if (opts.limit !== undefined) params.push(opts.limit);
+  return db
+    .prepare(
+      `SELECT log_type AS logType, message, created FROM logs ${where} ORDER BY id DESC${limit}`,
+    )
+    .all(...params) as LogEntry[];
+}
