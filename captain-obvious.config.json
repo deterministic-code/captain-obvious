@@ -1,0 +1,40 @@
+{
+  "gitHooks": {
+    "preCommit": [
+      "lint-comments --staged",
+      "lint-complexity --staged",
+      "lint-dead-code --staged",
+      "lint-prettier --staged",
+      "lint-emitter-casing --staged",
+      "lint-empty-catch --staged",
+      "lint-empty-tests --staged",
+      "lint-frozen-interfaces --staged",
+      "lint-max-lines --staged",
+      "lint-max-file-lines --staged",
+      "lint-max-line-length --staged",
+      "lint-max-params --staged",
+      "lint-max-statements --staged",
+      "lint-naming --staged",
+      "lint-solid-s --staged",
+      "lint-solid-o --staged",
+      "lint-solid-l --staged",
+      "lint-solid-i --staged",
+      "lint-solid-d --staged",
+      "lint-sync-calls --staged",
+      "lint-test-determinism --staged",
+      "lint-test-disabling-skipping --staged",
+      "lint-tests-with-code --staged"
+    ],
+    "prePush": [
+      "lint-dup --push",
+      "lint-dup-fn --push",
+      "lint-dup-structural --push",
+      "lint-coverage --push",
+      "run: npx tsc --noEmit"
+    ]
+  },
+  "claudeHooks": [
+    { "event": "PreToolUse", "matcher": "Edit|Write|NotebookEdit|Bash", "hook": "main-branch-guard", "timeout": 5 },
+    { "event": "Stop", "hook": "stop-unmerged-guard", "timeout": 15 }
+  ]
+}
