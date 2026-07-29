@@ -35,9 +35,9 @@ function ruleId(slug: string): number {
 
 describe("selectDispatch", () => {
   it("returns only the rules whose package stage matches, in seed order", () => {
-    const expected = RULES.filter((r) => r.meta.stage === "pre-commit").map(
-      (r) => r.meta.slug,
-    );
+    const expected = RULES.filter((r) =>
+      r.meta.stages.includes("pre-commit"),
+    ).map((r) => r.meta.slug);
     expect(slugsFor("pre-commit")).toEqual(expected);
   });
 

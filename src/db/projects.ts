@@ -63,12 +63,14 @@ interface InsertProjectFields {
   description?: string;
   files?: string[];
   directories?: string[];
+  protected?: string[];
   isDefault: boolean;
 }
 
 /** Insert one project row and snapshot the current global rule config into it. */
 function insertProject(db: Db, fields: InsertProjectFields): ProjectRow {
-  const { name, description, files, directories, isDefault } = fields;
+  const { name, description, files, directories, protected: protectedGlobs, isDefault } =
+    fields;
   if (!name) throw new Error("add-project requires a name");
   const slug = slugify(name);
 
@@ -77,7 +79,7 @@ function insertProject(db: Db, fields: InsertProjectFields): ProjectRow {
     try {
       id = db
         .prepare(
-          "INSERT INTO projects (slug, name, description, files, directories, is_default) VALUES (?, ?, ?, ?, ?, ?)",
+          "INSERT INTO projects (slug, name, description, files, directories, protected, is_default) VALUES (?, ?, ?, ?, ?, ?, ?)",
         )
         .run(
           slug,
@@ -85,6 +87,7 @@ function insertProject(db: Db, fields: InsertProjectFields): ProjectRow {
           description ?? null,
           pathsJson(files),
           pathsJson(directories),
+          pathsJson(protectedGlobs),
           isDefault ? 1 : 0,
         ).lastInsertRowid;
     } catch (err) {
@@ -152,6 +155,12 @@ export function configureProject(
     if (opts.directories !== undefined) {
       db.prepare("UPDATE projects SET directories = ? WHERE id = ?").run(
         pathsJson(opts.directories),
+        id,
+      );
+    }
+    if (opts.protected !== undefined) {
+      db.prepare("UPDATE projects SET protected = ? WHERE id = ?").run(
+        pathsJson(opts.protected),
         id,
       );
     }
@@ -293,4 +302,17 @@ export function ensureDefaultProject(db: Db, root: string, name: string): Projec
   const row = insertProject(db, { name, directories: [root], isDefault: true });
   logEvent("project.added", `added default project ${row.slug}`);
   return row;
+}
+
+/**
+ * The default project's protected-glob list (is_default = 1), or [] when there
+ * is no default project yet or it protects nothing. A pure read for the git/
+ * Claude hooks, which run outside the server and must not throw on an
+ * un-provisioned registry.
+ */
+export function getDefaultProjectProtected(db: Db): string[] {
+  const row = db
+    .prepare("SELECT protected FROM projects WHERE is_default = 1")
+    .get() as { protected: string | null } | undefined;
+  return row?.protected ? (JSON.parse(row.protected) as string[]) : [];
 }

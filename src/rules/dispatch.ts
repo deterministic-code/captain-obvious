@@ -43,7 +43,7 @@ export function selectDispatch(db: Db, stage: Stage): Dispatched[] {
       WHERE r.slug = ? AND ra.environment_id IS NULL AND t.slug = 'warn'`,
   );
   return RULES.filter(
-    (r) => r.meta.stage === stage && enabled.has(r.meta.slug),
+    (r) => r.meta.stages.includes(stage) && enabled.has(r.meta.slug),
   ).map((r) => ({
     slug: r.meta.slug,
     advisory: warnBinding.get(r.meta.slug) !== undefined,

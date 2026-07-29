@@ -178,7 +178,7 @@ export function listRules(db: Db): RuleView[] {
       categories: orderCategories(r.category, categoriesByRule.get(r.id) ?? []),
       languages,
       languageIndependent: languages.length === 0,
-      stage: META_BY_SLUG.get(r.slug)?.stage ?? null,
+      stage: META_BY_SLUG.get(r.slug)?.stages[0] ?? null,
       enabled: r.enabled === 1,
       config: parseConfig(r.config_json),
       defaultAction: def ? { type: def.type, delayMs: def.delayMs } : null,
@@ -238,7 +238,7 @@ export function getStats(db: Db): StatsView {
     if (r.enabled === 1) enabled += 1;
     const cat = r.category ?? "uncategorized";
     byCategory[cat] = (byCategory[cat] ?? 0) + 1;
-    const stage = META_BY_SLUG.get(r.slug)?.stage ?? "unknown";
+    const stage = META_BY_SLUG.get(r.slug)?.stages[0] ?? "unknown";
     byStage[stage] = (byStage[stage] ?? 0) + 1;
   }
 
@@ -340,6 +340,7 @@ export interface ProjectView {
   description: string | null;
   files: string[];
   directories: string[];
+  protected: string[];
   isDefault: boolean;
 }
 
@@ -355,6 +356,7 @@ function toProjectView(row: ProjectRow): ProjectView {
     description: row.description,
     files: parsePaths(row.files),
     directories: parsePaths(row.directories),
+    protected: parsePaths(row.protected),
     isDefault: row.is_default === 1,
   };
 }
@@ -369,6 +371,7 @@ export interface ProjectPatch {
   description?: string;
   files?: string[];
   directories?: string[];
+  protected?: string[];
 }
 
 /** POST /api/projects — create a project, snapshotting the global rule config. */
@@ -381,6 +384,7 @@ export function createProject(db: Db, body: ProjectPatch): ProjectView {
       description: body.description,
       files: body.files,
       directories: body.directories,
+      protected: body.protected,
     }),
   );
 }

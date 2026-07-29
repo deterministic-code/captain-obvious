@@ -42,6 +42,8 @@ export interface ProjectRow {
   files: string | null;
   /** JSON array of absolute directory paths, or null. */
   directories: string | null;
+  /** JSON array of glob patterns the project protects from edits/commits, or null. */
+  protected: string | null;
   /** 1 for the repo the hook is installed in, else 0. */
   is_default: number;
 }
@@ -134,6 +136,8 @@ export interface AddProjectOpts {
   files?: string[];
   /** Absolute directory paths this project scopes to. */
   directories?: string[];
+  /** Glob patterns the project protects from edits/commits. */
+  protected?: string[];
 }
 
 export interface ConfigureProjectOpts {
@@ -143,6 +147,8 @@ export interface ConfigureProjectOpts {
   files?: string[];
   /** Replace the project's directory list wholesale. */
   directories?: string[];
+  /** Replace the project's protected-glob list wholesale. */
+  protected?: string[];
 }
 
 /** Project-scoped edit of a rule's enabled flag, languages, config, and severity. */

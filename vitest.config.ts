@@ -26,6 +26,8 @@ export default defineConfig({
         "src/bin/**", // CLI entry: dispatches to already-tested db/* helpers
         "src/server/serve.ts", // HTTP server bootstrap (routing over tested handlers)
         "hooks/git/dispatch.mjs", // git-hook entry shim: imports compiled dist and calls runDispatch (tested in src/rules/dispatch.ts)
+        "hooks/git/protected-globs.mjs", // bridge to compiled dist (readProtectedGlobs/matchProtected, tested in src/rules/protectedPaths.ts)
+        "hooks/claude/protected-paths-guard.mjs", // PreToolUse I/O shim: stdin+git+db, decision tested in src/rules/claudeGuard.ts
       ],
       thresholds: {
         statements: 100,

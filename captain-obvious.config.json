@@ -39,6 +39,7 @@
   },
   "claudeHooks": [
     { "event": "PreToolUse", "matcher": "Edit|Write|NotebookEdit|Bash", "hook": "main-branch-guard", "timeout": 5 },
+    { "event": "PreToolUse", "matcher": "Edit|Write|NotebookEdit", "hook": "protected-paths-guard", "timeout": 5 },
     { "event": "Stop", "hook": "stop-unmerged-guard", "timeout": 15 }
   ]
 }

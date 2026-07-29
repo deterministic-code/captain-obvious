@@ -105,4 +105,23 @@ describe("openDb against a real file", () => {
       .get("typescript") as { name: string; is_supported: number };
     expect(ts).toEqual({ name: "TypeScript", is_supported: 1 });
   });
+
+  it("migrates a pre-protected projects table by adding the column", () => {
+    const file = join(dir, "old-projects.db");
+    const raw = new Database(file);
+    raw.exec(
+      `CREATE TABLE projects (
+         id INTEGER PRIMARY KEY, slug TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+         description TEXT, files TEXT, directories TEXT,
+         is_default INTEGER NOT NULL DEFAULT 0
+       ) STRICT`,
+    );
+    raw.close();
+
+    db = openDb(file);
+    const cols = db.prepare("PRAGMA table_info(projects)").all() as {
+      name: string;
+    }[];
+    expect(cols.some((c) => c.name === "protected")).toBe(true);
+  });
 });

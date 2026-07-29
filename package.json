@@ -94,6 +94,7 @@
     "better-sqlite3": "^13.0.1",
     "jscpd": "^3.5.10",
     "knip": "^6.24.0",
+    "picomatch": "^4.0.5",
     "prettier": "^3.4.0",
     "typescript": "^5.7.0",
     "yaml": "^2.6.0"
@@ -101,6 +102,7 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^22.10.0",
+    "@types/picomatch": "^4.0.3",
     "@vitest/coverage-v8": "^2.1.9",
     "happy-dom": "^20.11.1",
     "vitest": "^2.1.0"
