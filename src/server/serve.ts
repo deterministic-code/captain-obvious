@@ -21,6 +21,7 @@ import {
 } from "./registry.js";
 import { profilingMeta, profilingReport } from "./profiling.js";
 import { browse, readSource, runMeta, runRules, type RunRequest } from "./run.js";
+import { analyzeProject, analyzeStatus } from "./analyze.js";
 import { PANEL_EXT } from "./panelExt.js";
 
 // dist/server/serve.js -> repo root (matches open.ts's pkgRoot derivation).
@@ -184,6 +185,15 @@ async function handle(
   if (pathname === "/api/run" && method === "POST") {
     const body = (await readBody(req)) as RunRequest;
     return sendJson(res, 200, await runRules(body));
+  }
+
+  // --- analyze (detect the project's languages; log the scan) ---
+  if (pathname === "/api/analyze/status" && method === "GET") {
+    return sendJson(res, 200, analyzeStatus());
+  }
+  if (pathname === "/api/analyze" && method === "POST") {
+    const body = (await readBody(req)) as { path?: string };
+    return sendJson(res, 200, await analyzeProject(body?.path));
   }
 
   // --- profiling (separate DB) ---

@@ -23,6 +23,10 @@ const META = {
 
 let patchCalls: { url: string; body: { languages: string[] } }[];
 let runCalls: { slugs: string[]; path: string }[];
+let analyzeCalls: unknown[];
+let analyzeFails: boolean;
+let analyzeStatusResult: { analyzed: boolean; lastAnalyzed: string | null };
+let lsStore: Map<string, string>;
 const RUN_RESULT = [
   {
     slug: "lint-a",
@@ -81,6 +85,16 @@ async function runInjected() {
 beforeEach(() => {
   patchCalls = [];
   runCalls = [];
+  analyzeCalls = [];
+  analyzeFails = false;
+  analyzeStatusResult = { analyzed: true, lastAnalyzed: "2026-01-01T00:00:00Z" };
+  // This happy-dom build ships no Storage, so stub localStorage the way the panel
+  // uses it (get/set), Map-backed and fresh per test.
+  lsStore = new Map();
+  vi.stubGlobal("localStorage", {
+    getItem: (k: string) => (lsStore.has(k) ? lsStore.get(k) : null),
+    setItem: (k: string, v: string) => void lsStore.set(k, String(v)),
+  });
   vi.stubGlobal("fetch", async (url: string, opts?: RequestInit) => {
     if (url === "/api/rules") return jsonRes(RULES);
     if (url === "/api/meta") return jsonRes(META);
@@ -108,6 +122,19 @@ beforeEach(() => {
     if (url === "/api/run") {
       runCalls.push(JSON.parse(opts?.body as string));
       return jsonRes(RUN_RESULT);
+    }
+    if (url === "/api/analyze/status") return jsonRes(analyzeStatusResult);
+    if (url === "/api/analyze") {
+      analyzeCalls.push(JSON.parse((opts?.body as string) || "{}"));
+      if (analyzeFails) {
+        return { ok: false, status: 400, json: async () => ({ error: "scan failed" }) } as unknown as Response;
+      }
+      return jsonRes({
+        root: "/proj",
+        totalFiles: 3,
+        otherFiles: 1,
+        languages: [{ slug: "typescript", name: "TypeScript", files: 3 }],
+      });
     }
     if (typeof url === "string" && url.startsWith("/api/run/file")) {
       const p = new URL(url, "http://x").searchParams.get("path")!;
@@ -479,5 +506,62 @@ describe("panelExt injected script", () => {
     expect(editor.querySelector(".co-code")).not.toBeNull();
     expect(editor.querySelector("#co-ed-active")).toBeNull();
     expect(editor.querySelectorAll(".co-caret")).toHaveLength(0);
+  });
+
+  it("shows no analyze banner once the project has been analyzed", async () => {
+    await runInjected(); // analyzeStatusResult defaults to analyzed:true
+    expect(document.getElementById("co-analyze")).toBeNull();
+  });
+
+  it("prompts to analyze when the project hasn't been analyzed", async () => {
+    analyzeStatusResult = { analyzed: false, lastAnalyzed: null };
+    await runInjected();
+    const banner = document.getElementById("co-analyze")!;
+    expect(banner).not.toBeNull();
+    expect(banner.textContent).toContain("hasn't been analyzed");
+    expect(banner.querySelector(".co-analyze-run")).not.toBeNull();
+  });
+
+  it("Ignore hides the banner and remembers the choice for this browser", async () => {
+    analyzeStatusResult = { analyzed: false, lastAnalyzed: null };
+    await runInjected();
+    (document.querySelector(".co-analyze-ignore") as HTMLElement).click();
+    expect(document.getElementById("co-analyze")).toBeNull();
+    expect(lsStore.get("co-analyze-ignored")).toBe("1");
+  });
+
+  it("does not prompt again when this browser has ignored the banner", async () => {
+    analyzeStatusResult = { analyzed: false, lastAnalyzed: null };
+    lsStore.set("co-analyze-ignored", "1");
+    await runInjected();
+    expect(document.getElementById("co-analyze")).toBeNull();
+  });
+
+  it("Analyze posts the scan and shows the detected languages, then Dismiss clears it", async () => {
+    analyzeStatusResult = { analyzed: false, lastAnalyzed: null };
+    await runInjected();
+    (document.querySelector(".co-analyze-run") as HTMLElement).click();
+    for (let i = 0; i < 3; i++) await flush();
+
+    expect(analyzeCalls).toHaveLength(1);
+    const banner = document.getElementById("co-analyze")!;
+    expect(banner.classList.contains("co-analyze-done")).toBe(true);
+    expect(banner.textContent).toContain("TypeScript (3)");
+
+    (banner.querySelector(".co-analyze-ignore") as HTMLElement).click();
+    expect(document.getElementById("co-analyze")).toBeNull();
+  });
+
+  it("shows the error and re-enables the button when analyze fails", async () => {
+    analyzeStatusResult = { analyzed: false, lastAnalyzed: null };
+    analyzeFails = true;
+    await runInjected();
+    const runBtn = document.querySelector(".co-analyze-run") as HTMLButtonElement;
+    runBtn.click();
+    for (let i = 0; i < 3; i++) await flush();
+
+    const banner = document.getElementById("co-analyze")!;
+    expect(banner.textContent).toContain("scan failed");
+    expect(runBtn.disabled).toBe(false);
   });
 });
