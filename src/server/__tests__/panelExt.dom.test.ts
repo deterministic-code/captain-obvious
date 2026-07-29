@@ -21,7 +21,24 @@ const META = {
   ],
 };
 
-let patchCalls: { url: string; body: { languages: string[] } }[];
+interface ProjectView {
+  id: number;
+  slug: string;
+  name: string;
+  description: string | null;
+  files: string[];
+  directories: string[];
+  isDefault: boolean;
+}
+
+// lint-a is disabled in project 2 only, so switching projects flips its toggle.
+function projectRules(id: number) {
+  return RULES.map((r) => ({ ...r, enabled: !(id === 2 && r.slug === "lint-a") }));
+}
+
+let projectList: ProjectView[];
+let projectCreateCalls: { name: string; directories: string[] }[];
+let patchCalls: { url: string; body: Record<string, unknown> }[];
 let runCalls: { slugs: string[]; path: string }[];
 let analyzeCalls: unknown[];
 let analyzeFails: boolean;
@@ -49,7 +66,7 @@ function row(slug: string, name: string, category: string): string {
     '<tr class="row"><td><div class="font-medium">' + name + "</div>" +
     '<div class="font-mono">' + slug + "</div></td>" +
     "<td><span>" + category + "</span></td>" +
-    "<td>pre-commit</td><td>on</td><td>action</td></tr>"
+    '<td>pre-commit</td><td class="text-center">on</td><td>action</td></tr>'
   );
 }
 
@@ -83,6 +100,11 @@ async function runInjected() {
 }
 
 beforeEach(() => {
+  projectList = [
+    { id: 1, slug: "repo", name: "Repo", description: null, files: [], directories: ["/proj"], isDefault: true },
+    { id: 2, slug: "web", name: "Web", description: null, files: [], directories: ["/proj/src"], isDefault: false },
+  ];
+  projectCreateCalls = [];
   patchCalls = [];
   runCalls = [];
   analyzeCalls = [];
@@ -96,6 +118,25 @@ beforeEach(() => {
     setItem: (k: string, v: string) => void lsStore.set(k, String(v)),
   });
   vi.stubGlobal("fetch", async (url: string, opts?: RequestInit) => {
+    if (url === "/api/projects" && opts?.method === "POST") {
+      const body = JSON.parse(opts.body as string);
+      projectCreateCalls.push(body);
+      const created = {
+        id: 3,
+        slug: "gamma",
+        name: body.name,
+        description: body.description ?? null,
+        files: body.files ?? [],
+        directories: body.directories ?? [],
+        isDefault: false,
+      };
+      projectList.push(created);
+      return jsonRes(created);
+    }
+    if (url === "/api/projects") return jsonRes(projectList);
+    if (typeof url === "string" && /^\/api\/projects\/\d+\/rules$/.test(url)) {
+      return jsonRes(projectRules(Number(url.split("/")[3])));
+    }
     if (url === "/api/rules") return jsonRes(RULES);
     if (url === "/api/meta") return jsonRes(META);
     if (url === "/api/run/meta") {
@@ -303,8 +344,8 @@ describe("panelExt injected script", () => {
     for (let i = 0; i < 3; i++) await flush();
 
     expect(patchCalls).toHaveLength(1);
-    expect(patchCalls[0].url).toBe("/api/rules/lint-a");
-    expect([...patchCalls[0].body.languages].sort()).toEqual([
+    expect(patchCalls[0].url).toBe("/api/projects/1/rules/lint-a");
+    expect([...(patchCalls[0].body.languages as string[])].sort()).toEqual([
       "javascript",
       "typescript",
     ]);
@@ -592,5 +633,78 @@ describe("panelExt injected script", () => {
     const banner = document.getElementById("co-analyze")!;
     expect(banner.textContent).toContain("scan failed");
     expect(runBtn.disabled).toBe(false);
+  });
+
+  const enabledBox = (slug: string) => {
+    const tr = [...document.querySelectorAll("tbody tr")].find(
+      (r) => r.querySelector(".font-mono")?.textContent === slug,
+    )!;
+    return tr.querySelector<HTMLInputElement>(".co-enabled-td .co-enabled-box")!;
+  };
+
+  it("renders a header project selector defaulting to the installed project", async () => {
+    await runInjected();
+    const sel = document.querySelector<HTMLSelectElement>(".co-project-select")!;
+    const opts = [...sel.options].map((o) => o.textContent);
+    expect(opts).toEqual(["Repo (default)", "Web", "＋ New project…"]);
+    expect(sel.value).toBe("1");
+  });
+
+  it("swaps the native Enabled toggle for a project-scoped one that PATCHes enabled", async () => {
+    await runInjected();
+    const tr = document.querySelector("tbody tr")!; // lint-a
+    // Native enabled cell hidden; our project toggle rendered and checked.
+    expect(tr.querySelector<HTMLElement>("td.text-center")!.style.display).toBe("none");
+    const box = enabledBox("lint-a");
+    expect(box.checked).toBe(true);
+
+    box.checked = false;
+    box.dispatchEvent(new Event("change", { bubbles: true }));
+    for (let i = 0; i < 3; i++) await flush();
+    expect(patchCalls).toHaveLength(1);
+    expect(patchCalls[0].url).toBe("/api/projects/1/rules/lint-a");
+    expect(patchCalls[0].body).toEqual({ enabled: false });
+  });
+
+  it("switching projects reloads the table with that project's config", async () => {
+    await runInjected();
+    expect(enabledBox("lint-a").checked).toBe(true);
+    const sel = document.querySelector<HTMLSelectElement>(".co-project-select")!;
+    sel.value = "2";
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+    for (let i = 0; i < 4; i++) await flush();
+    // Project 2 has lint-a disabled.
+    expect(enabledBox("lint-a").checked).toBe(false);
+    expect(lsStore.get("co-project")).toBe("2");
+  });
+
+  it("restores the last-selected project from localStorage", async () => {
+    lsStore.set("co-project", "2");
+    await runInjected();
+    expect(document.querySelector<HTMLSelectElement>(".co-project-select")!.value).toBe("2");
+    expect(enabledBox("lint-a").checked).toBe(false);
+  });
+
+  it("creates a project from the modal, then selects it", async () => {
+    await runInjected();
+    const sel = document.querySelector<HTMLSelectElement>(".co-project-select")!;
+    sel.value = "__new__";
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+    for (let i = 0; i < 3; i++) await flush();
+
+    const modal = document.getElementById("co-project-modal")!;
+    expect(modal).not.toBeNull();
+    // The folder browser loaded the run root's listing.
+    expect(modal.querySelector(".co-modal-browser-path")!.textContent).toBe("/proj");
+    modal.querySelector<HTMLButtonElement>(".co-modal-use")!.click();
+
+    (modal.querySelector<HTMLInputElement>(".co-modal-name")!).value = "Gamma";
+    modal.querySelector<HTMLButtonElement>(".co-modal-create")!.click();
+    for (let i = 0; i < 4; i++) await flush();
+
+    expect(projectCreateCalls).toHaveLength(1);
+    expect(projectCreateCalls[0]).toMatchObject({ name: "Gamma", directories: ["/proj"] });
+    expect(document.getElementById("co-project-modal")).toBeNull();
+    expect(document.querySelector<HTMLSelectElement>(".co-project-select")!.value).toBe("3");
   });
 });

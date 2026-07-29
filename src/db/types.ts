@@ -33,6 +33,19 @@ export interface ActionTypeRow {
   name: string;
 }
 
+export interface ProjectRow {
+  id: number;
+  slug: string;
+  name: string;
+  description: string | null;
+  /** JSON array of absolute file paths, or null. */
+  files: string | null;
+  /** JSON array of absolute directory paths, or null. */
+  directories: string | null;
+  /** 1 for the repo the hook is installed in, else 0. */
+  is_default: number;
+}
+
 export interface RuleActionRow {
   id: number;
   rule_id: number;
@@ -112,4 +125,29 @@ export interface ConfigureActionOpts {
   /** Create the action type if it does not exist. */
   add?: boolean;
   name?: string;
+}
+
+export interface AddProjectOpts {
+  name: string;
+  description?: string;
+  /** Absolute file paths this project scopes to. */
+  files?: string[];
+  /** Absolute directory paths this project scopes to. */
+  directories?: string[];
+}
+
+export interface ConfigureProjectOpts {
+  name?: string;
+  description?: string;
+  /** Replace the project's file list wholesale. */
+  files?: string[];
+  /** Replace the project's directory list wholesale. */
+  directories?: string[];
+}
+
+/** Project-scoped edit of a rule's enabled flag and/or language set. */
+export interface SetProjectRuleOpts {
+  enabled?: boolean;
+  /** The rule's full desired language set for this project; each slug must exist. */
+  languages?: string[];
 }

@@ -6,10 +6,18 @@
  */
 import { configureActionType } from "../db/actions.js";
 import type { RuleAction } from "../db/fixes.js";
+import {
+  addProject,
+  configureProject,
+  getProject,
+  listProjects as listProjectRows,
+  setProjectRule,
+  syncProjectRules,
+} from "../db/projects.js";
 import { configureRule } from "../db/rules.js";
 import { seedRules, type SeedSummary } from "../db/seed.js";
 import type { Db } from "../db/open.js";
-import type { RuleRow } from "../db/types.js";
+import type { ProjectRow, RuleRow } from "../db/types.js";
 import { RULES } from "../rules/index.js";
 
 /** slug -> registry metadata (the DB has no `stage` column; it lives here). */
@@ -318,6 +326,131 @@ export function patchRule(db: Db, slug: string, patch: RulePatch): RuleView {
 /** POST /api/seed — populate the registry from the bundled rule set. */
 export function seed(db: Db): SeedSummary {
   return seedRules(db, RULES);
+}
+
+// --- projects -------------------------------------------------------------
+// Projects overlay the global catalog with their own per-rule enabled flag and
+// language set. listProjectRules returns the same RuleView shape the panel
+// already consumes, so panelExt only swaps the URL it reads from.
+
+export interface ProjectView {
+  id: number;
+  slug: string;
+  name: string;
+  description: string | null;
+  files: string[];
+  directories: string[];
+  isDefault: boolean;
+}
+
+function parsePaths(json: string | null): string[] {
+  return json ? (JSON.parse(json) as string[]) : [];
+}
+
+function toProjectView(row: ProjectRow): ProjectView {
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    description: row.description,
+    files: parsePaths(row.files),
+    directories: parsePaths(row.directories),
+    isDefault: row.is_default === 1,
+  };
+}
+
+/** GET /api/projects — every project, the default first. */
+export function listProjects(db: Db): ProjectView[] {
+  return listProjectRows(db).map(toProjectView);
+}
+
+export interface ProjectPatch {
+  name?: string;
+  description?: string;
+  files?: string[];
+  directories?: string[];
+}
+
+/** POST /api/projects — create a project, snapshotting the global rule config. */
+export function createProject(db: Db, body: ProjectPatch): ProjectView {
+  const name = (body.name ?? "").trim();
+  if (!name) throw new Error("name is required");
+  return toProjectView(
+    addProject(db, {
+      name,
+      description: body.description,
+      files: body.files,
+      directories: body.directories,
+    }),
+  );
+}
+
+/** PATCH /api/projects/:id — edit name/description/paths. */
+export function updateProject(db: Db, id: number, body: ProjectPatch): ProjectView {
+  return toProjectView(configureProject(db, id, body));
+}
+
+/** GET /api/projects/:id/rules — every rule with this project's enabled + languages. */
+export function listProjectRules(db: Db, projectId: number): RuleView[] {
+  getProject(db, projectId);
+  syncProjectRules(db, projectId);
+
+  const enabledBySlug = new Map<string, number>();
+  for (const row of db
+    .prepare(
+      `SELECT r.slug AS slug, pr.enabled AS enabled
+         FROM project_rules pr
+         JOIN rules r ON r.id = pr.rule_id
+        WHERE pr.project_id = ?`,
+    )
+    .all(projectId) as { slug: string; enabled: number }[]) {
+    enabledBySlug.set(row.slug, row.enabled);
+  }
+
+  const langsBySlug = new Map<string, string[]>();
+  for (const row of db
+    .prepare(
+      `SELECT r.slug AS slug, l.slug AS lang
+         FROM project_rule_languages prl
+         JOIN rules r ON r.id = prl.rule_id
+         JOIN languages l ON l.id = prl.language_id
+        WHERE prl.project_id = ?
+        ORDER BY l.slug`,
+    )
+    .all(projectId) as { slug: string; lang: string }[]) {
+    const list = langsBySlug.get(row.slug) ?? [];
+    list.push(row.lang);
+    langsBySlug.set(row.slug, list);
+  }
+
+  // syncProjectRules guarantees a project_rules row per rule, so a missing map
+  // entry reads as disabled rather than needing an unreachable fallback branch.
+  return listRules(db).map((rule) => {
+    const languages = langsBySlug.get(rule.slug) ?? [];
+    return {
+      ...rule,
+      enabled: enabledBySlug.get(rule.slug) === 1,
+      languages,
+      languageIndependent: languages.length === 0,
+    };
+  });
+}
+
+export interface ProjectRulePatch {
+  enabled?: boolean;
+  languages?: string[];
+}
+
+/** PATCH /api/projects/:id/rules/:slug — set this project's enabled/languages for a rule. */
+export function patchProjectRule(
+  db: Db,
+  projectId: number,
+  slug: string,
+  patch: ProjectRulePatch,
+): RuleView {
+  setProjectRule(db, projectId, slug, patch);
+  // setProjectRule validated the slug, so the rule is always in the list.
+  return listProjectRules(db, projectId).find((r) => r.slug === slug)!;
 }
 
 /** POST /api/action-types — add (or rename) an action type. */
