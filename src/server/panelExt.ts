@@ -59,6 +59,15 @@ export const PANEL_EXT = `(() => {
   const ICON_SETTINGS = svgIcon(
     '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
   );
+  const ICON_THEME_AUTO = svgIcon(
+    '<rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>',
+  );
+  const ICON_THEME_LIGHT = svgIcon(
+    '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>',
+  );
+  const ICON_THEME_DARK = svgIcon('<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>');
+  const THEME_ICONS = { auto: ICON_THEME_AUTO, light: ICON_THEME_LIGHT, dark: ICON_THEME_DARK };
+  const THEME_TITLES = { auto: "System theme", light: "Light theme", dark: "Dark theme" };
   const ACTIONS_HTML =
     '<button type="button" class="co-act-btn" data-act="run" title="Run this rule" aria-label="Run this rule">' + ICON_RUN + "</button>" +
     '<button type="button" class="co-act-btn" data-act="report" title="Open reporting" aria-label="Open reporting">' + ICON_REPORT + "</button>" +
@@ -570,9 +579,15 @@ export const PANEL_EXT = `(() => {
       // Header project selector (top-right).
       ".co-project-wrap{display:flex;align-items:center;gap:8px;margin-left:auto}" +
       ".co-project-label{font-size:12px;font-weight:600;color:#64748b}" +
-      ":is(.co-project-select,.co-theme-select){font-size:13px;padding:5px 10px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#0f172a;cursor:pointer;outline:none}" +
-      ":is(.co-project-select,.co-theme-select):focus{border-color:#94a3b8}" +
-      ".co-theme-select{margin-right:6px}" +
+      ".co-project-select{font-size:13px;padding:5px 10px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#0f172a;cursor:pointer;outline:none}" +
+      ".co-project-select:focus{border-color:#94a3b8}" +
+      // Titleless segmented theme control (System / Light / Dark).
+      ".co-theme-seg{display:inline-flex;align-items:center;margin-right:6px;border:1px solid #cbd5e1;border-radius:6px;overflow:hidden;background:#fff}" +
+      ".co-theme-btn{cursor:pointer;border:0;background:none;padding:4px 7px;color:#64748b;display:inline-flex;align-items:center}" +
+      ".co-theme-btn + .co-theme-btn{border-left:1px solid #e2e8f0}" +
+      ".co-theme-btn svg{width:16px;height:16px}" +
+      ".co-theme-btn:hover{background:#f1f5f9;color:#0f172a}" +
+      ".co-theme-btn-active,.co-theme-btn-active:hover{background:#0f172a;color:#fff}" +
       ".co-enabled-td{text-align:center}" +
       ".co-enabled{display:inline-flex;align-items:center;cursor:pointer}" +
       ".co-enabled-box{width:16px;height:16px;cursor:pointer;accent-color:#0f172a}" +
@@ -656,7 +671,10 @@ export const PANEL_EXT = `(() => {
       D + ".co-modal{background:rgba(0,0,0,.6)}" +
       D + ":is(.co-dd-panel,.co-run-browser,.co-modal-card,.co-modal-browser){background:#1e293b;border-color:#334155}" +
       D + ":is(.co-run-navbar,.co-run-subbar,.co-run-browser-head,.co-run-rule-head,.co-ed-head,.co-modal-browser-head){background:#0f172a}" +
-      D + ":is(.co-dd-search,.co-run-path,.co-modal-input,.co-set-select,.co-project-select,.co-theme-select){background:#0f172a;border-color:#475569;color:#e2e8f0}" +
+      D + ":is(.co-dd-search,.co-run-path,.co-modal-input,.co-set-select,.co-project-select){background:#0f172a;border-color:#475569;color:#e2e8f0}" +
+      D + ".co-theme-seg{background:#1e293b;border-color:#475569}" +
+      D + ".co-theme-btn + .co-theme-btn{border-left-color:#475569}" +
+      D + ".co-theme-btn-active,.co-theme-btn-active:hover{background:#475569;color:#fff}" +
       D + ":is(.co-fix-summary,.co-dd-summary,.co-dd-foot button,.co-run-browse-btn,.co-modal-btn,.co-analyze-ignore){background:#1e293b;border-color:#475569;color:#cbd5e1}" +
       // Primary (accent) buttons and the active nav pill.
       D + ":is(.co-dd-close,.co-run-use,.co-run-btn,.co-run-nav-active,.co-modal-use,.co-modal-btn-primary,.co-analyze-run){background:#475569;border-color:#475569;color:#fff}" +
@@ -664,7 +682,7 @@ export const PANEL_EXT = `(() => {
       // Hover surfaces for list items, entries, tabs, action icons.
       D + ":is(.co-dd-item,.co-run-entry,.co-modal-entry,.co-run-vio,.co-run-nav-tab):hover{background:#334155}" +
       D + ":is(.co-dd-foot button,.co-run-browse-btn,.co-modal-btn,.co-analyze-ignore):hover{background:#334155}" +
-      D + ".co-act-btn:hover{background:#334155;color:#f1f5f9}" +
+      D + ":is(.co-act-btn,.co-theme-btn):hover{background:#334155;color:#f1f5f9}" +
       // Borders.
       D + ":is(.co-run-navbar,.co-run-subbar,.co-run-browser-head,.co-run-rule-head,.co-ed-head,.co-modal-browser-head,.co-run-picker-head,.co-dd-all-item,.co-dd-foot,.co-run-rule,.co-run-results,.co-run-sidebar,.co-run-sidebar-foot,.co-set-section){border-color:#334155}" +
       D + ".co-fix + .co-fix{border-color:#334155}" +
@@ -673,7 +691,7 @@ export const PANEL_EXT = `(() => {
       D + ":is(.co-run-brand-name,.co-run-slug,.co-modal-title,.co-set-heading,.co-set-enabled){color:#f1f5f9}" +
       D + ":is(.co-line,.co-fix-path,.co-run-dir,.co-run-updir,.co-modal-dir,.co-modal-updir,.co-set-chip){color:#e2e8f0}" +
       D + ":is(.co-dd-item,.co-run-file,.co-run-browser-path,.co-run-file-name,.co-run-detail,.co-run-nav-tab,.co-set-label,.co-set-lang,.co-modal-dirs,.co-ed-head){color:#cbd5e1}" +
-      D + ":is(.co-fix-desc,.co-run-target-label,.co-run-status,.co-project-label,.co-act-btn,.co-run-empty){color:#94a3b8}" +
+      D + ":is(.co-fix-desc,.co-run-target-label,.co-run-status,.co-project-label,.co-act-btn,.co-theme-btn,.co-run-empty){color:#94a3b8}" +
       D + ":is(.co-fix-none,.co-gutter){color:#475569}" +
       D + ".co-run-error{color:#fca5a5}" +
       // Badges, pills, chips.
@@ -1449,9 +1467,7 @@ export const PANEL_EXT = `(() => {
     }
     const wrap = document.createElement("div");
     wrap.className = "co-project-wrap";
-    const theme = buildThemeSelect();
-    wrap.appendChild(theme.label);
-    wrap.appendChild(theme.sel);
+    wrap.appendChild(buildThemeControl());
     const label = document.createElement("span");
     label.className = "co-project-label";
     label.textContent = "Project";
@@ -2000,24 +2016,41 @@ export const PANEL_EXT = `(() => {
       });
     }
   }
-  function buildThemeSelect() {
-    const label = document.createElement("span");
-    label.className = "co-project-label co-theme-label";
-    label.textContent = "Theme";
-    const sel = document.createElement("select");
-    sel.className = "co-theme-select";
-    for (const t of THEMES) {
-      const o = document.createElement("option");
-      o.value = t;
-      o.textContent = t.charAt(0).toUpperCase() + t.slice(1);
-      sel.appendChild(o);
+  // A titleless segmented icon control (System / Light / Dark). The active button
+  // tracks the stored preference, not the resolved theme — so "System" stays lit
+  // even as the OS flips the actual palette.
+  function buildThemeControl() {
+    const group = document.createElement("div");
+    group.className = "co-theme-seg";
+    group.setAttribute("role", "group");
+    group.setAttribute("aria-label", "Theme");
+    const buttons = [];
+    function sync() {
+      const cur = storedTheme();
+      for (const b of buttons) {
+        const on = b.getAttribute("data-theme") === cur;
+        b.classList.toggle("co-theme-btn-active", on);
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+      }
     }
-    sel.value = storedTheme();
-    sel.addEventListener("change", () => {
-      localStorage.setItem(THEME_KEY, sel.value);
-      applyTheme();
-    });
-    return { label, sel };
+    for (const t of THEMES) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "co-theme-btn";
+      btn.setAttribute("data-theme", t);
+      btn.title = THEME_TITLES[t];
+      btn.setAttribute("aria-label", THEME_TITLES[t]);
+      btn.innerHTML = THEME_ICONS[t];
+      btn.addEventListener("click", () => {
+        localStorage.setItem(THEME_KEY, t);
+        applyTheme();
+        sync();
+      });
+      group.appendChild(btn);
+      buttons.push(btn);
+    }
+    sync();
+    return group;
   }
 
   async function start() {

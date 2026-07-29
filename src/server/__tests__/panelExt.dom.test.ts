@@ -662,28 +662,35 @@ describe("panelExt injected script", () => {
     return tr.querySelector<HTMLInputElement>(".co-enabled-td .co-enabled-box")!;
   };
 
-  it("renders a header Theme selector defaulting to Auto (resolved to light)", async () => {
+  const themeBtn = (t: string) =>
+    document.querySelector<HTMLButtonElement>('.co-theme-seg .co-theme-btn[data-theme="' + t + '"]')!;
+
+  it("renders a titleless icon theme control defaulting to System (resolved to light)", async () => {
     await runInjected();
-    const sel = document.querySelector<HTMLSelectElement>(".co-theme-select")!;
-    expect([...sel.options].map((o) => o.textContent)).toEqual(["Auto", "Light", "Dark"]);
-    expect(sel.value).toBe("auto");
-    // No stored preference and no OS dark signal in happy-dom → resolves to light.
+    const seg = document.querySelector(".co-theme-seg")!;
+    const btns = [...seg.querySelectorAll(".co-theme-btn")];
+    expect(btns.map((b) => b.getAttribute("data-theme"))).toEqual(["auto", "light", "dark"]);
+    // Icons only — no visible text label anywhere in the control.
+    expect(seg.textContent).toBe("");
+    expect(btns.every((b) => b.querySelector("svg") !== null)).toBe(true);
+    // System is the active preference; with no OS dark signal it resolves to light.
+    expect(themeBtn("auto").classList.contains("co-theme-btn-active")).toBe(true);
     expect(document.documentElement.getAttribute("data-co-theme")).toBe("light");
   });
 
-  it("choosing Dark flips the document theme and remembers the choice", async () => {
+  it("clicking the Dark icon flips the theme, persists it, and marks the button active", async () => {
     await runInjected();
-    const sel = document.querySelector<HTMLSelectElement>(".co-theme-select")!;
-    sel.value = "dark";
-    sel.dispatchEvent(new Event("change", { bubbles: true }));
+    themeBtn("dark").click();
     expect(document.documentElement.getAttribute("data-co-theme")).toBe("dark");
     expect(lsStore.get("co-theme")).toBe("dark");
+    expect(themeBtn("dark").classList.contains("co-theme-btn-active")).toBe(true);
+    expect(themeBtn("auto").classList.contains("co-theme-btn-active")).toBe(false);
   });
 
   it("restores the stored theme on load", async () => {
     lsStore.set("co-theme", "dark");
     await runInjected();
-    expect(document.querySelector<HTMLSelectElement>(".co-theme-select")!.value).toBe("dark");
+    expect(themeBtn("dark").classList.contains("co-theme-btn-active")).toBe(true);
     expect(document.documentElement.getAttribute("data-co-theme")).toBe("dark");
   });
 
