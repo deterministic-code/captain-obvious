@@ -319,9 +319,11 @@ export const PANEL_EXT = `(() => {
 
   function decorate() {
     injectRunTab();
+    hideNativeTab("Advanced");
     syncRunView();
     const table = document.querySelector("table");
     if (!table) return;
+    if (table.parentElement) table.parentElement.classList.add("co-table-wrap");
     const headRow = table.querySelector("thead tr");
     if (headRow) {
       addHeader(headRow, "co-fix-th", "Fix");
@@ -359,6 +361,13 @@ export const PANEL_EXT = `(() => {
   function injectStyle() {
     const style = document.createElement("style");
     style.textContent =
+      // Fluid full-width layout: drop the panel's centered max-width cap so the
+      // header and tables span the window. The rules table wrapper ships as
+      // overflow-hidden (clips columns on narrow widths); co-table-wrap turns
+      // that into a horizontal scroll so no column is lost.
+      ".max-w-6xl{max-width:100%!important}" +
+      ".co-table-wrap{overflow-x:auto!important}" +
+      ".co-table-wrap table{min-width:760px}" +
       ".co-fix{padding:2px 0}.co-fix + .co-fix{margin-top:6px;border-top:1px solid #f1f5f9;padding-top:6px}" +
       ".co-kind{display:inline-block;font-size:11px;font-weight:600;padding:1px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:.03em}" +
       ".co-kind-script{background:#dcfce7;color:#166534}.co-kind-inferred{background:#e0e7ff;color:#3730a3}.co-kind-output{background:#f1f5f9;color:#475569}" +
@@ -389,11 +398,18 @@ export const PANEL_EXT = `(() => {
       ".co-filter-cats,.co-filter-langs{margin-left:8px;vertical-align:middle}" +
       ".co-run-tab{cursor:pointer}.co-run-tab-active{font-weight:700}" +
       "#co-run-overlay{position:fixed;inset:0;display:none;flex-direction:column;background:#fff;font-family:inherit;z-index:20}" +
-      ".co-run-header{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid #e2e8f0;background:#f8fafc}" +
-      ".co-run-back{cursor:pointer;white-space:nowrap;font-size:13px;font-weight:600;padding:5px 12px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;color:#334155}" +
-      ".co-run-back:hover{background:#f1f5f9}" +
-      ".co-run-title{font-size:16px;font-weight:700;color:#0f172a;white-space:nowrap}" +
-      ".co-run-target{position:relative;flex:1;display:flex;align-items:center;gap:8px}" +
+      // Branded top bar mirroring the panel's own header, so the Run page keeps
+      // the same nav chrome (its tabs route back into the panel).
+      ".co-run-navbar{display:flex;align-items:center;gap:24px;padding:12px 24px;border-bottom:1px solid #e2e8f0;background:#fff}" +
+      ".co-run-brand{display:flex;align-items:center;gap:8px}" +
+      ".co-run-brand-mark{font-size:18px}" +
+      ".co-run-brand-name{font-weight:600;letter-spacing:-.01em;color:#0f172a}" +
+      ".co-run-badge{border-radius:4px;background:#f1f5f9;padding:2px 6px;font-size:12px;color:#64748b}" +
+      ".co-run-nav{display:flex;gap:4px}" +
+      ".co-run-nav-tab{cursor:pointer;border:0;background:none;border-radius:6px;padding:6px 12px;font-size:14px;font-weight:500;color:#475569}" +
+      ".co-run-nav-tab:hover{background:#f1f5f9}" +
+      ".co-run-nav-active,.co-run-nav-active:hover{background:#0f172a;color:#fff}" +
+      ".co-run-subbar{position:relative;display:flex;align-items:center;gap:8px;padding:10px 24px;border-bottom:1px solid #e2e8f0;background:#f8fafc}" +
       ".co-run-target-label{font-size:12px;font-weight:600;color:#64748b}" +
       ".co-run-path{flex:1;box-sizing:border-box;padding:6px 10px;font-size:13px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid #cbd5e1;border-radius:6px;outline:none}" +
       ".co-run-path:focus{border-color:#94a3b8}" +
@@ -487,6 +503,33 @@ export const PANEL_EXT = `(() => {
       return { nav: fallback.parentElement, anchor: fallback };
     }
     return null;
+  }
+
+  // Leaf nav elements are the tab labels; match by text so a route rename in the
+  // bundle just no-ops rather than throwing.
+  function forEachNavLeaf(fn) {
+    for (const el of document.querySelectorAll("#root a, #root button, #root [role=tab], #root nav *")) {
+      if (el.children.length !== 0) continue;
+      fn(el, (el.textContent || "").trim());
+    }
+  }
+
+  // The bundle owns the /advanced route; with no source we can't drop it, so we
+  // hide its nav tab (idempotently, since React re-renders it back).
+  function hideNativeTab(label) {
+    forEachNavLeaf((el, txt) => {
+      if (txt === label) el.style.display = "none";
+    });
+  }
+
+  // The Run overlay's branded nav routes back into the panel by driving the real
+  // NavLink: close the overlay (revealing #root), then click the native tab.
+  function gotoNative(label) {
+    runActive = false;
+    syncRunView();
+    forEachNavLeaf((el, txt) => {
+      if (txt === label) el.click();
+    });
   }
 
   function injectRunTab() {
@@ -779,21 +822,39 @@ export const PANEL_EXT = `(() => {
     overlay.id = "co-run-overlay";
     overlay.style.display = "none";
 
-    const header = document.createElement("div");
-    header.className = "co-run-header";
-    const back = document.createElement("button");
-    back.type = "button";
-    back.className = "co-run-back";
-    back.textContent = "← Back";
-    back.addEventListener("click", () => {
-      runActive = false;
-      syncRunView();
+    const navbar = document.createElement("div");
+    navbar.className = "co-run-navbar";
+    const brand = document.createElement("div");
+    brand.className = "co-run-brand";
+    brand.innerHTML =
+      '<span class="co-run-brand-mark">🧭</span>' +
+      '<span class="co-run-brand-name">Captain Obvious</span>' +
+      '<span class="co-run-badge">control panel</span>';
+    const nav = document.createElement("div");
+    nav.className = "co-run-nav";
+    for (const label of ["Rules", "Reporting"]) {
+      const navTab = document.createElement("button");
+      navTab.type = "button";
+      navTab.className = "co-run-nav-tab";
+      navTab.setAttribute("data-nav", label);
+      navTab.textContent = label;
+      nav.appendChild(navTab);
+    }
+    const runTab = document.createElement("button");
+    runTab.type = "button";
+    runTab.className = "co-run-nav-tab co-run-nav-active";
+    runTab.textContent = "Run";
+    nav.appendChild(runTab);
+    nav.addEventListener("click", (e) => {
+      const t = e.target.closest(".co-run-nav-tab[data-nav]");
+      if (t) gotoNative(t.getAttribute("data-nav"));
     });
-    const title = document.createElement("span");
-    title.className = "co-run-title";
-    title.textContent = "Run rules";
-    const target = document.createElement("div");
-    target.className = "co-run-target";
+    navbar.appendChild(brand);
+    navbar.appendChild(nav);
+    overlay.appendChild(navbar);
+
+    const subbar = document.createElement("div");
+    subbar.className = "co-run-subbar";
     const tlabel = document.createElement("span");
     tlabel.className = "co-run-target-label";
     tlabel.textContent = "Target";
@@ -817,14 +878,11 @@ export const PANEL_EXT = `(() => {
       else if (t.getAttribute("data-file")) selectTarget(t.getAttribute("data-file"));
       else selectTarget(t.getAttribute("data-use"));
     });
-    target.appendChild(tlabel);
-    target.appendChild(pathInput);
-    target.appendChild(browseBtn);
-    target.appendChild(browser);
-    header.appendChild(back);
-    header.appendChild(title);
-    header.appendChild(target);
-    overlay.appendChild(header);
+    subbar.appendChild(tlabel);
+    subbar.appendChild(pathInput);
+    subbar.appendChild(browseBtn);
+    subbar.appendChild(browser);
+    overlay.appendChild(subbar);
 
     const body = document.createElement("div");
     body.className = "co-run-body";
