@@ -707,4 +707,24 @@ describe("panelExt injected script", () => {
     expect(document.getElementById("co-project-modal")).toBeNull();
     expect(document.querySelector<HTMLSelectElement>(".co-project-select")!.value).toBe("3");
   });
+
+  it("does not rebuild the project dropdown on unrelated re-render ticks", async () => {
+    await runInjected();
+    const sel = document.querySelector<HTMLSelectElement>(".co-project-select")!;
+    const firstOption = sel.options[0];
+    // Fire several observer ticks the way the panel's React re-renders would.
+    for (let i = 0; i < 3; i++) {
+      const marker = document.createElement("div");
+      document.getElementById("root")!.appendChild(marker);
+      marker.remove();
+      await flush();
+    }
+    // Options kept their identity → the open native dropdown isn't clobbered.
+    expect(sel.options[0]).toBe(firstOption);
+    // "＋ New project…" still opens the modal after the churn.
+    sel.value = "__new__";
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+    for (let i = 0; i < 2; i++) await flush();
+    expect(document.getElementById("co-project-modal")).not.toBeNull();
+  });
 });
