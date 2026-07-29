@@ -25,10 +25,10 @@ const CATEGORIES: RuleCategory[] = [
 const ACTION_KINDS = ["inferred", "script", "output"];
 
 describe("RULES registry", () => {
-  it("has 30 rules with unique slugs", () => {
-    expect(RULES).toHaveLength(30);
+  it("has 31 rules with unique slugs", () => {
+    expect(RULES).toHaveLength(31);
     const slugs = RULES.map((r) => r.meta.slug);
-    expect(new Set(slugs).size).toBe(30);
+    expect(new Set(slugs).size).toBe(31);
   });
 
   it("uses only known categories (primary and extras)", () => {
@@ -87,7 +87,7 @@ describe("RULES registry", () => {
     for (const r of RULES) {
       // Server-stage governance rules (e.g. gov-require-pr) are enforced by
       // GitHub branch protection and carry no local runner.
-      if (r.meta.stage === "server") continue;
+      if (r.meta.stages.includes("server")) continue;
       const hookPath = resolve(pkgRoot, "hooks", "git", `${r.meta.slug}.mjs`);
       const mod = await import(pathToFileURL(hookPath).href);
       expect(typeof mod.main, r.meta.slug).toBe("function");
@@ -95,7 +95,7 @@ describe("RULES registry", () => {
   });
 
   it("server-stage rules have no local runner and target no language", () => {
-    const serverRules = RULES.filter((r) => r.meta.stage === "server");
+    const serverRules = RULES.filter((r) => r.meta.stages.includes("server"));
     expect(serverRules.map((r) => r.meta.slug)).toEqual(["gov-require-pr"]);
     for (const r of serverRules) {
       expect(r.meta.category).toBe("governance");

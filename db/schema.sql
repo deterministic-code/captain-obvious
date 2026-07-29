@@ -122,6 +122,7 @@ CREATE TABLE IF NOT EXISTS projects (
   description TEXT,
   files       TEXT,                       -- JSON array of absolute paths (optional)
   directories TEXT,                       -- JSON array of absolute paths (optional)
+  protected   TEXT,                       -- JSON array of glob patterns (optional)
   is_default  INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1))
 ) STRICT;
 

@@ -282,6 +282,17 @@ export const PANEL_EXT = `(() => {
     if (!res.ok) throw new Error("PATCH " + url + " -> " + res.status);
   }
 
+  async function patchProject(id, patch) {
+    const url = "/api/projects/" + id;
+    const res = await fetch(url, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) throw new Error("PATCH " + url + " -> " + res.status);
+    return res.json();
+  }
+
   async function patchLanguages(slug, languages) {
     await patchProjectRule(slug, { languages });
   }
@@ -1729,6 +1740,15 @@ export const PANEL_EXT = `(() => {
     });
     wrap.appendChild(label);
     wrap.appendChild(sel);
+    const gear = document.createElement("button");
+    gear.type = "button";
+    gear.className = "co-theme-btn co-project-settings-btn";
+    gear.title = "Project settings";
+    gear.innerHTML = ICON_SETTINGS;
+    gear.addEventListener("click", () => {
+      if (currentProjectId !== null) openProjectSettingsModal(currentProjectId);
+    });
+    wrap.appendChild(gear);
     bar.appendChild(wrap);
     renderProjectOptions();
   }
@@ -2181,6 +2201,80 @@ export const PANEL_EXT = `(() => {
       close();
       decorate();
       toast("Saved settings for " + slug);
+    });
+  }
+
+  // Project-scoped settings: the protected-path glob list the lint-protected-paths
+  // rule enforces (git commits + Claude edits). Standalone dialog rather than a
+  // section of the create modal, which is create-only (no edit/PATCH path).
+  function openProjectSettingsModal(projectId) {
+    if (document.getElementById("co-project-settings-modal")) return;
+    const project = projects.find((p) => p.id === projectId);
+    if (!project) return;
+
+    const overlay = document.createElement("div");
+    overlay.id = "co-project-settings-modal";
+    overlay.className = "co-modal";
+    const card = document.createElement("div");
+    card.className = "co-modal-card co-set-card";
+    overlay.appendChild(card);
+
+    const title = document.createElement("div");
+    title.className = "co-modal-title";
+    title.textContent = "Project settings — " + project.name;
+    card.appendChild(title);
+
+    const section = document.createElement("div");
+    section.className = "co-set-section";
+    const heading = document.createElement("div");
+    heading.className = "co-set-heading";
+    heading.textContent = "Protected paths";
+    section.appendChild(heading);
+    const hint = document.createElement("div");
+    hint.className = "co-modal-hint";
+    hint.textContent =
+      "Glob patterns (e.g. db/schema.sql, .github/**) that block git commits and Claude edits. An empty list protects nothing.";
+    section.appendChild(hint);
+    const editor = buildListEditor(project.protected || []);
+    section.appendChild(editor.el);
+    card.appendChild(section);
+
+    const actions = document.createElement("div");
+    actions.className = "co-modal-actions";
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "co-modal-btn co-set-cancel";
+    cancel.textContent = "Cancel";
+    const save = document.createElement("button");
+    save.type = "button";
+    save.className = "co-modal-btn co-modal-btn-primary co-set-save";
+    save.textContent = "Save";
+    actions.appendChild(cancel);
+    actions.appendChild(save);
+    card.appendChild(actions);
+
+    document.body.appendChild(overlay);
+
+    function close() {
+      overlay.remove();
+    }
+    cancel.addEventListener("click", close);
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close();
+    });
+
+    save.addEventListener("click", async () => {
+      const next = editor.read();
+      let updated;
+      try {
+        updated = await patchProject(projectId, { protected: next });
+      } catch (err) {
+        toast("Couldn't save protected paths: " + err.message, "error");
+        return;
+      }
+      project.protected = updated && updated.protected ? updated.protected : next;
+      close();
+      toast("Saved protected paths");
     });
   }
 

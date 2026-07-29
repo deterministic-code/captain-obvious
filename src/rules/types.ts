@@ -25,10 +25,11 @@ export type RuleCategory =
 
 /**
  * When the rule runs. The git stages fire locally (pre-commit / pre-push);
- * `server` marks a governance policy that only GitHub can enforce (branch
- * protection / rulesets) and therefore has no local runner.
+ * `claude-tool` fires from the Claude Code PreToolUse guard (before an edit is
+ * applied), not from git; `server` marks a governance policy that only GitHub
+ * can enforce (branch protection / rulesets) and therefore has no local runner.
  */
-export type Stage = "pre-commit" | "pre-push" | "server";
+export type Stage = "pre-commit" | "pre-push" | "claude-tool" | "server";
 
 /** Normalized violation shape, identical across every rule (lint-shared.mjs). */
 export interface Violation {
@@ -70,7 +71,9 @@ export interface RuleMeta {
   config: Record<string, unknown> | null;
   ratchetable: boolean;
   modes: LintMode[];
-  stage: Stage;
+  /** Every stage this rule runs at. A rule may enforce at more than one (e.g. a
+   * path guard that fires both on `pre-commit` and from the `claude-tool` guard). */
+  stages: Stage[];
   /**
    * Remediation/output actions (rows in the `fixes` table). A rule may have
    * none (check only). On re-seed: `undefined` leaves existing actions

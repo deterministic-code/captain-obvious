@@ -5,6 +5,7 @@ import {
   addProject,
   configureProject,
   ensureDefaultProject,
+  getDefaultProjectProtected,
   getProject,
   listProjects,
   setProjectRule,
@@ -92,10 +93,12 @@ describe("addProject", () => {
       description: "the app",
       files: ["/a/x.ts"],
       directories: ["/a/src"],
+      protected: ["db/schema.sql", ".github/**"],
     });
     expect(row).toMatchObject({ slug: "my-app", name: "My App", description: "the app" });
     expect(JSON.parse(row.files as string)).toEqual(["/a/x.ts"]);
     expect(JSON.parse(row.directories as string)).toEqual(["/a/src"]);
+    expect(JSON.parse(row.protected as string)).toEqual(["db/schema.sql", ".github/**"]);
     expect(row.is_default).toBe(0);
   });
 
@@ -103,6 +106,7 @@ describe("addProject", () => {
     const row = addProject(db, { name: "Bare" });
     expect(row.files).toBeNull();
     expect(row.directories).toBeNull();
+    expect(row.protected).toBeNull();
   });
 
   it("snapshots the global rule config (enabled + languages) into the project", () => {
@@ -159,17 +163,20 @@ describe("configureProject", () => {
       description: "new",
       files: ["/f.ts"],
       directories: ["/d"],
+      protected: ["src/**"],
     });
     expect(row).toMatchObject({ name: "New Name", slug: "new-name", description: "new" });
     expect(JSON.parse(row.files as string)).toEqual(["/f.ts"]);
     expect(JSON.parse(row.directories as string)).toEqual(["/d"]);
+    expect(JSON.parse(row.protected as string)).toEqual(["src/**"]);
   });
 
   it("clears paths when given empty arrays", () => {
-    configureProject(db, id, { files: ["/f.ts"] });
-    const row = configureProject(db, id, { files: [], directories: [] });
+    configureProject(db, id, { files: ["/f.ts"], protected: ["src/**"] });
+    const row = configureProject(db, id, { files: [], directories: [], protected: [] });
     expect(row.files).toBeNull();
     expect(row.directories).toBeNull();
+    expect(row.protected).toBeNull();
   });
 
   it("throws when renaming onto an existing project's slug", () => {
@@ -311,5 +318,23 @@ describe("ensureDefaultProject", () => {
     const second = ensureDefaultProject(db, "/repo", "Repo");
     expect(second.id).toBe(first.id);
     expect(listProjects(db).filter((p) => p.is_default === 1)).toHaveLength(1);
+  });
+});
+
+describe("getDefaultProjectProtected", () => {
+  it("returns [] when there is no default project", () => {
+    addProject(db, { name: "NotDefault" });
+    expect(getDefaultProjectProtected(db)).toEqual([]);
+  });
+
+  it("returns [] when the default project protects nothing", () => {
+    ensureDefaultProject(db, "/repo", "Repo");
+    expect(getDefaultProjectProtected(db)).toEqual([]);
+  });
+
+  it("returns the default project's protected globs once configured", () => {
+    const p = ensureDefaultProject(db, "/repo", "Repo");
+    configureProject(db, p.id, { protected: ["db/schema.sql", ".github/**"] });
+    expect(getDefaultProjectProtected(db)).toEqual(["db/schema.sql", ".github/**"]);
   });
 });

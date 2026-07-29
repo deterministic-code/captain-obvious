@@ -34,6 +34,7 @@ describe("createProject / listProjects", () => {
       name: "Web",
       description: "frontend",
       directories: ["/repo/web"],
+      protected: ["db/schema.sql"],
     });
     expect(created).toMatchObject({
       slug: "web",
@@ -43,7 +44,13 @@ describe("createProject / listProjects", () => {
     });
     expect(created.directories).toEqual(["/repo/web"]);
     expect(created.files).toEqual([]);
+    expect(created.protected).toEqual(["db/schema.sql"]);
     expect(listProjects(db).map((p) => p.slug)).toContain("web");
+  });
+
+  it("defaults protected to [] when omitted", () => {
+    const created = createProject(db, { name: "Bare" });
+    expect(created.protected).toEqual([]);
   });
 
   it("requires a non-empty name", () => {
@@ -55,9 +62,14 @@ describe("createProject / listProjects", () => {
 describe("updateProject", () => {
   it("edits a project and returns the updated view", () => {
     const p = createProject(db, { name: "Api" });
-    const updated = updateProject(db, p.id, { description: "backend", files: ["/f.ts"] });
+    const updated = updateProject(db, p.id, {
+      description: "backend",
+      files: ["/f.ts"],
+      protected: ["migrations/**"],
+    });
     expect(updated).toMatchObject({ slug: "api", description: "backend" });
     expect(updated.files).toEqual(["/f.ts"]);
+    expect(updated.protected).toEqual(["migrations/**"]);
   });
 });
 

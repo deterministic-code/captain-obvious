@@ -25,7 +25,7 @@ export const RULES: LintRule[] = [
     config: null,
     ratchetable: false,
     modes: ["staged", "files"],
-    stage: "pre-commit",
+    stages: ["pre-commit"],
   }),
   defineRule({
     slug: "lint-complexity",
@@ -36,7 +36,7 @@ export const RULES: LintRule[] = [
     config: { maxComplexity: 15 },
     ratchetable: false,
     modes: FILE_MODES,
-    stage: "pre-commit",
+    stages: ["pre-commit"],
   }),
   defineRule({
     slug: "lint-dead-code",
@@ -47,7 +47,7 @@ export const RULES: LintRule[] = [
     config: null,
     ratchetable: false,
     modes: FILE_MODES,
-    stage: "pre-commit",
+    stages: ["pre-commit"],
   }),
   defineRule({
     slug: "lint-prettier",
@@ -59,7 +59,7 @@ export const RULES: LintRule[] = [
     config: null,
     ratchetable: false,
     modes: FILE_MODES,
-    stage: "pre-commit",
+    stages: ["pre-commit"],
     actions: [
       {
         kind: "script",
@@ -78,7 +78,7 @@ export const RULES: LintRule[] = [
     config: null,
     ratchetable: true,
     modes: RATCHET_MODES,
-    stage: "pre-push",
+    stages: ["pre-push"],
   }),
   defineRule({
     slug: "lint-dup-fn",
@@ -89,7 +89,7 @@ export const RULES: LintRule[] = [
     config: null,
     ratchetable: true,
     modes: RATCHET_MODES,
-    stage: "pre-push",
+    stages: ["pre-push"],
   }),
   defineRule({
     slug: "lint-dup-structural",
@@ -100,7 +100,7 @@ export const RULES: LintRule[] = [
     config: null,
     ratchetable: true,
     modes: RATCHET_MODES,
-    stage: "pre-push",
+    stages: ["pre-push"],
   }),
   defineRule({
     slug: "lint-emitter-casing",
@@ -111,7 +111,7 @@ export const RULES: LintRule[] = [
     config: null,
     ratchetable: false,
     modes: FILE_MODES,
-    stage: "pre-commit",
+    stages: ["pre-commit"],
   }),
   defineRule({
     slug: "lint-empty-catch",
@@ -122,7 +122,7 @@ export const RULES: LintRule[] = [
     config: null,
     ratchetable: false,
     modes: FILE_MODES,
-    stage: "pre-commit",
+    stages: ["pre-commit"],
   }),
   defineRule({
     slug: "lint-frozen-interfaces",
@@ -133,7 +133,7 @@ export const RULES: LintRule[] = [
     config: null,
     ratchetable: true,
     modes: RATCHET_MODES,
-    stage: "pre-commit",
+    stages: ["pre-commit"],
   }),
   defineRule({
     slug: "lint-max-lines",
@@ -144,7 +144,7 @@ export const RULES: LintRule[] = [
     config: { maxLines: 60 },
     ratchetable: false,
     modes: FILE_MODES,
-    stage: "pre-commit",
+    stages: ["pre-commit"],
   }),
   defineRule({
     slug: "lint-max-file-lines",
@@ -155,7 +155,7 @@ export const RULES: LintRule[] = [
     config: { maxFileLines: 300 },
     ratchetable: false,
     modes: FILE_MODES,
-    stage: "pre-commit",
+    stages: ["pre-commit"],
   }),
   defineRule({
     slug: "lint-max-line-length",
@@ -166,7 +166,7 @@ export const RULES: LintRule[] = [
     config: { maxLineLength: 100 },
     ratchetable: false,
     modes: FILE_MODES,
-    stage: "pre-commit",
+    stages: ["pre-commit"],
   }),
   defineRule({
     slug: "lint-max-params",
@@ -177,7 +177,7 @@ export const RULES: LintRule[] = [
     config: { maxParams: 3 },
     ratchetable: false,
     modes: FILE_MODES,
-    stage: "pre-commit",
+    stages: ["pre-commit"],
   }),
   defineRule({
     slug: "lint-max-statements",
@@ -188,7 +188,7 @@ export const RULES: LintRule[] = [
     config: { maxStatements: 20 },
     ratchetable: false,
     modes: FILE_MODES,
-    stage: "pre-commit",
+    stages: ["pre-commit"],
   }),
   defineRule({
     slug: "lint-naming",
@@ -199,7 +199,7 @@ export const RULES: LintRule[] = [
     config: null,
     ratchetable: false,
     modes: FILE_MODES,
-    stage: "pre-commit",
+    stages: ["pre-commit"],
   }),
   defineRule({
     slug: "lint-solid-s",
@@ -210,7 +210,7 @@ export const RULES: LintRule[] = [
     config: { lcom4: 1, deps: 8 },
     ratchetable: false,
     modes: FILE_MODES,
-    stage: "pre-commit",
+    stages: ["pre-commit"],
   }),
   defineRule({
     slug: "lint-solid-o",
@@ -221,7 +221,7 @@ export const RULES: LintRule[] = [
     config: null,
     ratchetable: false,
     modes: FILE_MODES,
-    stage: "pre-commit",
+    stages: ["pre-commit"],
   }),
   defineRule({
     slug: "lint-solid-l",
@@ -232,7 +232,7 @@ export const RULES: LintRule[] = [
     config: null,
     ratchetable: false,
     modes: FILE_MODES,
-    stage: "pre-commit",
+    stages: ["pre-commit"],
   }),
   defineRule({
     slug: "lint-solid-i",
@@ -243,7 +243,7 @@ export const RULES: LintRule[] = [
     config: null,
     ratchetable: false,
     modes: FILE_MODES,
-    stage: "pre-commit",
+    stages: ["pre-commit"],
   }),
   defineRule({
     slug: "lint-solid-d",
@@ -254,7 +254,7 @@ export const RULES: LintRule[] = [
     config: null,
     ratchetable: false,
     modes: FILE_MODES,
-    stage: "pre-commit",
+    stages: ["pre-commit"],
   }),
   defineRule({
     slug: "lint-sync-calls",
@@ -265,7 +265,7 @@ export const RULES: LintRule[] = [
     config: null,
     ratchetable: false,
     modes: FILE_MODES,
-    stage: "pre-commit",
+    stages: ["pre-commit"],
   }),
   defineRule({
     slug: "lint-test-disabling-skipping",
@@ -276,7 +276,7 @@ export const RULES: LintRule[] = [
     config: null,
     ratchetable: true,
     modes: RATCHET_MODES,
-    stage: "pre-commit",
+    stages: ["pre-commit"],
   }),
   defineRule({
     slug: "lint-coverage",
@@ -288,7 +288,7 @@ export const RULES: LintRule[] = [
     config: null,
     ratchetable: true,
     modes: RATCHET_MODES,
-    stage: "pre-push",
+    stages: ["pre-push"],
   }),
   defineRule({
     slug: "lint-tests-with-code",
@@ -300,7 +300,7 @@ export const RULES: LintRule[] = [
     config: null,
     ratchetable: true,
     modes: ["staged", "warn"],
-    stage: "pre-commit",
+    stages: ["pre-commit"],
   }),
   defineRule({
     slug: "lint-empty-tests",
@@ -312,7 +312,7 @@ export const RULES: LintRule[] = [
     config: null,
     ratchetable: false,
     modes: FILE_MODES,
-    stage: "pre-commit",
+    stages: ["pre-commit"],
   }),
   defineRule({
     slug: "lint-test-determinism",
@@ -324,7 +324,19 @@ export const RULES: LintRule[] = [
     config: null,
     ratchetable: false,
     modes: FILE_MODES,
-    stage: "pre-commit",
+    stages: ["pre-commit"],
+  }),
+  defineRule({
+    slug: "lint-protected-paths",
+    name: "Protected paths",
+    category: "governance",
+    description:
+      "Blocks staging (git) or editing (Claude Code) any path matching the project's protected globs (project settings).",
+    languages: [],
+    config: null,
+    ratchetable: false,
+    modes: ["staged", "all", "files"],
+    stages: ["pre-commit", "claude-tool"],
   }),
   // Governance rules police the repo/workflow, not source files: language-agnostic
   // (languages: []) and enforced per environment via action bindings (e.g. halt on
@@ -340,7 +352,7 @@ export const RULES: LintRule[] = [
     config: { branch: "main", blockingJobs: ["unit", "integration"] },
     ratchetable: false,
     modes: ["push", "warn"],
-    stage: "pre-push",
+    stages: ["pre-push"],
   }),
   defineRule({
     slug: "gov-no-push-to-main",
@@ -352,7 +364,7 @@ export const RULES: LintRule[] = [
     config: { branches: ["main", "master"] },
     ratchetable: false,
     modes: ["push", "warn"],
-    stage: "pre-push",
+    stages: ["pre-push"],
   }),
   defineRule({
     slug: "gov-require-pr",
@@ -364,6 +376,6 @@ export const RULES: LintRule[] = [
     config: { branch: "main", ruleset: ".github/rulesets/main.json" },
     ratchetable: false,
     modes: [],
-    stage: "server",
+    stages: ["server"],
   }),
 ];
