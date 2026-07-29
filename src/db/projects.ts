@@ -1,6 +1,7 @@
 import { logEvent } from "./audit.js";
 import { isUniqueViolation } from "./languages.js";
-import { requireLanguageId, requireRule } from "./lookups.js";
+import { requireEnvironmentId, requireLanguageId, requireRule } from "./lookups.js";
+import { resolveBinding, type ResolvedBinding } from "./rules.js";
 import type { Db } from "./open.js";
 import type {
   AddProjectOpts,
@@ -169,8 +170,56 @@ export function configureProject(
 }
 
 /**
- * Project-scoped equivalent of patchRule: set a rule's enabled flag and/or
- * rewrite its language set for one project. Backfills first so the row exists.
+ * Upsert one project_rule_action. Delete-then-insert like setRuleAction: the
+ * UNIQUE constraint treats NULL environment_id as distinct, so it would not
+ * catch a duplicate default (all-env) binding.
+ */
+function setProjectRuleAction(
+  db: Db,
+  projectId: number,
+  ruleId: number,
+  b: ResolvedBinding,
+): void {
+  if (b.environmentId === null) {
+    db.prepare(
+      "DELETE FROM project_rule_actions WHERE project_id = ? AND rule_id = ? AND environment_id IS NULL",
+    ).run(projectId, ruleId);
+  } else {
+    db.prepare(
+      "DELETE FROM project_rule_actions WHERE project_id = ? AND rule_id = ? AND environment_id = ?",
+    ).run(projectId, ruleId, b.environmentId);
+  }
+  db.prepare(
+    "INSERT INTO project_rule_actions (project_id, rule_id, environment_id, action_type_id, delay_ms) VALUES (?, ?, ?, ?, ?)",
+  ).run(projectId, ruleId, b.environmentId, b.actionTypeId, b.delayMs);
+}
+
+function removeProjectRuleAction(
+  db: Db,
+  projectId: number,
+  ruleId: number,
+  target: string,
+): void {
+  if (target === "all") {
+    db.prepare(
+      "DELETE FROM project_rule_actions WHERE project_id = ? AND rule_id = ?",
+    ).run(projectId, ruleId);
+  } else if (target === "default") {
+    db.prepare(
+      "DELETE FROM project_rule_actions WHERE project_id = ? AND rule_id = ? AND environment_id IS NULL",
+    ).run(projectId, ruleId);
+  } else {
+    const envId = requireEnvironmentId(db, target);
+    db.prepare(
+      "DELETE FROM project_rule_actions WHERE project_id = ? AND rule_id = ? AND environment_id = ?",
+    ).run(projectId, ruleId, envId);
+  }
+}
+
+/**
+ * Project-scoped equivalent of patchRule: set a rule's enabled flag, language
+ * set, config override, and/or severity bindings for one project. Backfills
+ * first so the project_rules row exists.
  */
 export function setProjectRule(
   db: Db,
@@ -184,6 +233,7 @@ export function setProjectRule(
     opts.languages !== undefined
       ? opts.languages.map((s) => requireLanguageId(db, s))
       : undefined;
+  const binding = opts.setAction ? resolveBinding(db, opts.setAction) : undefined;
 
   const apply = db.transaction(() => {
     syncProjectRulesTx(db, projectId);
@@ -191,6 +241,11 @@ export function setProjectRule(
       db.prepare(
         "UPDATE project_rules SET enabled = ? WHERE project_id = ? AND rule_id = ?",
       ).run(opts.enabled ? 1 : 0, projectId, rule.id);
+    }
+    if (opts.config !== undefined) {
+      db.prepare(
+        "UPDATE project_rules SET config_json = ? WHERE project_id = ? AND rule_id = ?",
+      ).run(opts.config, projectId, rule.id);
     }
     if (languageIds !== undefined) {
       db.prepare(
@@ -201,6 +256,10 @@ export function setProjectRule(
       );
       for (const id of languageIds) link.run(projectId, rule.id, id);
     }
+    if (binding) setProjectRuleAction(db, projectId, rule.id, binding);
+    if (opts.removeAction) {
+      removeProjectRuleAction(db, projectId, rule.id, opts.removeAction);
+    }
   });
   apply();
 
@@ -210,10 +269,10 @@ export function setProjectRule(
   if (opts.enabled === false) {
     logEvent("project.rule.disabled", `disabled ${ruleSlug} in project ${projectId}`);
   }
-  if (opts.languages !== undefined) {
+  if (opts.languages !== undefined || opts.config !== undefined || opts.setAction || opts.removeAction) {
     logEvent(
       "project.rule.configured",
-      `updated languages for ${ruleSlug} in project ${projectId}`,
+      `updated config for ${ruleSlug} in project ${projectId}`,
     );
   }
 }

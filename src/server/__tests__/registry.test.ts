@@ -5,9 +5,12 @@ import { addRule, configureRule } from "../../db/rules.js";
 import { PANEL_EXT } from "../panelExt.js";
 import {
   addActionType,
+  createProject,
   getMeta,
   getStats,
+  listProjectRules,
   listRules,
+  patchProjectRule,
   patchRule,
   seed,
 } from "../registry.js";
@@ -307,10 +310,97 @@ describe("seed", () => {
   });
 });
 
+describe("listProjectRules / patchProjectRule overlay", () => {
+  function projectView(projectId: number, slug: string) {
+    const found = listProjectRules(db, projectId).find((r) => r.slug === slug);
+    if (!found) throw new Error(`missing project rule view: ${slug}`);
+    return found;
+  }
+
+  it("inherits global config and bindings until the project overrides them", () => {
+    addRule(db, {
+      slug: "lint-x",
+      name: "X",
+      languages: ["typescript"],
+      config: JSON.stringify({ maxLines: 300 }),
+    });
+    configureRule(db, "lint-x", {
+      setAction: { type: "halt", environment: null, delayMs: null },
+    });
+    configureRule(db, "lint-x", {
+      setAction: { type: "warn", environment: "claude", delayMs: null },
+    });
+    const p = createProject(db, { name: "Proj" });
+
+    const inherited = projectView(p.id, "lint-x");
+    expect(inherited.config).toEqual({ maxLines: 300 });
+    expect(inherited.defaultAction).toEqual({ type: "halt", delayMs: null });
+    expect(inherited.envActions).toEqual([{ environment: "claude", type: "warn" }]);
+  });
+
+  it("overlays the project's config and fully replaces bindings once set", () => {
+    addRule(db, {
+      slug: "lint-y",
+      name: "Y",
+      languages: ["typescript"],
+      config: JSON.stringify({ maxLines: 300 }),
+    });
+    configureRule(db, "lint-y", {
+      setAction: { type: "warn", environment: "claude", delayMs: null },
+    });
+    const p = createProject(db, { name: "Proj" });
+
+    patchProjectRule(db, p.id, "lint-y", {
+      config: { maxLines: 40 },
+      setAction: { type: "delay_halt", delayMs: 250 },
+    });
+    const v = projectView(p.id, "lint-y");
+    expect(v.config).toEqual({ maxLines: 40 });
+    // A single project binding replaces the whole global set, so the inherited
+    // claude override is gone and the project default stands alone.
+    expect(v.defaultAction).toEqual({ type: "delay_halt", delayMs: 250 });
+    expect(v.envActions).toEqual([]);
+
+    // Clearing the config override falls back to the global config.
+    patchProjectRule(db, p.id, "lint-y", { config: null });
+    expect(projectView(p.id, "lint-y").config).toEqual({ maxLines: 300 });
+  });
+
+  it("applies enabled, languages, and removeAction through the patch", () => {
+    addRule(db, { slug: "lint-z", name: "Z", languages: ["typescript", "javascript"] });
+    configureRule(db, "lint-z", {
+      setAction: { type: "halt", environment: null, delayMs: null },
+    });
+    const p = createProject(db, { name: "Proj" });
+    patchProjectRule(db, p.id, "lint-z", {
+      setAction: { type: "warn", environment: "claude" },
+    });
+
+    const patched = patchProjectRule(db, p.id, "lint-z", {
+      enabled: false,
+      languages: ["javascript"],
+      removeAction: "all",
+    });
+    expect(patched.enabled).toBe(false);
+    expect(patched.languages).toEqual(["javascript"]);
+    // removeAction "all" clears the project bindings, so it inherits global again.
+    expect(patched.defaultAction).toEqual({ type: "halt", delayMs: null });
+  });
+});
+
 describe("PANEL_EXT", () => {
   it("is a non-empty IIFE string the serve layer injects into the panel", () => {
     expect(typeof PANEL_EXT).toBe("string");
     expect(PANEL_EXT).toContain("/api/rules");
     expect(PANEL_EXT.trim().startsWith("(()")).toBe(true);
+  });
+
+  it("renders the Run/Report/Settings actions column and settings dialog", () => {
+    expect(PANEL_EXT).toContain('addHeader(headRow, "co-act-th"');
+    expect(PANEL_EXT).toContain('data-act="run"');
+    expect(PANEL_EXT).toContain('data-act="report"');
+    expect(PANEL_EXT).toContain('data-act="settings"');
+    expect(PANEL_EXT).toContain("openRuleSettingsModal");
+    expect(PANEL_EXT).toContain("<svg");
   });
 });

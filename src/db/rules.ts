@@ -203,13 +203,13 @@ function auditConfigureRule(
   }
 }
 
-interface ResolvedBinding {
+export interface ResolvedBinding {
   environmentId: number | null;
   actionTypeId: number;
   delayMs: number | null;
 }
 
-function resolveBinding(db: Db, b: ActionBinding): ResolvedBinding {
+export function resolveBinding(db: Db, b: ActionBinding): ResolvedBinding {
   return {
     environmentId: b.environment ? requireEnvironmentId(db, b.environment) : null,
     actionTypeId: requireActionTypeId(db, b.type),
