@@ -403,4 +403,12 @@ describe("PANEL_EXT", () => {
     expect(PANEL_EXT).toContain("openRuleSettingsModal");
     expect(PANEL_EXT).toContain("<svg");
   });
+
+  it("gives the Activity overlay the same full-screen base style as the Run overlay", () => {
+    // Both overlay containers must share the fixed/inset/column base, or the
+    // Activity overlay lays out as a row filling only part of the viewport.
+    expect(PANEL_EXT).toContain(
+      "#co-activity-overlay){position:fixed;inset:0;display:none;flex-direction:column",
+    );
+  });
 });

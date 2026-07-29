@@ -511,7 +511,7 @@ export const PANEL_EXT = `(() => {
       ".co-dd-close:hover{background:#1e293b}" +
       ".co-filter-cats,.co-filter-langs{margin-left:8px;vertical-align:middle}" +
       ".co-run-tab{cursor:pointer}.co-run-tab-active{font-weight:700}" +
-      "#co-run-overlay{position:fixed;inset:0;display:none;flex-direction:column;background:#fff;font-family:inherit;z-index:20}" +
+      ":is(#co-run-overlay,#co-activity-overlay){position:fixed;inset:0;display:none;flex-direction:column;background:#fff;font-family:inherit;z-index:20}" +
       // Branded top bar mirroring the panel's own header, so the Run page keeps
       // the same nav chrome (its tabs route back into the panel).
       ".co-run-navbar{display:flex;align-items:center;gap:24px;padding:12px 24px;border-bottom:1px solid #e2e8f0;background:#fff}" +
@@ -704,7 +704,7 @@ export const PANEL_EXT = `(() => {
       D + ".border-red-200{border-color:#7f1d1d}" +
       D + ".divide-slate-100 > :not([hidden]) ~ :not([hidden]){border-color:#334155}" +
       // Our co-* components: surfaces.
-      D + "#co-run-overlay{background:#0b1220}" +
+      D + ":is(#co-run-overlay,#co-activity-overlay){background:#0b1220}" +
       D + ".co-run-editor{background:#0f172a}" +
       D + ".co-modal{background:rgba(0,0,0,.6)}" +
       D + ":is(.co-dd-panel,.co-run-browser,.co-modal-card,.co-modal-browser){background:#1e293b;border-color:#334155}" +
