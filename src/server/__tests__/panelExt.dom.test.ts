@@ -869,14 +869,14 @@ describe("panelExt injected script", () => {
     return tr.querySelector<HTMLButtonElement>('.co-act-td .co-act-btn[data-act="' + act + '"]')!;
   };
 
-  it("adds a trailing actions column with Run/Activity/Settings/Copy icon buttons per row", async () => {
+  it("adds a trailing actions column with Run/Activity/Settings icon buttons per row", async () => {
     await runInjected();
     const cells = document.querySelectorAll(".co-act-td");
     expect(cells).toHaveLength(3);
     const acts = [...cells[0].querySelectorAll(".co-act-btn")].map((b) =>
       b.getAttribute("data-act"),
     );
-    expect(acts).toEqual(["run", "activity", "settings", "copy"]);
+    expect(acts).toEqual(["run", "activity", "settings"]);
     // Icons are inline Lucide SVGs, not emoji or text.
     expect(cells[0].querySelector(".co-act-btn svg")).not.toBeNull();
   });
@@ -902,26 +902,6 @@ describe("panelExt injected script", () => {
     modal.querySelector<HTMLButtonElement>(".co-set-save")!.click();
     for (let i = 0; i < 4; i++) await flush();
     expect(toasts().map(toastText)).toContain("Saved settings for lint-a");
-  });
-
-  it("copies a rule slug to the clipboard and toasts", async () => {
-    const writeText = vi.fn(async () => {});
-    vi.stubGlobal("navigator", { clipboard: { writeText } });
-    await runInjected();
-    actBtn("lint-a", "copy").click();
-    for (let i = 0; i < 3; i++) await flush();
-    expect(writeText).toHaveBeenCalledWith("lint-a");
-    expect(toasts().map(toastText)).toContain("Copied lint-a to clipboard");
-  });
-
-  it("shows an error toast when the clipboard is unavailable", async () => {
-    vi.stubGlobal("navigator", {});
-    await runInjected();
-    actBtn("lint-a", "copy").click();
-    await flush();
-    const t = toasts()[0];
-    expect(t.classList.contains("co-toast-error")).toBe(true);
-    expect(toastText(t)).toContain("Clipboard unavailable");
   });
 
   it("dismisses a toast when it is clicked", async () => {
