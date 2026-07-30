@@ -16,6 +16,10 @@ const execFileAsync = promisify(execFile);
 
 const KNIP_EXCLUDE = "dependencies,unlisted,binaries,unresolved";
 
+// knip has no incremental mode, so every git stage the dispatcher runs this in
+// (`--push`, and `--staged` defensively) resolves to the same whole-repo scan as `--all`.
+const WHOLE_REPO_MODES = new Set(["--all", "--push", "--staged"]);
+
 export function knipIssuesToViolations(issues) {
   const violations = [];
   for (const issue of issues) {
@@ -93,7 +97,7 @@ export async function main(argv) {
   const mode = argv[2];
   const repoRoot = await repoRootOf(process.cwd());
 
-  if (mode === "--all") {
+  if (WHOLE_REPO_MODES.has(mode)) {
     const violations = knipIssuesToViolations(await runKnip(repoRoot));
     if (jsonMode()) return emitJson(violations);
     printReport(violations, "the repo", true);

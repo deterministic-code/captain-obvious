@@ -194,6 +194,31 @@ describe("lint-dead-code / main", () => {
     expect(process.exitCode).toBe(savedExitCode);
   });
 
+  test("--push takes the whole-repo path: clean run prints the repo line, exitCode unset", async () => {
+    knipJson({ issues: [] });
+    await main(["node", "s.mjs", "--push"]);
+    expect(stdoutText()).toMatch(/no dead code found in the repo/);
+    expect(process.exitCode).toBe(savedExitCode);
+  });
+
+  test("--push with dead code blocks like --all (no report-only suffix) and sets exitCode 1", async () => {
+    knipJson({
+      issues: [{ file: "src/a.ts", exports: [{ name: "unusedFn", line: 3, col: 2 }] }],
+    });
+    await main(["node", "s.mjs", "--push"]);
+    const out = stdoutText();
+    expect(out).toMatch(/1 dead-code finding\(s\) in the repo\. Whitelist/);
+    expect(out).not.toMatch(/report-only/);
+    expect(process.exitCode).toBe(1);
+  });
+
+  test("--staged also resolves to the whole-repo scan (knip has no incremental mode)", async () => {
+    knipJson({ issues: [] });
+    await main(["node", "s.mjs", "--staged"]);
+    expect(stdoutText()).toMatch(/no dead code found in the repo/);
+    expect(process.exitCode).toBe(savedExitCode);
+  });
+
   test("runKnip throws the invariant when `issues` is not an array", async () => {
     knipJson({ issues: 123 });
     await expect(main(["node", "s.mjs", "--all"])).rejects.toThrow(

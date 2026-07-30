@@ -46,6 +46,11 @@ describe("selectDispatch", () => {
     expect(all).not.toContain("gov-require-pr");
   });
 
+  it("dispatches the whole-repo lint-dead-code at pre-push, not pre-commit", () => {
+    expect(slugsFor("pre-push")).toContain("lint-dead-code");
+    expect(slugsFor("pre-commit")).not.toContain("lint-dead-code");
+  });
+
   it("omits a disabled rule", () => {
     expect(slugsFor("pre-commit")).toContain("lint-naming");
     db.prepare("UPDATE rules SET enabled = 0 WHERE slug = ?").run("lint-naming");
