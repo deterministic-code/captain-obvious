@@ -179,11 +179,13 @@ describe("planFix — Tier A (delegate to Claude Code)", () => {
     ]);
   });
 
-  it("throws when the rule has no inferred fix", async () => {
+  it("builds a prompt even for a rule with no inferred fix (AI fix is universal), omitting the guidance line", async () => {
     setRuleFixes(db, "lint-prettier", [{ kind: "script", scriptBody: "x" }]);
-    await expect(planFix(db, { slug: "lint-prettier", path: filePath })).rejects.toThrow(
-      "rule has no inferred fix: lint-prettier",
-    );
+    const plan = await planFix(db, { slug: "lint-prettier", path: filePath });
+    expect(plan.slug).toBe("lint-prettier");
+    expect(plan.prompt).toContain("Rule intent:");
+    expect(plan.prompt).not.toContain("Fix guidance:");
+    expect(existsSync(plan.file)).toBe(true);
   });
 
   it("rejects a folder target", async () => {
@@ -243,6 +245,21 @@ describe("aiProposeFix — Tier B/C (server-side model)", () => {
     expect(init.headers["anthropic-version"]).toBe("2023-06-01");
     // The file on disk is untouched — proposals are review-then-apply.
     expect(readFileSync(filePath, "utf8")).toBe("const my_var = 1;\n");
+  });
+
+  it("proposes a fix for a rule with no inferred action, omitting the guidance line", async () => {
+    vi.stubEnv("CO_FIX_API_KEY", "sk-test");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(fetchResponse({ ok: true, json: { content: [{ type: "text", text: "const myVar = 1;\n" }] } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const proposal = await aiProposeFix(db, { slug: "lint-max-lines", path: filePath });
+    expect(proposal.slug).toBe("lint-max-lines");
+    expect(proposal.newSource).toBe("const myVar = 1;\n");
+    const prompt = JSON.parse(fetchMock.mock.calls[0][1].body).messages[0].content;
+    expect(prompt).toContain("Rule intent:");
+    expect(prompt).not.toContain("Fix guidance:");
   });
 
   it("calls an OpenAI-compatible endpoint when configured", async () => {

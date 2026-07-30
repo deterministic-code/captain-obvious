@@ -120,13 +120,18 @@ export async function fixRule(db: Db, auditDb: Db, body: FixRequest): Promise<Fi
   };
 }
 
-/** Resolve `path` to a single lintable file, its fresh violations, and the rule's `inferred` action. */
+/**
+ * The rule's metadata plus its `inferred` action if it declares one. An AI fix
+ * works for any rule — the model just needs the rule intent and the violations —
+ * so a missing `inferred` action is not an error; its `description` (extra fix
+ * guidance) is simply absent from the prompt.
+ */
 async function fileFixContext(
   db: Db,
   slug: string,
-): Promise<{ meta: RuleMeta; action: RuleAction }> {
+): Promise<{ meta: RuleMeta; action: RuleAction | null }> {
   const meta = ruleMeta(slug);
-  const action = requireAction(db, slug, "inferred");
+  const action = getRuleFixes(db, slug).find((a) => a.kind === "inferred") ?? null;
   return { meta, action };
 }
 
@@ -154,7 +159,7 @@ function joinLines(lines: (string | false)[]): string {
 /** Instruction for the running Claude Code agent to edit the file itself (it has tools). */
 function buildAgentFixPrompt(
   meta: RuleMeta,
-  action: RuleAction,
+  action: RuleAction | null,
   absPath: string,
   violations: Violation[],
 ): string {
@@ -164,7 +169,7 @@ function buildAgentFixPrompt(
     describeViolations(violations),
     "",
     `Rule intent: ${meta.description}`,
-    !!action.description && `Fix guidance: ${action.description}`,
+    !!action?.description && `Fix guidance: ${action.description}`,
     "",
     "Edit the file in place so the rule passes. Keep the change minimal and behavior-preserving.",
   ]);
@@ -173,7 +178,7 @@ function buildAgentFixPrompt(
 /** Instruction for a bare model (no tools) to return the corrected file content. */
 function buildModelFixPrompt(
   meta: RuleMeta,
-  action: RuleAction,
+  action: RuleAction | null,
   relPath: string,
   source: string,
   violations: Violation[],
@@ -181,7 +186,7 @@ function buildModelFixPrompt(
   return joinLines([
     `You are fixing ${meta.name} (${meta.slug}) lint violations in the file ${relPath}.`,
     `Rule intent: ${meta.description}`,
-    !!action.description && `Fix guidance: ${action.description}`,
+    !!action?.description && `Fix guidance: ${action.description}`,
     "",
     "Violations:",
     describeViolations(violations),

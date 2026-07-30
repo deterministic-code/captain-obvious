@@ -1781,14 +1781,11 @@ export const PANEL_EXT = `(() => {
     }
   }
 
-  // Which remediations a rule offers, from its /api/rules actions. Drives the
-  // per-file "Fix" (deterministic script) and "Fix with AI" (inferred) buttons.
+  // Whether a rule has a deterministic script fix, from its /api/rules actions —
+  // gates the per-file "Fix" button. ("Fix with AI" is offered for every rule.)
   function fixKinds(slug) {
     const actions = (slug && fixesBySlug[slug]) || [];
-    return {
-      script: actions.some((a) => a.kind === "script"),
-      ai: actions.some((a) => a.kind === "inferred"),
-    };
+    return { script: actions.some((a) => a.kind === "script") };
   }
 
   function fixButtons(slug, path, kinds) {
@@ -1797,10 +1794,11 @@ export const PANEL_EXT = `(() => {
       html += '<button type="button" class="co-run-fix-btn" data-fix="script" data-slug="' +
         esc(slug) + '" data-path="' + esc(path) + '">Fix</button>';
     }
-    if (kinds.ai) {
-      html += '<button type="button" class="co-run-fix-btn co-run-fix-ai" data-fix="ai" data-slug="' +
-        esc(slug) + '" data-path="' + esc(path) + '">Fix with AI</button>';
-    }
+    // Every violation is AI-fixable — the model only needs the rule intent and
+    // the file — so "Fix with AI" is offered for all rules, not just ones that
+    // declare an inferred action.
+    html += '<button type="button" class="co-run-fix-btn co-run-fix-ai" data-fix="ai" data-slug="' +
+      esc(slug) + '" data-path="' + esc(path) + '">Fix with AI</button>';
     return html;
   }
 
