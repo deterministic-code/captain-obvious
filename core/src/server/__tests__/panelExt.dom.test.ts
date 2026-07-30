@@ -458,6 +458,22 @@ describe("panelExt injected script", () => {
     expect(details.open).toBe(false);
   });
 
+  it("a click outside an open dropdown collapses it", async () => {
+    await runInjected();
+    const details = document.querySelector<HTMLDetailsElement>(".co-filter-cats")!;
+    details.open = true;
+    document.body.click();
+    expect(details.open).toBe(false);
+  });
+
+  it("a click inside an open dropdown leaves it open", async () => {
+    await runInjected();
+    const details = document.querySelector<HTMLDetailsElement>(".co-filter-cats")!;
+    details.open = true;
+    details.querySelector<HTMLInputElement>(".co-dd-search")!.click();
+    expect(details.open).toBe(true);
+  });
+
   it("PATCHes the new language set when a row checkbox is toggled", async () => {
     await runInjected();
     const cell = document.querySelector(".co-lang-td")!; // lint-a
