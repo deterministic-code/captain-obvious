@@ -30,8 +30,10 @@ import { activityFeed, activitySummary } from "./activity.js";
 import { browse, readSource, runMeta, runRules, type RunRequest } from "./run.js";
 import {
   aiApplyFix,
+  aiProposeAllFixes,
   aiProposeFix,
   fixRule,
+  planAllFixes,
   planFix,
   type AiApplyRequest,
   type FixRequest,
@@ -259,9 +261,17 @@ async function handle(
     const body = (await readBody(req)) as FixRequest;
     return sendJson(res, 200, await planFix(db, body));
   }
+  if (pathname === "/api/run/fix/plan/all" && method === "POST") {
+    const body = (await readBody(req)) as RunRequest;
+    return sendJson(res, 200, await planAllFixes(db, body));
+  }
   if (pathname === "/api/run/fix/ai" && method === "POST") {
     const body = (await readBody(req)) as FixRequest;
     return sendJson(res, 200, await aiProposeFix(db, body));
+  }
+  if (pathname === "/api/run/fix/ai/all" && method === "POST") {
+    const body = (await readBody(req)) as RunRequest;
+    return sendJson(res, 200, await aiProposeAllFixes(db, body));
   }
   if (pathname === "/api/run/fix/ai/apply" && method === "POST") {
     const body = (await readBody(req)) as AiApplyRequest;

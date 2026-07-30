@@ -41,6 +41,9 @@ export const PANEL_EXT = `(() => {
   // one rule. Both operate on the already-fetched blocks (display toggle), no refetch.
   let runShow = "all";
   let runRuleFilter = "all";
+  // The last run's target, captured so the run-level "fix all" buttons can re-run
+  // the same rules/path on the server without re-reading the panel's DOM state.
+  let lastRun = { slugs: [], path: "" };
   // Activity overlay: a global (not project-scoped) view of hook runs + config
   // changes. activityKeys drives the rule multiselect; activitySelectedRules is
   // the current filter; activityWindow is the time span.
@@ -963,6 +966,9 @@ export const PANEL_EXT = `(() => {
       ".co-run-fix-btn{font-size:11px;font-weight:600;padding:2px 10px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;color:#0f172a;cursor:pointer}" +
       ".co-run-fix-btn:hover{background:#f1f5f9}.co-run-fix-btn:disabled{opacity:.5;cursor:default}" +
       ".co-run-fix-ai{border-color:#c7d2fe;background:#eef2ff;color:#4338ca}.co-run-fix-ai:hover{background:#e0e7ff}" +
+      ".co-run-fixall{margin-left:auto;display:flex;gap:8px}" +
+      ".co-fix-file + .co-fix-file{margin-top:18px;border-top:1px solid #e2e8f0;padding-top:14px}" +
+      ".co-fix-skip{margin:6px 0 0;padding-left:18px;font-size:12px}" +
       ".co-fix-overlay{position:fixed;inset:0;z-index:60;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:24px}" +
       ".co-fix-modal{background:#fff;border-radius:12px;width:min(880px,96vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 50px rgba(15,23,42,.3)}" +
       ".co-fix-mhead{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #e2e8f0}" +
@@ -1766,7 +1772,30 @@ export const PANEL_EXT = `(() => {
     setSelectOptions(rule.sel, [{ value: "all", label: "All rules" }], runRuleFilter);
     bar.appendChild(show.wrap);
     bar.appendChild(rule.wrap);
+    // Run-level fix actions, pushed to the right; shown only when a run has violations.
+    const actions = document.createElement("div");
+    actions.className = "co-run-fixall";
+    actions.id = "co-run-fixall";
+    actions.style.display = "none";
+    const plan = document.createElement("button");
+    plan.type = "button";
+    plan.className = "co-run-fix-btn";
+    plan.textContent = "Generate fix plan";
+    plan.addEventListener("click", () => doPlanAll());
+    const ai = document.createElement("button");
+    ai.type = "button";
+    ai.className = "co-run-fix-btn co-run-fix-ai";
+    ai.textContent = "Fix all with AI";
+    ai.addEventListener("click", () => doAiFixAll());
+    actions.appendChild(plan);
+    actions.appendChild(ai);
+    bar.appendChild(actions);
     return bar;
+  }
+
+  function showFixAllActions(show) {
+    const actions = document.getElementById("co-run-fixall");
+    if (actions) actions.style.display = show ? "flex" : "none";
   }
 
   function applyRunFilter() {
@@ -1849,6 +1878,7 @@ export const PANEL_EXT = `(() => {
     if (!Array.isArray(data) || data.length === 0) {
       list.innerHTML = '<div class="co-run-empty">No results.</div>';
       syncRunResultsBar([]);
+      showFixAllActions(false);
       return;
     }
     let html = "";
@@ -1881,6 +1911,7 @@ export const PANEL_EXT = `(() => {
     list.innerHTML = html;
     syncRunResultsBar(data.map((r) => r.slug));
     applyRunFilter();
+    showFixAllActions(data.some((r) => r.ok && (r.violations || []).length > 0));
   }
 
   async function doRun() {
@@ -1893,14 +1924,16 @@ export const PANEL_EXT = `(() => {
     if (status) status.textContent = "Running " + selectedSlugs.size + " rule(s)…";
     if (list) list.innerHTML = "";
     syncRunResultsBar([]);
+    showFixAllActions(false);
+    lastRun = {
+      slugs: Array.from(selectedSlugs),
+      path: pathInput ? pathInput.value.trim() : "",
+    };
     try {
       const res = await fetch("/api/run", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          slugs: Array.from(selectedSlugs),
-          path: pathInput ? pathInput.value.trim() : "",
-        }),
+        body: JSON.stringify(lastRun),
       });
       if (!res.ok) {
         const msg = await res.json().then((b) => b.error, () => "");
@@ -1961,7 +1994,9 @@ export const PANEL_EXT = `(() => {
     if (el) el.remove();
   }
 
-  function openAiFixModal(slug, path) {
+  // The empty fix-modal shell (title + optional subtitle + an empty #co-fix-mbody
+  // the caller fills). Shared by the per-file and whole-run fix flows.
+  function openFixModalShell(title, subtitle) {
     closeFixModal();
     const overlay = document.createElement("div");
     overlay.className = "co-fix-overlay";
@@ -1972,14 +2007,17 @@ export const PANEL_EXT = `(() => {
     const modal = document.createElement("div");
     modal.className = "co-fix-modal";
     modal.innerHTML =
-      '<div class="co-fix-mhead"><span class="co-fix-mtitle">Fix with AI · ' +
-      esc(slug) + "</span>" +
+      '<div class="co-fix-mhead"><span class="co-fix-mtitle">' + esc(title) + "</span>" +
       '<button type="button" class="co-fix-mclose" aria-label="Close">×</button></div>' +
-      '<div class="co-fix-mpath">' + esc(path) + "</div>" +
+      (subtitle ? '<div class="co-fix-mpath">' + esc(subtitle) + "</div>" : "") +
       '<div class="co-fix-mbody" id="co-fix-mbody"></div>';
     overlay.appendChild(modal);
     document.body.appendChild(overlay);
     modal.querySelector(".co-fix-mclose").addEventListener("click", closeFixModal);
+  }
+
+  function openAiFixModal(slug, path) {
+    openFixModalShell("Fix with AI · " + slug, path);
     renderAiChooser(slug, path);
   }
 
@@ -1999,24 +2037,28 @@ export const PANEL_EXT = `(() => {
     body.querySelector("#co-fix-plan").addEventListener("click", () => doAiPlan(slug, path));
   }
 
+  // Render a fix prompt with a Copy button into the modal body. Shared by the
+  // per-file plan and the whole-run plan — both return { prompt, file }.
+  function renderCopyPrompt(body, data) {
+    body.innerHTML =
+      '<p class="co-fix-mnote">Paste this into Claude Code (also written to ' +
+      esc(data.file) + "):</p>" +
+      '<pre class="co-fix-pre">' + esc(data.prompt) + "</pre>" +
+      '<div class="co-fix-mactions"><button type="button" class="co-run-btn" id="co-fix-copy">Copy</button></div>';
+    body.querySelector("#co-fix-copy").addEventListener("click", () => {
+      navigator.clipboard.writeText(data.prompt).then(
+        () => toast("Prompt copied"),
+        () => toast("Copy failed — select the text manually", "error"),
+      );
+    });
+  }
+
   async function doAiPlan(slug, path) {
     const body = document.getElementById("co-fix-mbody");
     if (body) body.innerHTML = '<p class="co-fix-mnote">Building prompt…</p>';
     try {
       const data = await postFix("/api/run/fix/plan", { slug: slug, path: path });
-      if (body) {
-        body.innerHTML =
-          '<p class="co-fix-mnote">Paste this into Claude Code (also written to ' +
-          esc(data.file) + "):</p>" +
-          '<pre class="co-fix-pre">' + esc(data.prompt) + "</pre>" +
-          '<div class="co-fix-mactions"><button type="button" class="co-run-btn" id="co-fix-copy">Copy</button></div>';
-        body.querySelector("#co-fix-copy").addEventListener("click", () => {
-          navigator.clipboard.writeText(data.prompt).then(
-            () => toast("Prompt copied"),
-            () => toast("Copy failed — select the text manually", "error"),
-          );
-        });
-      }
+      if (body) renderCopyPrompt(body, data);
     } catch (err) {
       if (body) body.innerHTML = '<p class="co-fix-merr">' + esc(err.message) + "</p>";
     }
@@ -2043,10 +2085,7 @@ export const PANEL_EXT = `(() => {
     body.innerHTML =
       '<p class="co-fix-mnote">Proposed by ' + esc(data.provider) + " / " + esc(data.model) +
       ". Review, then apply.</p>" +
-      '<div class="co-fix-diff"><div class="co-fix-pane"><div class="co-fix-plabel">Current</div>' +
-      '<pre class="co-fix-pre">' + esc(data.originalSource) + "</pre></div>" +
-      '<div class="co-fix-pane"><div class="co-fix-plabel">Proposed</div>' +
-      '<pre class="co-fix-pre">' + esc(data.newSource) + "</pre></div></div>" +
+      diffPanes(data.originalSource, data.newSource) +
       '<div class="co-fix-mactions"><button type="button" class="co-run-btn" id="co-fix-apply">Apply</button>' +
       '<button type="button" class="co-fix-alt" id="co-fix-discard">Discard</button></div>';
     body.querySelector("#co-fix-discard").addEventListener("click", closeFixModal);
@@ -2063,6 +2102,111 @@ export const PANEL_EXT = `(() => {
         toast(err.message, "error");
         btn.disabled = false;
         btn.textContent = "Apply";
+      }
+    });
+  }
+
+  // Run-level: one prompt covering every violation in the last run, for Claude Code.
+  async function doPlanAll() {
+    openFixModalShell("Generate fix plan", "Every violation in the last run");
+    const body = document.getElementById("co-fix-mbody");
+    if (body) body.innerHTML = '<p class="co-fix-mnote">Building plan…</p>';
+    try {
+      const data = await postFix("/api/run/fix/plan/all", lastRun);
+      if (body) renderCopyPrompt(body, data);
+    } catch (err) {
+      if (body) body.innerHTML = '<p class="co-fix-merr">' + esc(err.message) + "</p>";
+    }
+  }
+
+  function skippedHtml(skipped) {
+    if (!skipped || skipped.length === 0) return "";
+    const items = skipped
+      .map((s) => "<li>" + esc(s.path) + " — " + esc(s.reason) + "</li>")
+      .join("");
+    return '<div class="co-fix-mnote">Skipped (not AI-writable):<ul class="co-fix-skip">' +
+      items + "</ul></div>";
+  }
+
+  // Run-level: ask the model to correct every violated file, one call per file,
+  // and present each as a reviewable diff. Nothing is written until applied.
+  async function doAiFixAll() {
+    openFixModalShell("Fix all with AI", "Reviewing every violated file");
+    const body = document.getElementById("co-fix-mbody");
+    if (body) body.innerHTML = '<p class="co-fix-mnote">Asking the model for each file…</p>';
+    try {
+      renderAiFixAll(await postFix("/api/run/fix/ai/all", lastRun));
+    } catch (err) {
+      if (body) body.innerHTML = '<p class="co-fix-merr">' + esc(err.message) + "</p>";
+    }
+  }
+
+  function diffPanes(original, proposed) {
+    return '<div class="co-fix-diff"><div class="co-fix-pane"><div class="co-fix-plabel">Current</div>' +
+      '<pre class="co-fix-pre">' + esc(original) + "</pre></div>" +
+      '<div class="co-fix-pane"><div class="co-fix-plabel">Proposed</div>' +
+      '<pre class="co-fix-pre">' + esc(proposed) + "</pre></div></div>";
+  }
+
+  function renderAiFixAll(data) {
+    const body = document.getElementById("co-fix-mbody");
+    if (!body) return;
+    const proposals = data.proposals || [];
+    const skipped = data.skipped || [];
+    if (proposals.length === 0) {
+      body.innerHTML =
+        '<p class="co-fix-mnote">No AI-fixable files had violations.</p>' + skippedHtml(skipped);
+      return;
+    }
+    let appliedAny = false;
+    let html =
+      '<p class="co-fix-mnote">' + proposals.length +
+      (proposals.length === 1 ? " file" : " files") + " proposed by " +
+      esc(proposals[0].provider) + " / " + esc(proposals[0].model) +
+      ". Review each, then apply.</p>" +
+      '<div class="co-fix-mactions"><button type="button" class="co-run-btn" id="co-fix-applyall">Apply all</button>' +
+      '<button type="button" class="co-fix-alt" id="co-fix-closeall">Close</button></div>' +
+      skippedHtml(skipped);
+    proposals.forEach((p, i) => {
+      html += '<div class="co-fix-file">' +
+        '<div class="co-fix-mpath">' + esc(p.path) + " · " + esc(p.slug) + "</div>" +
+        diffPanes(p.originalSource, p.newSource) +
+        '<div class="co-fix-mactions"><button type="button" class="co-run-fix-btn co-run-fix-ai co-fix-one" data-i="' +
+        i + '">Apply</button></div></div>';
+    });
+    body.innerHTML = html;
+    const finish = () => {
+      closeFixModal();
+      if (appliedAny) doRun();
+    };
+    const applyOne = async (btn) => {
+      if (btn.disabled) return;
+      const p = proposals[Number(btn.getAttribute("data-i"))];
+      btn.disabled = true;
+      btn.textContent = "Applying…";
+      try {
+        await postFix("/api/run/fix/ai/apply", { path: p.path, newSource: p.newSource });
+        btn.textContent = "Applied";
+        appliedAny = true;
+      } catch (err) {
+        toast(err.message, "error");
+        btn.disabled = false;
+        btn.textContent = "Apply";
+      }
+    };
+    body.querySelector("#co-fix-closeall").addEventListener("click", finish);
+    body.querySelectorAll(".co-fix-one").forEach((btn) => {
+      btn.addEventListener("click", () => applyOne(btn));
+    });
+    body.querySelector("#co-fix-applyall").addEventListener("click", async (e) => {
+      const all = e.currentTarget;
+      all.disabled = true;
+      all.textContent = "Applying…";
+      for (const btn of body.querySelectorAll(".co-fix-one")) await applyOne(btn);
+      if (appliedAny) finish();
+      else {
+        all.disabled = false;
+        all.textContent = "Apply all";
       }
     });
   }

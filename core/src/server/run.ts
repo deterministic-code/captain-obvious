@@ -201,7 +201,7 @@ function runOne(slug: string, cwd: string, modeArgs: string[]): Promise<RunResul
 }
 
 /** Run each slug against `cwd` with a small pool — the rules re-scan the whole tree, so don't unbounded-fan-out. */
-async function mapPool<T, R>(
+export async function mapPool<T, R>(
   items: T[],
   limit: number,
   fn: (item: T) => Promise<R>,
