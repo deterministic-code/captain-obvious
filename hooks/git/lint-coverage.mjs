@@ -8,9 +8,9 @@ import {
 } from "./lint-shared.mjs";
 
 /** Committed ratchet state: the per-metric coverage floor, at the repo root. */
-export const BASELINE_FILE = "coverage-baseline.json";
+const BASELINE_FILE = "coverage-baseline.json";
 /** Where vitest's json-summary reporter writes current coverage. */
-export const SUMMARY_FILE = join("coverage", "coverage-summary.json");
+const SUMMARY_FILE = join("coverage", "coverage-summary.json");
 
 const METRICS = ["lines", "statements", "functions", "branches"];
 // v8 pct values carry two decimals; tolerate float noise below this.
@@ -37,7 +37,7 @@ function pcts(entry) {
  * paths so a baseline stays portable across checkouts. Throws when the report is
  * missing — a coverage gate that passes with no data is worse than useless.
  */
-export async function readSummary(repoRoot) {
+async function readSummary(repoRoot) {
   const raw = await readSourceOrNull(join(repoRoot, SUMMARY_FILE));
   if (raw == null) {
     throw new Error(
@@ -53,7 +53,7 @@ export async function readSummary(repoRoot) {
   return { total: pcts(parsed.total), files };
 }
 
-export async function loadBaseline(repoRoot) {
+async function loadBaseline(repoRoot) {
   const raw = await readSourceOrNull(join(repoRoot, BASELINE_FILE));
   return raw == null ? null : JSON.parse(raw);
 }

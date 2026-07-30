@@ -2,7 +2,6 @@
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import {
-  EXCLUDED_PATH_PARTS,
   emitJson,
   formatViolation,
   isExcluded,
@@ -15,8 +14,6 @@ import {
 import { JS_TS_EXTS as SUPPORTED_EXTS } from "../../lib/languages.mjs";
 
 export { SUPPORTED_EXTS };
-
-export { EXCLUDED_PATH_PARTS, isExcluded, stripStringsAndComments };
 
 export const DEVOPS_ALLOWLIST = [
   "scripts/hooks/install-git-hooks.mjs",
@@ -51,7 +48,7 @@ export function isLintable(path) {
   return SUPPORTED_EXTS.has(extname(path));
 }
 
-export const FORBIDDEN_SYNC_APIS = [
+const FORBIDDEN_SYNC_APIS = [
   "readFileSync",
   "writeFileSync",
   "appendFileSync",

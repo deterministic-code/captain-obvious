@@ -13,7 +13,7 @@ export async function cleanupTmp(root) {
 }
 
 /** Deterministic git identity so commits in tests don't depend on the host's git config. */
-export const GIT_TEST_ENV = {
+const GIT_TEST_ENV = {
   ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_"))),
   GIT_AUTHOR_NAME: "t",
   GIT_AUTHOR_EMAIL: "t@t",

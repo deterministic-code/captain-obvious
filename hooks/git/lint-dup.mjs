@@ -23,8 +23,8 @@ import { JSCPD_FORMAT_BY_EXT } from "../../lib/languages.mjs";
 
 const execFileAsync = promisify(execFile);
 
-export const MIN_TOKENS = 50;
-export const MIN_LINES = 5;
+const MIN_TOKENS = 50;
+const MIN_LINES = 5;
 
 export { JSCPD_FORMAT_BY_EXT };
 

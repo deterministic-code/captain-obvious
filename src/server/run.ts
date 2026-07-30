@@ -80,7 +80,7 @@ export function runMeta(): RunMeta {
   return { root: process.cwd(), runnableSlugs: [...RUNNABLE_SLUGS] };
 }
 
-export interface BrowseEntry {
+interface BrowseEntry {
   name: string;
   type: "dir" | "file";
   path: string;

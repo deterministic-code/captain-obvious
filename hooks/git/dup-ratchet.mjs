@@ -102,7 +102,7 @@ export function rangesOverlap([start, end], ranges) {
   return ranges.some(([s, e]) => start <= e && end >= s);
 }
 
-export async function pushBase(repoRoot) {
+async function pushBase(repoRoot) {
   try {
     const { stdout } = await execFileAsync(
       "git",

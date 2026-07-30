@@ -1,11 +1,5 @@
 // Row and option-bag types for the captain-obvious registry.
 
-/** Action-type slugs seeded by open.ts. New ones can be added via configure-action. */
-export type ActionSlug = "warn" | "halt" | "delay_halt";
-
-/** Environment slugs seeded by open.ts. */
-export type EnvironmentSlug = "claude" | "cursor" | "github";
-
 // --- Row shapes (as returned by better-sqlite3) ---------------------------
 
 export interface LanguageRow {
@@ -65,16 +59,6 @@ export interface RuleActionRow {
  * actions (check only).
  */
 export type FixKind = "inferred" | "script" | "output";
-
-export interface FixRow {
-  id: number;
-  rule_id: number;
-  kind: string;
-  language_id: number | null;
-  script_path: string | null;
-  script_body: string | null;
-  description: string | null;
-}
 
 // --- Command option bags --------------------------------------------------
 

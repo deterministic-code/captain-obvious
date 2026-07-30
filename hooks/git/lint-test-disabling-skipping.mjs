@@ -16,7 +16,7 @@ import {
 
 const execFileAsync = promisify(execFile);
 
-export const TEST_SUFFIX_RE =
+const TEST_SUFFIX_RE =
   /\.(?:functional|integration)\.test\.(?:ts|tsx|mts|mjs|js|jsx)$|\.test\.(?:ts|tsx|mts|mjs|js|jsx)$|\.spec\.(?:ts|tsx|mts|mjs|js|jsx)$/;
 
 const E2E_HELPER_RE =
@@ -319,7 +319,6 @@ export async function lintFile(path, cwd) {
   return findViolations(src, tier).map((v) => ({ ...v, path }));
 }
 
-export { formatViolation };
 
 function isInScope(path) {
   const normalized = path.replace(/\\/g, "/");

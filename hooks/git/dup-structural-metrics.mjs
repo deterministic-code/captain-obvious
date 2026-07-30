@@ -7,8 +7,8 @@ import {
   objectShape,
 } from "./ast-fingerprint.mjs";
 
-export const MIN_SIBLINGS = 3;
-export const MIN_CLONE_NODES = 20;
+const MIN_SIBLINGS = 3;
+const MIN_CLONE_NODES = 20;
 
 const DRY_REF = 'See CLAUDE.md "DRY — extract on the second copy".';
 
@@ -148,4 +148,3 @@ export async function subtreesForFile(path, { minNodes = MIN_CLONE_NODES } = {})
   };
 }
 
-export { fingerprint };

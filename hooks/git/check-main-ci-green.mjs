@@ -5,7 +5,7 @@ import { isInvokedAsScript } from "./lint-shared.mjs";
 
 const execFileAsync = promisify(execFile);
 
-export const BLOCKING_JOBS = ["unit", "integration"];
+const BLOCKING_JOBS = ["unit", "integration"];
 const FAILING_JOB_CONCLUSIONS = new Set([
   "failure",
   "timed_out",

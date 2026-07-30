@@ -23,11 +23,11 @@ import { RULES } from "../rules/index.js";
 /** slug -> registry metadata (the DB has no `stage` column; it lives here). */
 const META_BY_SLUG = new Map(RULES.map((r) => [r.meta.slug, r.meta]));
 
-export interface ActionView {
+interface ActionView {
   type: string;
   delayMs?: number | null;
 }
-export interface EnvActionView {
+interface EnvActionView {
   environment: string;
   type: string;
 }

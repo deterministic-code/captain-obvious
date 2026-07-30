@@ -39,7 +39,7 @@ export function profilingMeta(dbPath: string): ProfilingMeta {
   }
 }
 
-export interface ReportRow {
+interface ReportRow {
   count: number;
   total: number;
   avg: number;
