@@ -45,11 +45,15 @@ export interface RunTarget {
 }
 
 /**
- * Resolve `rawPath` (default: cwd) to a `RunTarget`. Throws if it doesn't exist
- * or isn't inside a git work tree.
+ * Resolve `rawPath` (default: the repo root) to a `RunTarget`. A relative path is
+ * resolved against the repo root, not the process cwd — the panel deals in
+ * root-relative violation paths, and `serve` may run from a subdirectory (e.g.
+ * `core/`), so cwd-relative resolution would point at a phantom file. Throws if
+ * the target doesn't exist or isn't inside a git work tree.
  */
 export async function resolveRunTarget(rawPath?: string): Promise<RunTarget> {
-  const target = rawPath?.trim() ? resolve(rawPath.trim()) : await repoRoot();
+  const root = await repoRoot();
+  const target = rawPath?.trim() ? resolve(root, rawPath.trim()) : root;
   const info = await stat(target).catch(() => {
     throw new Error(`no such file or folder: ${target}`);
   });
