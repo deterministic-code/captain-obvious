@@ -47,7 +47,7 @@ export const RULES: LintRule[] = [
     config: null,
     ratchetable: false,
     modes: FILE_MODES,
-    stages: ["pre-commit"],
+    stages: ["pre-push"],
   }),
   defineRule({
     slug: "lint-prettier",
