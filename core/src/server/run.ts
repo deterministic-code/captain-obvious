@@ -4,16 +4,14 @@
  * a human report and exit; here we spawn each with CO_JSON=1 so it emits one JSON
  * line of violations instead, and collect that. Display-only — no fixes applied.
  */
-import { execFile, spawn } from "node:child_process";
-import { readFile, readdir, stat } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { readFile, readdir } from "node:fs/promises";
 import { dirname, extname, join, resolve } from "node:path";
-import { promisify } from "node:util";
 import { checkScriptPath } from "../rules/dispatch.js";
 import { RULES } from "../rules/index.js";
 import type { Violation } from "../rules/types.js";
+import { resolveRunTarget } from "./target.js";
 import { JS_TS_EXTS as LINTABLE_EXTS } from "../../lib/languages.mjs";
-
-const execFileAsync = promisify(execFile);
 
 /** Directories the browser hides — build output, deps, VCS; dotfiles are skipped separately. */
 export const HIDDEN_DIRS = new Set([
@@ -138,18 +136,6 @@ export async function readSource(rawPath?: string): Promise<FileView> {
   return { path, text };
 }
 
-/** Throw a clean 400-worthy error unless `path` is inside a git work tree (the `--all` hooks need `git ls-files`). */
-async function assertGitRepo(path: string): Promise<void> {
-  await execFileAsync("git", [
-    "-C",
-    path,
-    "rev-parse",
-    "--is-inside-work-tree",
-  ]).catch(() => {
-    throw new Error(`not a git repository (or missing folder): ${path}`);
-  });
-}
-
 function errResult(slug: string, stderr: string, code: number | null): RunResult {
   return {
     slug,
@@ -244,14 +230,17 @@ export async function runRules(body: RunRequest): Promise<RunResult[]> {
   if (!Array.isArray(requested) || requested.length === 0) {
     throw new Error("slugs is required");
   }
-  const target = body.path?.trim() ? resolve(body.path.trim()) : process.cwd();
-  const info = await stat(target).catch(() => {
-    throw new Error(`no such file or folder: ${target}`);
-  });
-  const isDir = info.isDirectory();
-  const cwd = isDir ? target : dirname(target);
-  await assertGitRepo(cwd);
-  const modeArgs = isDir ? ["--all"] : ["--files", target];
+  const { cwd, modeArgs } = await resolveRunTarget(body.path);
   const slugs = [...new Set(requested)];
   return mapPool(slugs, 4, (slug) => runOne(slug, cwd, modeArgs));
+}
+
+/**
+ * Run one rule over a single file and return its result. The AI-fix flow uses
+ * this to get authoritative, fresh violations for the file it's about to fix,
+ * rather than trusting whatever the panel last rendered.
+ */
+export async function runRuleOnFile(slug: string, file: string): Promise<RunResult> {
+  const { cwd, modeArgs } = await resolveRunTarget(file);
+  return runOne(slug, cwd, modeArgs);
 }

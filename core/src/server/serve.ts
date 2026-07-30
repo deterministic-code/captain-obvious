@@ -28,6 +28,14 @@ import {
 import { profilingMeta, profilingReport } from "./profiling.js";
 import { activityFeed, activitySummary } from "./activity.js";
 import { browse, readSource, runMeta, runRules, type RunRequest } from "./run.js";
+import {
+  aiApplyFix,
+  aiProposeFix,
+  fixRule,
+  planFix,
+  type AiApplyRequest,
+  type FixRequest,
+} from "./fix.js";
 import { analyzeProject, analyzeStatus } from "./analyze.js";
 import { PANEL_EXT } from "./panelExt.js";
 
@@ -238,6 +246,24 @@ async function handle(
   if (pathname === "/api/run" && method === "POST") {
     const body = (await readBody(req)) as RunRequest;
     return sendJson(res, 200, await runRules(body));
+  }
+
+  // --- fix (apply a rule's remediation to violations the run surfaced) ---
+  if (pathname === "/api/run/fix" && method === "POST") {
+    const body = (await readBody(req)) as FixRequest;
+    return sendJson(res, 200, await fixRule(db, auditDb, body));
+  }
+  if (pathname === "/api/run/fix/plan" && method === "POST") {
+    const body = (await readBody(req)) as FixRequest;
+    return sendJson(res, 200, await planFix(db, body));
+  }
+  if (pathname === "/api/run/fix/ai" && method === "POST") {
+    const body = (await readBody(req)) as FixRequest;
+    return sendJson(res, 200, await aiProposeFix(db, body));
+  }
+  if (pathname === "/api/run/fix/ai/apply" && method === "POST") {
+    const body = (await readBody(req)) as AiApplyRequest;
+    return sendJson(res, 200, await aiApplyFix(body));
   }
 
   // --- analyze (detect the project's languages; log the scan) ---
