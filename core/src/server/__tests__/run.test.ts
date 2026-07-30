@@ -62,9 +62,14 @@ beforeEach(() => {
   );
   execFileMock.mockImplementation(((
     _cmd: string,
-    _args: string[],
+    args: string[],
     cb: (e: unknown, r: unknown) => void,
-  ) => cb(null, { stdout: "true\n", stderr: "" })) as never);
+    // `--show-toplevel` anchors the run at the repo root; the work-tree probe just needs a truthy line.
+  ) =>
+    cb(null, {
+      stdout: args.includes("--show-toplevel") ? `${process.cwd()}\n` : "true\n",
+      stderr: "",
+    })) as never);
 });
 
 afterEach(() => {
@@ -75,8 +80,8 @@ afterEach(() => {
 });
 
 describe("runMeta", () => {
-  it("returns the cwd as root and the full runnable slug set", () => {
-    const meta = runMeta();
+  it("returns the repo root and the full runnable slug set", async () => {
+    const meta = await runMeta();
     expect(meta.root).toBe(process.cwd());
     expect(meta.runnableSlugs).toEqual([...RUNNABLE_SLUGS]);
     expect(meta.runnableSlugs).toContain("lint-naming");
@@ -96,7 +101,7 @@ describe("browse", () => {
     expect(v.entries[1].path).toBe(filePath);
   });
 
-  it("defaults to the process cwd when no path is given", async () => {
+  it("defaults to the repo root when no path is given", async () => {
     const v = await browse();
     expect(v.path).toBe(process.cwd());
   });
@@ -179,7 +184,7 @@ describe("runRules — folder mode (--all)", () => {
     expect(opts.env.CO_JSON).toBe("1");
   });
 
-  it("defaults the target to the process cwd", async () => {
+  it("defaults the target to the repo root", async () => {
     await runRules({ slugs: ["lint-naming"] });
     const opts = spawnMock.mock.calls[0][2] as { cwd: string };
     expect(opts.cwd).toBe(process.cwd());

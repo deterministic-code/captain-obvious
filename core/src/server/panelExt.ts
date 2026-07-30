@@ -990,11 +990,14 @@ export const PANEL_EXT = `(() => {
       ".co-analyze-run:hover{background:#1e293b}.co-analyze-run:disabled{opacity:.5;cursor:not-allowed}" +
       ".co-analyze-ignore{cursor:pointer;font-size:13px;font-weight:600;padding:5px 12px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;color:#334155}" +
       ".co-analyze-ignore:hover{background:#f8fafc}" +
-      // Header project selector (top-right).
-      ".co-project-wrap{display:flex;align-items:center;gap:8px;margin-left:auto}" +
-      ".co-project-label{font-size:12px;font-weight:600;color:#64748b}" +
-      ".co-project-select{font-size:13px;padding:5px 10px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#0f172a;cursor:pointer;outline:none}" +
-      ".co-project-select:focus{border-color:#94a3b8}" +
+      // Header project selector (top-right). The select carries its own chevron
+      // (appearance:none) so it matches the panel's flat controls; the dark rule
+      // below re-declares the same background shorthand to swap the chevron color.
+      ".co-project-wrap{display:flex;align-items:center;gap:10px;margin-left:auto}" +
+      ".co-project-label{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#94a3b8}" +
+      ".co-project-select{appearance:none;-webkit-appearance:none;font-size:13px;font-weight:600;padding:6px 32px 6px 12px;border:1px solid #cbd5e1;border-radius:8px;background:#fff url(\\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\\") no-repeat right 11px center;color:#0f172a;cursor:pointer;outline:none;box-shadow:0 1px 2px rgba(15,23,42,.05);transition:border-color .12s,box-shadow .12s}" +
+      ".co-project-select:hover{border-color:#94a3b8}" +
+      ".co-project-select:focus{border-color:#0f172a;box-shadow:0 0 0 3px rgba(15,23,42,.12)}" +
       // Titleless segmented theme control (System / Light / Dark).
       ".co-theme-seg{display:inline-flex;align-items:center;margin-right:6px;border:1px solid #cbd5e1;border-radius:6px;overflow:hidden;background:#fff}" +
       ".co-theme-btn{cursor:pointer;border:0;background:none;padding:4px 7px;color:#64748b;display:inline-flex;align-items:center}" +
@@ -1126,7 +1129,9 @@ export const PANEL_EXT = `(() => {
       D + ".co-modal{background:rgba(0,0,0,.6)}" +
       D + ":is(.co-dd-panel,.co-run-browser,.co-modal-card,.co-modal-browser){background:#1e293b;border-color:#334155}" +
       D + ":is(.co-run-navbar,.co-run-subbar,.co-run-browser-head,.co-run-rule-head,.co-ed-head,.co-modal-browser-head){background:#0f172a}" +
-      D + ":is(.co-dd-search,.co-run-path,.co-modal-input,.co-set-select,.co-project-select){background:#0f172a;border-color:#475569;color:#e2e8f0}" +
+      D + ":is(.co-dd-search,.co-run-path,.co-modal-input,.co-set-select){background:#0f172a;border-color:#475569;color:#e2e8f0}" +
+      D + ".co-project-select{background:#0f172a url(\\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\\") no-repeat right 11px center;border-color:#475569;color:#e2e8f0}" +
+      D + ".co-project-select:focus{border-color:#94a3b8;box-shadow:0 0 0 3px rgba(148,163,184,.18)}" +
       D + ".co-theme-seg{background:#1e293b;border-color:#475569}" +
       D + ".co-theme-btn + .co-theme-btn{border-left-color:#475569}" +
       D + ".co-theme-btn-active,.co-theme-btn-active:hover{background:#475569;color:#fff}" +

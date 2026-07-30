@@ -10,7 +10,7 @@ import { dirname, extname, join, resolve } from "node:path";
 import { checkScriptPath } from "../rules/dispatch.js";
 import { RULES } from "../rules/index.js";
 import type { Violation } from "../rules/types.js";
-import { resolveRunTarget } from "./target.js";
+import { repoRoot, resolveRunTarget } from "./target.js";
 import { JS_TS_EXTS as LINTABLE_EXTS } from "../../lib/languages.mjs";
 
 /** Directories the browser hides — build output, deps, VCS; dotfiles are skipped separately. */
@@ -74,8 +74,8 @@ export interface RunMeta {
 }
 
 /** GET /api/run/meta — the default target folder + the slugs the Run tab may run. */
-export function runMeta(): RunMeta {
-  return { root: process.cwd(), runnableSlugs: [...RUNNABLE_SLUGS] };
+export async function runMeta(): Promise<RunMeta> {
+  return { root: await repoRoot(), runnableSlugs: [...RUNNABLE_SLUGS] };
 }
 
 interface BrowseEntry {
@@ -95,7 +95,7 @@ export interface BrowseView {
  * can't hand us a real path). Dirs first, then files, each alphabetical.
  */
 export async function browse(rawPath?: string): Promise<BrowseView> {
-  const path = rawPath?.trim() ? resolve(rawPath.trim()) : process.cwd();
+  const path = rawPath?.trim() ? resolve(rawPath.trim()) : await repoRoot();
   const dirents = await readdir(path, { withFileTypes: true });
   const dirs: BrowseEntry[] = [];
   const files: BrowseEntry[] = [];
@@ -128,7 +128,7 @@ export interface FileView {
  */
 export async function readSource(rawPath?: string): Promise<FileView> {
   if (!rawPath?.trim()) throw new Error("path is required");
-  const path = resolve(rawPath.trim());
+  const path = resolve(await repoRoot(), rawPath.trim());
   if (!LINTABLE_EXTS.has(extname(path))) {
     throw new Error(`not a viewable file: ${path}`);
   }

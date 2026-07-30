@@ -235,7 +235,7 @@ async function handle(
 
   // --- run (execute rules against a folder) ---
   if (pathname === "/api/run/meta" && method === "GET") {
-    return sendJson(res, 200, runMeta());
+    return sendJson(res, 200, await runMeta());
   }
   if (pathname === "/api/run/browse" && method === "GET") {
     return sendJson(res, 200, await browse(url.searchParams.get("path") ?? undefined));
