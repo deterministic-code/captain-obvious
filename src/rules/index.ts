@@ -378,5 +378,6 @@ export const RULES: LintRule[] = [
     ratchetable: false,
     modes: [],
     stages: ["server"],
+    settingsControls: ["project-note"],
   }),
 ];

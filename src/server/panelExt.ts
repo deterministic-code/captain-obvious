@@ -2030,6 +2030,34 @@ export const PANEL_EXT = `(() => {
         },
       };
     },
+    "project-note": (ctx) => {
+      const section = document.createElement("div");
+      section.className = "co-set-section";
+      const heading = document.createElement("div");
+      heading.className = "co-set-heading";
+      heading.textContent = "Project notes";
+      section.appendChild(heading);
+      const hint = document.createElement("div");
+      hint.className = "co-modal-hint";
+      hint.textContent =
+        "Free-text notes for this project (stored as the project description).";
+      section.appendChild(hint);
+      const project = ctx.project;
+      const ta = document.createElement("textarea");
+      ta.className = "co-modal-input co-set-json";
+      ta.value = project && project.description ? project.description : "";
+      section.appendChild(ta);
+      ctx.card.appendChild(section);
+      return {
+        save: async () => {
+          if (!project) return;
+          const next = ta.value;
+          const updated = await patchProject(project.id, { description: next });
+          project.description =
+            updated && "description" in updated ? updated.description : next;
+        },
+      };
+    },
   };
 
   function openRuleSettingsModal(slug) {
