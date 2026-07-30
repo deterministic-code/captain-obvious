@@ -18,12 +18,6 @@ export function requireLanguageId(db: Db, slug: string): number {
   return id;
 }
 
-export function requireHookId(db: Db, slug: string): number {
-  const id = idBySlug(db, "hooks", slug);
-  if (id === undefined) throw new Error(`unknown hook: ${slug}`);
-  return id;
-}
-
 export function requireActionTypeId(db: Db, slug: string): number {
   const id = idBySlug(db, "action_types", slug);
   if (id === undefined) throw new Error(`unknown action type: ${slug}`);

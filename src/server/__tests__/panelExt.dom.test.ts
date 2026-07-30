@@ -12,15 +12,23 @@ const RULES = [
     slug: "lint-a",
     name: "A",
     categories: ["size"],
+    stages: ["pre-commit"],
     languages: ["typescript"],
     actions: [],
     config: { maxLines: 300, exclude: ["dist/**"] },
     defaultAction: { type: "halt", delayMs: null },
     envActions: [{ environment: "claude", type: "warn" }],
   },
-  { slug: "lint-b", name: "B", categories: ["naming"], languages: [], actions: [{ kind: "output" }] },
-  // No category and language-independent: the filters can't exclude it, so it always shows.
-  { slug: "lint-c", name: "C", categories: [], languages: [], languageIndependent: true, actions: [] },
+  {
+    slug: "lint-b",
+    name: "B",
+    categories: ["naming"],
+    stages: ["pre-commit", "pre-push"],
+    languages: [],
+    actions: [{ kind: "output" }],
+  },
+  // No category/stage and language-independent: the filters can't exclude it, so it always shows.
+  { slug: "lint-c", name: "C", categories: [], stages: [], languages: [], languageIndependent: true, actions: [] },
 ];
 const META = {
   languages: [
@@ -37,6 +45,12 @@ const META = {
     { slug: "warn", name: "Warn" },
     { slug: "halt", name: "Halt" },
     { slug: "delay_halt", name: "Delayed halt" },
+  ],
+  stages: [
+    { slug: "pre-commit", name: "Pre-commit" },
+    { slug: "pre-push", name: "Pre-push" },
+    { slug: "claude-tool", name: "Claude tool" },
+    { slug: "server", name: "Server" },
   ],
 };
 
@@ -265,9 +279,16 @@ describe("panelExt injected script", () => {
       "Fix",
       "",
     ]);
-    // The per-row Languages cell lands in the same (third) column.
+    // The native Category/Stage cells are hidden and replaced in place by
+    // editable-pill cells; Languages sits right after the Category pill cell.
     const firstRow = document.querySelector("tbody tr")!;
-    expect(firstRow.children[2].classList.contains("co-lang-td")).toBe(true);
+    expect(firstRow.children[2].classList.contains("co-cat-td")).toBe(true);
+    expect(firstRow.children[3].classList.contains("co-lang-td")).toBe(true);
+    expect(firstRow.children[5].classList.contains("co-stage-td")).toBe(true);
+    expect(
+      (firstRow.children[1] as HTMLElement).style.display === "none" &&
+        (firstRow.children[4] as HTMLElement).style.display === "none",
+    ).toBe(true);
   });
 
   it("sorts rows by a clicked column and toggles asc/desc, surviving re-render", async () => {
@@ -450,6 +471,92 @@ describe("panelExt injected script", () => {
       "javascript",
       "typescript",
     ]);
+  });
+
+  it("renders editable category pills and PATCHes the global rule on toggle", async () => {
+    await runInjected();
+    const cell = document.querySelector(".co-cat-td")!; // lint-a has ["size"]
+    const pills = [...cell.querySelectorAll(".co-pill")].map((p) => p.textContent);
+    expect(pills.some((t) => t!.startsWith("size"))).toBe(true);
+    const box = [...cell.querySelectorAll<HTMLInputElement>(".co-dd-opt")].find(
+      (i) => i.value === "naming",
+    )!;
+    box.checked = true;
+    box.dispatchEvent(new Event("change", { bubbles: true }));
+    for (let i = 0; i < 3; i++) await flush();
+    expect(patchCalls).toHaveLength(1);
+    expect(patchCalls[0].url).toBe("/api/rules/lint-a");
+    expect([...(patchCalls[0].body.categories as string[])].sort()).toEqual([
+      "naming",
+      "size",
+    ]);
+  });
+
+  it("removes a category pill and PATCHes the reduced set", async () => {
+    await runInjected();
+    const cell = document.querySelector(".co-cat-td")!; // lint-a
+    cell.querySelector<HTMLButtonElement>(".co-pill-x")!.click();
+    for (let i = 0; i < 3; i++) await flush();
+    expect(patchCalls[0].url).toBe("/api/rules/lint-a");
+    expect(patchCalls[0].body.categories).toEqual([]);
+  });
+
+  it("creates a brand-new category from free text and PATCHes it", async () => {
+    await runInjected();
+    const cell = document.querySelector(".co-cat-td")!; // lint-a
+    cell.querySelector<HTMLInputElement>(".co-pills-new")!.value = "governance";
+    cell.querySelector<HTMLButtonElement>(".co-dd-add-btn")!.click();
+    for (let i = 0; i < 3; i++) await flush();
+    expect(patchCalls[0].url).toBe("/api/rules/lint-a");
+    expect([...(patchCalls[0].body.categories as string[])].sort()).toEqual([
+      "governance",
+      "size",
+    ]);
+  });
+
+  it("renders editable stage pills and PATCHes the global rule on toggle", async () => {
+    await runInjected();
+    const cell = document.querySelector(".co-stage-td")!; // lint-a has ["pre-commit"]
+    const pills = [...cell.querySelectorAll(".co-pill")].map((p) => p.textContent);
+    expect(pills.some((t) => t!.startsWith("Pre-commit"))).toBe(true);
+    const box = [...cell.querySelectorAll<HTMLInputElement>(".co-dd-opt")].find(
+      (i) => i.value === "pre-push",
+    )!;
+    box.checked = true;
+    box.dispatchEvent(new Event("change", { bubbles: true }));
+    for (let i = 0; i < 3; i++) await flush();
+    expect(patchCalls[0].url).toBe("/api/rules/lint-a");
+    expect([...(patchCalls[0].body.stages as string[])].sort()).toEqual([
+      "pre-commit",
+      "pre-push",
+    ]);
+  });
+
+  it("offers no free-text creation for stages (fixed taxonomy)", async () => {
+    await runInjected();
+    const cell = document.querySelector(".co-stage-td")!;
+    expect(cell.querySelector(".co-pills-new")).toBeNull();
+    // The four canonical stages are the only options.
+    const opts = [...cell.querySelectorAll<HTMLInputElement>(".co-dd-opt")].map(
+      (i) => i.value,
+    );
+    expect(opts.sort()).toEqual(["claude-tool", "pre-commit", "pre-push", "server"]);
+  });
+
+  it("narrows rows by the Stage filter", async () => {
+    await runInjected();
+    for (const v of ["pre-commit", "claude-tool", "server"]) {
+      const b = [
+        ...document.querySelectorAll<HTMLInputElement>(".co-filter-stages .co-dd-opt"),
+      ].find((i) => i.value === v)!;
+      b.checked = false;
+      b.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    for (let i = 0; i < 3; i++) await flush();
+    const rows = document.querySelectorAll<HTMLTableRowElement>("tbody tr");
+    expect(rows[0].style.display).toBe("none"); // lint-a (pre-commit only) hidden
+    expect(rows[1].style.display).toBe(""); // lint-b (has pre-push) shown
+    expect(rows[2].style.display).toBe(""); // lint-c (no stage) always shows
   });
 
   it("shows every row by default (All selected drives the filter)", async () => {

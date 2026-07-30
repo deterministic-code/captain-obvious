@@ -187,9 +187,14 @@ describe("getMeta", () => {
 
 describe("getStats", () => {
   it("counts totals, enabled/disabled, and the three breakdowns", () => {
-    addRule(db, { slug: "lint-a", name: "A", category: "size" });
-    addRule(db, { slug: "lint-b", name: "B", category: "size" });
-    addRule(db, { slug: "lint-c", name: "C" }); // uncategorized
+    addRule(db, { slug: "lint-a", name: "A", category: "size", stages: ["pre-commit"] });
+    addRule(db, {
+      slug: "lint-b",
+      name: "B",
+      category: "size",
+      stages: ["pre-commit", "pre-push"],
+    });
+    addRule(db, { slug: "lint-c", name: "C" }); // uncategorized, no stages
     configureRule(db, "lint-b", { enabled: false });
     configureRule(db, "lint-a", {
       setAction: { type: "halt", environment: null, delayMs: null },
@@ -205,19 +210,20 @@ describe("getStats", () => {
     expect(stats.disabled).toBe(1);
     expect(stats.byCategory).toEqual({ size: 2, uncategorized: 1 });
     expect(stats.byActionType).toEqual({ halt: 1 });
-    // No rule is in META_BY_SLUG (all custom), so every stage is "unknown".
-    expect(stats.byStage).toEqual({ unknown: 3 });
+    // byStage counts rule_stages memberships (a rule counts once per stage); the
+    // stage-less lint-c contributes nothing.
+    expect(stats.byStage).toEqual({ "pre-commit": 2, "pre-push": 1 });
   });
 
-  it("resolves byStage from the registry metadata for bundled rules", () => {
-    // Seeding real rules means their slugs hit META_BY_SLUG, so byStage carries
-    // the concrete stages rather than the "unknown" fallback.
+  it("resolves byStage from rule_stages for bundled rules", () => {
+    // Seeding writes each rule's meta.stages into rule_stages, so byStage carries
+    // the concrete stages; multi-stage rules count once per stage.
     seed(db);
     const stats = getStats(db);
-    expect(Object.keys(stats.byStage)).not.toEqual(["unknown"]);
-    const stagedTotal = Object.values(stats.byStage).reduce((a, b) => a + b, 0);
-    expect(stagedTotal).toBe(stats.total);
     expect(stats.byStage).toHaveProperty("pre-commit");
+    expect(Object.values(stats.byStage).every((n) => n > 0)).toBe(true);
+    const stagedTotal = Object.values(stats.byStage).reduce((a, b) => a + b, 0);
+    expect(stagedTotal).toBeGreaterThanOrEqual(stats.total);
   });
 });
 
@@ -270,6 +276,25 @@ describe("patchRule", () => {
     addRule(db, { slug: "lint-pl3", name: "PL3", languages: ["typescript"] });
     const v = patchRule(db, "lint-pl3", { languages: [] });
     expect(v.languages).toEqual([]);
+  });
+
+  it("sets the category set by diffing add/remove against current links", () => {
+    addRule(db, { slug: "lint-pcat", name: "PCat", category: "size" });
+    const v = patchRule(db, "lint-pcat", { categories: ["naming", "complexity"] });
+    expect([...v.categories].sort()).toEqual(["complexity", "naming"]);
+  });
+
+  it("is a no-op when the desired category set already matches", () => {
+    addRule(db, { slug: "lint-pcat2", name: "PCat2", category: "size" });
+    const v = patchRule(db, "lint-pcat2", { categories: ["size"] });
+    expect(v.categories).toEqual(["size"]);
+  });
+
+  it("replaces the stage set (canonical order) via setStages", () => {
+    addRule(db, { slug: "lint-pst", name: "PSt", stages: ["pre-commit"] });
+    const v = patchRule(db, "lint-pst", { stages: ["pre-push", "claude-tool"] });
+    expect(v.stages).toEqual(["pre-push", "claude-tool"]);
+    expect(v.stage).toBe("pre-push");
   });
 
   it("throws for an unknown rule when the patch is a no-op", () => {

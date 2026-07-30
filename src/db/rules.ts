@@ -3,12 +3,12 @@ import { isUniqueViolation } from "./languages.js";
 import {
   requireActionTypeId,
   requireEnvironmentId,
-  requireHookId,
   requireLanguageId,
   requireRule,
 } from "./lookups.js";
 import type { Db } from "./open.js";
 import type { RuleMeta } from "../rules/types.js";
+import { requireStage } from "../rules/stages.js";
 import type {
   ActionBinding,
   AddRuleOpts,
@@ -17,18 +17,18 @@ import type {
 } from "./types.js";
 
 /**
- * Insert a rule and link it to languages and hooks. All referenced language and
- * hook slugs must already exist; validation happens before any write and the
- * whole thing runs in a transaction, so a bad reference leaves no partial rows.
+ * Insert a rule and link it to languages, categories, and stages. All referenced
+ * slugs must be valid; validation happens before any write and the whole thing
+ * runs in a transaction, so a bad reference leaves no partial rows.
  */
 export function addRule(db: Db, opts: AddRuleOpts): RuleRow {
-  const { slug, name, category, categories, description, languages, config, hooks } =
+  const { slug, name, category, categories, description, languages, config, stages } =
     opts;
   if (!slug || !name) throw new Error("add-rule requires --slug and --name");
   const configJson = normalizeConfig(config);
 
   const languageIds = (languages ?? []).map((s) => requireLanguageId(db, s));
-  const hookIds = (hooks ?? []).map((s) => requireHookId(db, s));
+  const stageSlugs = (stages ?? []).map((s) => requireStage(s));
 
   const insert = db.transaction((): RuleRow => {
     let ruleId: number | bigint;
@@ -47,11 +47,8 @@ export function addRule(db: Db, opts: AddRuleOpts): RuleRow {
       "INSERT INTO rule_languages (rule_id, language_id) VALUES (?, ?)",
     );
     for (const id of languageIds) linkLang.run(ruleId, id);
-    const linkHook = db.prepare(
-      "INSERT INTO hook_rules (hook_id, rule_id) VALUES (?, ?)",
-    );
-    for (const id of hookIds) linkHook.run(id, ruleId);
     linkCategories(db, ruleId, categorySet(category, categories));
+    linkStages(db, ruleId, stageSlugs);
     return db.prepare("SELECT * FROM rules WHERE id = ?").get(ruleId) as RuleRow;
   });
 
@@ -83,6 +80,15 @@ function linkCategories(
     "INSERT INTO rule_categories (rule_id, category) VALUES (?, ?)",
   );
   for (const c of categories) link.run(ruleId, c);
+}
+
+/** Replace a rule's stage links with the given set (callers validate the slugs). */
+function linkStages(db: Db, ruleId: number | bigint, stages: string[]): void {
+  db.prepare("DELETE FROM rule_stages WHERE rule_id = ?").run(ruleId);
+  const link = db.prepare(
+    "INSERT INTO rule_stages (rule_id, stage) VALUES (?, ?)",
+  );
+  for (const s of stages) link.run(ruleId, s);
 }
 
 /**
@@ -125,6 +131,7 @@ export function configureRule(
   const removeLangIds = (opts.removeLanguages ?? []).map((s) =>
     requireLanguageId(db, s),
   );
+  const setStageSlugs = opts.setStages?.map((s) => requireStage(s));
   const binding = opts.setAction
     ? resolveBinding(db, opts.setAction)
     : undefined;
@@ -165,6 +172,8 @@ export function configureRule(
       reconcilePrimaryCategory(db, rule.id);
     }
 
+    if (setStageSlugs !== undefined) linkStages(db, rule.id, setStageSlugs);
+
     if (binding) setRuleAction(db, rule.id, binding);
     if (opts.removeAction) removeRuleAction(db, rule.id, opts.removeAction);
 
@@ -190,6 +199,9 @@ function auditConfigureRule(
   }
   if ((opts.addCategories?.length ?? 0) + (opts.removeCategories?.length ?? 0) > 0) {
     logEvent("rule.configured", `updated categories for rule ${slug}`);
+  }
+  if (opts.setStages !== undefined) {
+    logEvent("rule.configured", `updated stages for rule ${slug}`);
   }
   if (opts.setAction) {
     const env = opts.setAction.environment ?? "all environments";
@@ -298,6 +310,7 @@ export function upsertRule(db: Db, meta: RuleMeta): void {
     for (const id of languageIds) link.run(ruleId, id);
 
     linkCategories(db, ruleId, categorySet(meta.category, meta.categories));
+    linkStages(db, ruleId, meta.stages);
   });
 
   tx();

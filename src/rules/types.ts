@@ -2,6 +2,11 @@
 // registry metadata that `seed-rules` writes to the DB and the execution surface
 // (a uniform `run`, plus an optional pure `findViolations` for per-source rules).
 
+import type { Stage } from "./stages.js";
+
+/** When the rule runs. Canonical taxonomy + git flags live in stages.ts. */
+export type { Stage };
+
 /** Languages the rules police today. JS/TS family only; other dialects later. */
 export type Language = "typescript" | "javascript";
 
@@ -22,14 +27,6 @@ export type RuleCategory =
   | "testing"
   | "formatting"
   | "governance";
-
-/**
- * When the rule runs. The git stages fire locally (pre-commit / pre-push);
- * `claude-tool` fires from the Claude Code PreToolUse guard (before an edit is
- * applied), not from git; `server` marks a governance policy that only GitHub
- * can enforce (branch protection / rulesets) and therefore has no local runner.
- */
-export type Stage = "pre-commit" | "pre-push" | "claude-tool" | "server";
 
 /** Normalized violation shape, identical across every rule (lint-shared.mjs). */
 export interface Violation {

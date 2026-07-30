@@ -50,6 +50,16 @@ function primaryCategory(slug: string): string | null {
   ).category;
 }
 
+function ruleStages(slug: string): string[] {
+  return (
+    db
+      .prepare(
+        "SELECT rs.stage FROM rule_stages rs JOIN rules r ON r.id = rs.rule_id WHERE r.slug = ? ORDER BY rs.stage",
+      )
+      .all(slug) as { stage: string }[]
+  ).map((r) => r.stage);
+}
+
 describe("addRule", () => {
   it("inserts a rule and links languages", () => {
     const row = addRule(db, {
@@ -106,25 +116,24 @@ describe("addRule", () => {
     expect(() => addRule(db, { slug: "", name: "X" })).toThrow(/requires/);
   });
 
-  it("links hooks to the rule", () => {
-    const envId = (
-      db.prepare("SELECT id FROM environments WHERE slug = ?").get("claude") as {
-        id: number;
-      }
-    ).id;
-    db.prepare("INSERT INTO hooks (environment_id, slug) VALUES (?, ?)").run(
-      envId,
-      "dispatch-guard",
-    );
+  it("links stages to the rule", () => {
     const row = addRule(db, {
-      slug: "lint-hooked",
-      name: "Hooked",
-      hooks: ["dispatch-guard"],
+      slug: "lint-staged",
+      name: "Staged",
+      stages: ["pre-commit", "claude-tool"],
     });
-    const links = db
-      .prepare("SELECT count(*) AS n FROM hook_rules WHERE rule_id = ?")
-      .get(row.id) as { n: number };
-    expect(links.n).toBe(1);
+    const stages = (
+      db
+        .prepare("SELECT stage FROM rule_stages WHERE rule_id = ? ORDER BY stage")
+        .all(row.id) as { stage: string }[]
+    ).map((r) => r.stage);
+    expect(stages).toEqual(["claude-tool", "pre-commit"]);
+  });
+
+  it("rejects an unknown stage", () => {
+    expect(() =>
+      addRule(db, { slug: "lint-badstage", name: "Bad", stages: ["nope"] }),
+    ).toThrow(/unknown stage: nope/);
   });
 
   it("rethrows a non-unique insert error unchanged", () => {
@@ -160,6 +169,19 @@ describe("configureRule", () => {
     expect(categories("lint-max-lines")).toEqual(["complexity", "size"]);
     configureRule(db, "lint-max-lines", { removeCategories: ["complexity"] });
     expect(categories("lint-max-lines")).toEqual(["size"]);
+  });
+
+  it("replaces the full stage set with setStages", () => {
+    configureRule(db, "lint-max-lines", { setStages: ["pre-commit", "pre-push"] });
+    expect(ruleStages("lint-max-lines")).toEqual(["pre-commit", "pre-push"]);
+    configureRule(db, "lint-max-lines", { setStages: ["claude-tool"] });
+    expect(ruleStages("lint-max-lines")).toEqual(["claude-tool"]);
+  });
+
+  it("rejects an unknown stage in setStages", () => {
+    expect(() =>
+      configureRule(db, "lint-max-lines", { setStages: ["nope"] }),
+    ).toThrow(/unknown stage: nope/);
   });
 
   it("re-points the primary when the primary category is removed", () => {

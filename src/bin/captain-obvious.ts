@@ -16,10 +16,10 @@ const USAGE = `usage: captain-obvious <command> [flags]
 commands:
   add-language     --slug <s> --name <n> [--ext <csv>]
   add-rule         --slug <s> --name <n> [--category <c>] [--categories <csv>]
-                   [--description <d>] [--lang <csv>] [--config <json>] [--hook <csv>]
+                   [--description <d>] [--lang <csv>] [--config <json>] [--stages <csv>]
   configure-rule   <rule-slug> [--set-config <json>] [--enable | --disable]
                    [--add-lang <csv>] [--remove-lang <csv>]
-                   [--add-category <csv>] [--remove-category <csv>]
+                   [--add-category <csv>] [--remove-category <csv>] [--set-stages <csv>]
                    [--set-action <type>[:<env>][:<delayMs>]] [--remove-action <env|default|all>]
   configure-action <type-slug> [--add] [--name <n>]
   seed-rules       [--only <slug>]   populate the registry from the bundled rule set
@@ -94,7 +94,7 @@ function runAddRule(args: ParsedArgs): void {
       description: args.values.get("description"),
       languages: csv(args.values.get("lang")),
       config: args.values.get("config"),
-      hooks: csv(args.values.get("hook")),
+      stages: csv(args.values.get("stages")),
     });
     done(`added rule ${row.slug}`, row);
   });
@@ -120,6 +120,9 @@ function runConfigureRule(args: ParsedArgs): void {
       removeLanguages: csv(args.values.get("remove-lang")),
       addCategories: csv(args.values.get("add-category")),
       removeCategories: csv(args.values.get("remove-category")),
+      setStages: args.values.has("set-stages")
+        ? csv(args.values.get("set-stages"))
+        : undefined,
       setAction: setAction ? parseActionBinding(setAction) : undefined,
       removeAction: args.values.get("remove-action"),
     });

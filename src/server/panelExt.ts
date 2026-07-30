@@ -19,10 +19,15 @@ export const PANEL_EXT = `(() => {
   let langsBySlug = {};
   let langIndependentBySlug = {};
   let catsBySlug = {};
+  let stagesBySlug = {};
   let supportedLangs = [];
   let nameBySlug = {};
   let allCategories = [];
+  // The canonical stage list ({slug,name}) from /api/meta; drives the Stage
+  // picker and the Stage filter. Stage/category edits hit the GLOBAL catalog.
+  let allStages = [];
   const selectedCats = new Set();
+  const selectedStages = new Set();
   const selectedLangs = new Set();
   let runRoot = "";
   let runnableSlugs = [];
@@ -288,6 +293,18 @@ export const PANEL_EXT = `(() => {
     return res.json();
   }
 
+  // Categories and stages are global catalog metadata (no per-project overlay),
+  // so their edits hit /api/rules/:slug, not the project-scoped route above.
+  async function patchGlobalRule(slug, patch) {
+    const url = "/api/rules/" + encodeURIComponent(slug);
+    const res = await fetch(url, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) throw new Error("PATCH " + url + " -> " + res.status);
+  }
+
   async function patchLanguages(slug, languages) {
     await patchProjectRule(slug, { languages });
   }
@@ -341,6 +358,181 @@ export const PANEL_EXT = `(() => {
     cell.setAttribute("data-langs", current.slice().sort().join(","));
   }
 
+  // An in-cell editable-pill control: the current values render as removable
+  // pills, and a "+" dropdown toggles the known options (opts.options) plus, when
+  // opts.allowCreate, a free-text field to mint a new value. onChange(values)
+  // fires on every add/remove with the full set. Checkboxes are built once and
+  // kept in sync in place, so toggling one never detaches the row it lives in.
+  function buildPillEditor(opts) {
+    const values = (opts.values || []).slice();
+    const boxes = {};
+    const labelOf = (v) => {
+      const o = opts.options.find((x) => x.value === v);
+      return o ? o.label : v;
+    };
+
+    const wrap = document.createElement("div");
+    wrap.className = "co-pills";
+    const pillList = document.createElement("span");
+    pillList.className = "co-pills-list";
+    wrap.appendChild(pillList);
+
+    const details = document.createElement("details");
+    details.className = "co-dd co-pills-add";
+    const summary = document.createElement("summary");
+    summary.className = "co-pills-add-btn";
+    summary.setAttribute("aria-label", "Edit");
+    summary.textContent = "+";
+    details.appendChild(summary);
+    const panel = document.createElement("div");
+    panel.className = "co-dd-panel";
+    const list = document.createElement("div");
+    list.className = "co-dd-list";
+    panel.appendChild(list);
+    details.appendChild(panel);
+    wrap.appendChild(details);
+
+    function renderPills() {
+      pillList.innerHTML = "";
+      for (const v of values) {
+        const pill = document.createElement("span");
+        pill.className = "co-pill";
+        pill.textContent = labelOf(v);
+        const x = document.createElement("button");
+        x.type = "button";
+        x.className = "co-pill-x";
+        x.setAttribute("aria-label", "Remove " + labelOf(v));
+        x.textContent = "×";
+        x.addEventListener("click", () => setValue(v, false));
+        pill.appendChild(x);
+        pillList.appendChild(pill);
+      }
+    }
+    function setValue(v, on) {
+      const i = values.indexOf(v);
+      if (on && i === -1) values.push(v);
+      else if (!on && i !== -1) values.splice(i, 1);
+      else return;
+      if (boxes[v]) boxes[v].checked = on;
+      renderPills();
+      opts.onChange(values.slice());
+    }
+    function addOptionRow(value, label) {
+      const item = document.createElement("label");
+      item.className = "co-dd-item";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.className = "co-dd-opt";
+      cb.value = value;
+      cb.checked = values.indexOf(value) !== -1;
+      cb.addEventListener("change", () => setValue(value, cb.checked));
+      item.appendChild(cb);
+      const span = document.createElement("span");
+      span.textContent = label;
+      item.appendChild(span);
+      list.appendChild(item);
+      boxes[value] = cb;
+    }
+    for (const o of opts.options) addOptionRow(o.value, o.label);
+    if (opts.allowCreate) {
+      for (const v of values) if (!boxes[v]) addOptionRow(v, v);
+      const addRow = document.createElement("div");
+      addRow.className = "co-dd-add-row";
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "co-dd-search co-pills-new";
+      input.placeholder = "New…";
+      const addBtn = document.createElement("button");
+      addBtn.type = "button";
+      addBtn.className = "co-dd-add-btn";
+      addBtn.textContent = "Add";
+      const commit = () => {
+        const v = input.value.trim();
+        input.value = "";
+        if (!v) return;
+        if (!boxes[v]) addOptionRow(v, v);
+        setValue(v, true);
+      };
+      addBtn.addEventListener("click", commit);
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); commit(); }
+      });
+      addRow.appendChild(input);
+      addRow.appendChild(addBtn);
+      panel.appendChild(addRow);
+    }
+    renderPills();
+    return { el: wrap };
+  }
+
+  function buildCategoryCell(cell, slug) {
+    const current = catsBySlug[slug] || [];
+    const ed = buildPillEditor({
+      values: current,
+      options: allCategories.map((c) => ({ value: c, label: c })),
+      allowCreate: true,
+      onChange: async (vals) => {
+        try {
+          await patchGlobalRule(slug, { categories: vals });
+        } catch (err) {
+          toast("Couldn't update categories for " + slug + ": " + err.message, "error");
+          buildCategoryCell(cell, slug);
+          return;
+        }
+        catsBySlug[slug] = vals;
+        // A freshly-created category joins the catalog list and the active
+        // filter, so the row it was added to doesn't vanish under the filter.
+        for (const c of vals) {
+          if (allCategories.indexOf(c) === -1) allCategories.push(c);
+          selectedCats.add(c);
+        }
+        allCategories.sort();
+        cell.setAttribute("data-cats", vals.slice().sort().join(","));
+        applyFilter();
+        applySort();
+        toast("Updated categories for " + slug);
+      },
+    });
+    cell.innerHTML = "";
+    cell.appendChild(ed.el);
+    cell.setAttribute("data-cats", current.slice().sort().join(","));
+  }
+
+  function buildStageCell(cell, slug) {
+    const current = stagesBySlug[slug] || [];
+    const ed = buildPillEditor({
+      values: current,
+      options: allStages.map((s) => ({ value: s.slug, label: s.name })),
+      allowCreate: false,
+      onChange: async (vals) => {
+        try {
+          await patchGlobalRule(slug, { stages: vals });
+        } catch (err) {
+          toast("Couldn't update stages for " + slug + ": " + err.message, "error");
+          buildStageCell(cell, slug);
+          return;
+        }
+        stagesBySlug[slug] = orderStages(vals);
+        for (const s of vals) selectedStages.add(s);
+        cell.setAttribute("data-stages", vals.slice().sort().join(","));
+        applyFilter();
+        applySort();
+        toast("Updated stages for " + slug);
+      },
+    });
+    cell.innerHTML = "";
+    cell.appendChild(ed.el);
+    cell.setAttribute("data-stages", current.slice().sort().join(","));
+  }
+
+  // Order a stage set by the canonical /api/meta order so stagesBySlug[0] (what
+  // the Stage column sorts on) matches the server's earliest-first ordering.
+  function orderStages(vals) {
+    const idx = {};
+    allStages.forEach((s, i) => { idx[s.slug] = i; });
+    return vals.slice().sort((a, b) => (idx[a] ?? 99) - (idx[b] ?? 99));
+  }
+
   function findCategorySelect() {
     for (const s of document.querySelectorAll("select")) {
       for (const o of s.options) {
@@ -383,6 +575,12 @@ export const PANEL_EXT = `(() => {
       selectedCats,
     );
     catDd.details.classList.add("co-filter-cats");
+    const stageDd = buildFilterDropdown(
+      "Stages",
+      allStages.map((s) => ({ value: s.slug, label: s.name })),
+      selectedStages,
+    );
+    stageDd.details.classList.add("co-filter-stages");
     const langDd = buildFilterDropdown(
       "Languages",
       supportedLangs.map((l) => ({ value: l.slug, label: l.name })),
@@ -390,7 +588,8 @@ export const PANEL_EXT = `(() => {
     );
     langDd.details.classList.add("co-filter-langs");
     nativeSel.insertAdjacentElement("afterend", catDd.details);
-    catDd.details.insertAdjacentElement("afterend", langDd.details);
+    catDd.details.insertAdjacentElement("afterend", stageDd.details);
+    stageDd.details.insertAdjacentElement("afterend", langDd.details);
   }
 
   // Maps a header cell to its sort key, or null when the column can't be sorted
@@ -416,7 +615,7 @@ export const PANEL_EXT = `(() => {
     if (key === "enabled") return slug && enabledBySlug[slug] ? 1 : 0;
     if (key === "lang") return ((slug && langsBySlug[slug]) || []).slice().sort().join(",");
     if (key === "category") return ((slug && catsBySlug[slug]) || [])[0] || "";
-    if (key === "stage") return (rule && rule.stage) || "";
+    if (key === "stage") return ((slug && stagesBySlug[slug]) || [])[0] || "";
     return (rule && rule.name) || slug || "";
   }
 
@@ -476,12 +675,14 @@ export const PANEL_EXT = `(() => {
       const slug = rowSlug(tr);
       const cats = (slug && catsBySlug[slug]) || [];
       const langs = (slug && langsBySlug[slug]) || [];
+      const stages = (slug && stagesBySlug[slug]) || [];
       // The selection drives the filter: a row passes when one of its
-      // categories/languages is checked. A row with none of that metadata isn't
-      // something the filter can exclude, so it always passes.
+      // categories/stages/languages is checked. A row with none of that metadata
+      // isn't something the filter can exclude, so it always passes.
       const okCat = cats.length === 0 || cats.some((c) => selectedCats.has(c));
+      const okStage = stages.length === 0 || stages.some((s) => selectedStages.has(s));
       const okLang = langs.length === 0 || langs.some((l) => selectedLangs.has(l));
-      tr.style.display = okCat && okLang ? "" : "none";
+      tr.style.display = okCat && okStage && okLang ? "" : "none";
     }
   }
 
@@ -525,16 +726,43 @@ export const PANEL_EXT = `(() => {
         cell.innerHTML = html;
         cell.setAttribute("data-co", html);
       }
+      // Category: hide the native cell and render editable pills in its slot (a
+      // global-catalog edit). tr.children[1] is the native Category cell; we only
+      // ever insert AFTER it, so it stays at index 1 across re-renders.
+      const nativeCat = tr.children[1];
+      if (nativeCat) nativeCat.style.display = "none";
+      let ccell = tr.querySelector(".co-cat-td");
+      if (!ccell) {
+        ccell = document.createElement("td");
+        ccell.className = "px-4 py-3 co-cat-td";
+        if (nativeCat) nativeCat.insertAdjacentElement("afterend", ccell);
+        else tr.appendChild(ccell);
+      }
+      const csig = ((slug ? catsBySlug[slug] : null) || []).slice().sort().join(",");
+      if (slug && ccell.getAttribute("data-cats") !== csig) buildCategoryCell(ccell, slug);
+
       let lcell = tr.querySelector(".co-lang-td");
       if (!lcell) {
         lcell = document.createElement("td");
         lcell.className = "px-4 py-3 co-lang-td";
-        const catCell = tr.children[1];
-        if (catCell) catCell.insertAdjacentElement("afterend", lcell);
-        else tr.appendChild(lcell);
+        ccell.insertAdjacentElement("afterend", lcell);
       }
       const sig = ((slug ? langsBySlug[slug] : null) || []).slice().sort().join(",");
       if (slug && lcell.getAttribute("data-langs") !== sig) buildLangCell(lcell, slug);
+
+      // Stage: the native Stage cell sits right after Languages; hide it and
+      // render editable pills in its slot (a global-catalog edit).
+      const nativeStage = lcell.nextElementSibling;
+      if (nativeStage) nativeStage.style.display = "none";
+      let scell = tr.querySelector(".co-stage-td");
+      if (!scell) {
+        scell = document.createElement("td");
+        scell.className = "px-4 py-3 co-stage-td";
+        if (nativeStage) nativeStage.insertAdjacentElement("afterend", scell);
+        else tr.appendChild(scell);
+      }
+      const ssig = ((slug ? stagesBySlug[slug] : null) || []).slice().sort().join(",");
+      if (slug && scell.getAttribute("data-stages") !== ssig) buildStageCell(scell, slug);
 
       // The native enabled cell (the only text-center td) toggles the GLOBAL
       // catalog; hide it and render our project-scoped toggle in its place.
@@ -645,7 +873,22 @@ export const PANEL_EXT = `(() => {
       ".co-dd-foot button:hover{background:#f1f5f9}" +
       ".co-dd-close{background:#0f172a;color:#fff;border-color:#0f172a}" +
       ".co-dd-close:hover{background:#1e293b}" +
-      ".co-filter-cats,.co-filter-langs{margin-left:8px;vertical-align:middle}" +
+      ".co-filter-cats,.co-filter-stages,.co-filter-langs{margin-left:8px;vertical-align:middle}" +
+      // Editable-pill cells (Category / Stage): pills with a remove ×, plus a
+      // "+" dropdown (reuses the co-dd panel/list styles) to toggle or create.
+      ".co-pills{display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px;max-width:20rem}" +
+      ".co-pills-list{display:inline-flex;flex-wrap:wrap;gap:4px}" +
+      ".co-pill{display:inline-flex;align-items:center;gap:4px;font-size:12px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:12px;padding:2px 8px;color:#334155;white-space:nowrap}" +
+      ".co-pill-x{cursor:pointer;border:0;background:none;color:#94a3b8;font-size:13px;line-height:1;padding:0}" +
+      ".co-pill-x:hover{color:#ef4444}" +
+      ".co-pills-add{display:inline-block}" +
+      ".co-pills-add-btn{cursor:pointer;list-style:none;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border:1px dashed #cbd5e1;border-radius:12px;font-size:14px;line-height:1;color:#64748b;background:#fff}" +
+      ".co-pills-add-btn::-webkit-details-marker{display:none}" +
+      ".co-pills-add-btn:hover{border-color:#94a3b8;color:#0f172a}" +
+      ".co-dd-add-row{display:flex;gap:6px;margin-top:6px;border-top:1px solid #f1f5f9;padding-top:6px}" +
+      ".co-dd-add-row .co-pills-new{margin-bottom:0}" +
+      ".co-dd-add-btn{cursor:pointer;font-size:12px;font-weight:600;padding:4px 10px;border-radius:6px;border:1px solid #0f172a;background:#0f172a;color:#fff}" +
+      ".co-dd-add-btn:hover{background:#1e293b}" +
       ".co-run-tab{cursor:pointer}.co-run-tab-active{font-weight:700}" +
       ":is(#co-run-overlay,#co-activity-overlay){position:fixed;inset:0;display:none;flex-direction:column;background:#fff;font-family:inherit;z-index:20}" +
       // Branded top bar mirroring the panel's own header, so the Run page keeps
@@ -887,6 +1130,9 @@ export const PANEL_EXT = `(() => {
       D + ".co-run-pill-err{background:#78350f;color:#fde68a}" +
       D + ".co-run-badge{background:#334155;color:#94a3b8}" +
       D + ".co-set-chip{background:#334155}" +
+      D + ".co-pill{background:#334155;border-color:#475569;color:#e2e8f0}" +
+      D + ".co-pills-add-btn{background:#1e293b;border-color:#475569;color:#94a3b8}" +
+      D + ".co-pills-add-btn:hover{border-color:#64748b;color:#e2e8f0}" +
       // Code viewer issue lines and carets.
       D + ".co-ln-issue .co-gutter{color:#f87171}" +
       D + ".co-ln-issue .co-line{background:#450a0a}" +
@@ -2343,6 +2589,7 @@ export const PANEL_EXT = `(() => {
     fixesBySlug = {};
     langsBySlug = {};
     catsBySlug = {};
+    stagesBySlug = {};
     enabledBySlug = {};
     ruleBySlug = {};
     const cats = new Set();
@@ -2351,12 +2598,14 @@ export const PANEL_EXT = `(() => {
       langsBySlug[r.slug] = r.languages || [];
       langIndependentBySlug[r.slug] = !!r.languageIndependent;
       catsBySlug[r.slug] = r.categories || [];
+      stagesBySlug[r.slug] = r.stages || [];
       enabledBySlug[r.slug] = !!r.enabled;
       ruleBySlug[r.slug] = r;
       for (const c of r.categories || []) cats.add(c);
     }
     environments = meta.environments || [];
     actionTypes = meta.actionTypes || [];
+    allStages = meta.stages || [];
     slugList = rules.map((r) => ({
       slug: r.slug,
       name: r.name,
@@ -2370,6 +2619,8 @@ export const PANEL_EXT = `(() => {
     // until the user narrows. The selection set IS the filter.
     selectedCats.clear();
     for (const c of allCategories) selectedCats.add(c);
+    selectedStages.clear();
+    for (const s of allStages) selectedStages.add(s.slug);
     selectedLangs.clear();
     for (const l of supportedLangs) selectedLangs.add(l.slug);
     applyProjectRunRoot();
