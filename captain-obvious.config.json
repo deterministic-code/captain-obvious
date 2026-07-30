@@ -62,7 +62,7 @@
       "lint-dup-fn --push",
       "lint-dup-structural --push",
       "lint-coverage --push",
-      "run: npx tsc --noEmit"
+      "run: npx tsc -p core/tsconfig.json --noEmit"
     ]
   },
   "npmScripts": {
