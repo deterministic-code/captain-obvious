@@ -20,7 +20,12 @@ export default {
     "stages": [
       "pre-commit"
     ],
-    "actions": []
+    "actions": [
+      {
+        "kind": "inferred",
+        "description": "Rename offending identifiers to the convention (camelCase for values, PascalCase for types), updating their references."
+      }
+    ]
   },
   "dependencies": [],
   "checkEntry": "./check.mjs"

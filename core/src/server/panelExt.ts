@@ -957,7 +957,26 @@ export const PANEL_EXT = `(() => {
       ".co-run-pill{font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px}" +
       ".co-run-pill-ok{background:#dcfce7;color:#166534}.co-run-pill-n{background:#fee2e2;color:#991b1b}.co-run-pill-err{background:#fef3c7;color:#92400e}" +
       ".co-run-resfile{padding:6px 12px}.co-run-resfile + .co-run-resfile{border-top:1px solid #f8fafc}" +
-      ".co-run-file-name{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#475569;margin-bottom:4px}" +
+      ".co-run-file-head{display:flex;align-items:center;gap:8px;margin-bottom:4px}" +
+      ".co-run-file-name{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#475569}" +
+      ".co-run-file-fixes{margin-left:auto;display:flex;gap:6px}" +
+      ".co-run-fix-btn{font-size:11px;font-weight:600;padding:2px 10px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;color:#0f172a;cursor:pointer}" +
+      ".co-run-fix-btn:hover{background:#f1f5f9}.co-run-fix-btn:disabled{opacity:.5;cursor:default}" +
+      ".co-run-fix-ai{border-color:#c7d2fe;background:#eef2ff;color:#4338ca}.co-run-fix-ai:hover{background:#e0e7ff}" +
+      ".co-fix-overlay{position:fixed;inset:0;z-index:60;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:24px}" +
+      ".co-fix-modal{background:#fff;border-radius:12px;width:min(880px,96vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 50px rgba(15,23,42,.3)}" +
+      ".co-fix-mhead{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #e2e8f0}" +
+      ".co-fix-mtitle{font-weight:700;font-size:14px;color:#0f172a}" +
+      ".co-fix-mclose{border:none;background:none;font-size:22px;line-height:1;color:#64748b;cursor:pointer}" +
+      ".co-fix-mpath{padding:8px 18px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#64748b;border-bottom:1px solid #f1f5f9;word-break:break-all}" +
+      ".co-fix-mbody{padding:16px 18px;overflow:auto}" +
+      ".co-fix-mnote{font-size:13px;color:#475569;margin:0 0 12px}.co-fix-merr{font-size:13px;color:#b91c1c;margin:0 0 12px}" +
+      ".co-fix-mactions{display:flex;gap:10px;margin-top:14px}" +
+      ".co-fix-alt{font-size:13px;padding:7px 14px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;color:#0f172a;cursor:pointer}.co-fix-alt:hover{background:#f1f5f9}" +
+      ".co-fix-diff{display:grid;grid-template-columns:1fr 1fr;gap:12px}" +
+      ".co-fix-pane{min-width:0;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}" +
+      ".co-fix-plabel{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#64748b;padding:6px 10px;background:#f8fafc;border-bottom:1px solid #e2e8f0}" +
+      ".co-fix-pre{margin:0;padding:10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.5;color:#0f172a;white-space:pre-wrap;word-break:break-word;max-height:48vh;overflow:auto}" +
       ".co-run-vio{font-size:13px;padding:3px 6px;display:flex;gap:8px;align-items:baseline;border-radius:6px;cursor:pointer}" +
       ".co-run-vio:hover{background:#f1f5f9}" +
       ".co-run-loc{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#94a3b8;min-width:44px}" +
@@ -1123,6 +1142,15 @@ export const PANEL_EXT = `(() => {
       D + ":is(.co-run-navbar,.co-run-subbar,.co-run-browser-head,.co-run-rule-head,.co-ed-head,.co-modal-browser-head,.co-run-picker-head,.co-dd-all-item,.co-dd-foot,.co-run-rule,.co-run-results,.co-run-sidebar,.co-run-sidebar-foot,.co-set-section){border-color:#334155}" +
       D + ".co-fix + .co-fix{border-color:#334155}" +
       D + ".co-run-resfile + .co-run-resfile{border-color:#334155}" +
+      D + ":is(.co-run-fix-btn,.co-fix-alt){background:#1e293b;border-color:#475569;color:#e2e8f0}" +
+      D + ":is(.co-run-fix-btn,.co-fix-alt):hover{background:#334155}" +
+      D + ".co-run-fix-ai{background:#312e81;border-color:#4338ca;color:#c7d2fe}" +
+      D + ".co-fix-modal{background:#0f172a}" +
+      D + ":is(.co-fix-mhead,.co-fix-mpath,.co-fix-pane,.co-fix-plabel){border-color:#334155}" +
+      D + ":is(.co-fix-mtitle){color:#f1f5f9}" +
+      D + ":is(.co-fix-mnote,.co-fix-mpath,.co-fix-plabel){color:#94a3b8}" +
+      D + ":is(.co-fix-plabel){background:#1e293b}" +
+      D + ".co-fix-pre{color:#e2e8f0}" +
       // Text.
       D + ":is(.co-run-brand-name,.co-run-slug,.co-modal-title,.co-set-heading,.co-set-enabled){color:#f1f5f9}" +
       D + ":is(.co-line,.co-fix-path,.co-run-dir,.co-run-updir,.co-modal-dir,.co-modal-updir,.co-set-chip){color:#e2e8f0}" +
@@ -1656,6 +1684,12 @@ export const PANEL_EXT = `(() => {
     results.className = "co-run-results";
     results.id = "co-run-results";
     results.addEventListener("click", (e) => {
+      const fix = e.target.closest(".co-run-fix-btn");
+      if (fix) {
+        e.stopPropagation();
+        onFixClick(fix);
+        return;
+      }
       const t = e.target.closest(".co-run-vio[data-path]");
       if (!t) return;
       openInEditor(t.getAttribute("data-path"), Number(t.getAttribute("data-line")));
@@ -1742,7 +1776,31 @@ export const PANEL_EXT = `(() => {
     }
   }
 
-  function renderViolations(violations) {
+  // Which remediations a rule offers, from its /api/rules actions. Drives the
+  // per-file "Fix" (deterministic script) and "Fix with AI" (inferred) buttons.
+  function fixKinds(slug) {
+    const actions = (slug && fixesBySlug[slug]) || [];
+    return {
+      script: actions.some((a) => a.kind === "script"),
+      ai: actions.some((a) => a.kind === "inferred"),
+    };
+  }
+
+  function fixButtons(slug, path, kinds) {
+    let html = "";
+    if (kinds.script) {
+      html += '<button type="button" class="co-run-fix-btn" data-fix="script" data-slug="' +
+        esc(slug) + '" data-path="' + esc(path) + '">Fix</button>';
+    }
+    if (kinds.ai) {
+      html += '<button type="button" class="co-run-fix-btn co-run-fix-ai" data-fix="ai" data-slug="' +
+        esc(slug) + '" data-path="' + esc(path) + '">Fix with AI</button>';
+    }
+    return html;
+  }
+
+  function renderViolations(violations, slug) {
+    const kinds = fixKinds(slug);
     const byFile = {};
     for (const v of violations) {
       const p = v.path || "(unknown)";
@@ -1750,8 +1808,9 @@ export const PANEL_EXT = `(() => {
     }
     let html = "";
     for (const path of Object.keys(byFile).sort()) {
-      html += '<div class="co-run-resfile"><div class="co-run-file-name">' +
-        esc(path) + "</div>";
+      html += '<div class="co-run-resfile"><div class="co-run-file-head">' +
+        '<span class="co-run-file-name">' + esc(path) + "</span>" +
+        '<span class="co-run-file-fixes">' + fixButtons(slug, path, kinds) + "</span></div>";
       for (const v of byFile[path]) {
         html += '<div class="co-run-vio" data-path="' + esc(path) +
           '" data-line="' + esc(v.line) + '"><span class="co-run-loc">' +
@@ -1813,7 +1872,7 @@ export const PANEL_EXT = `(() => {
           (count === 1 ? " violation" : " violations") + "</span>";
       }
       html += "</div>";
-      if (r.ok && count > 0) html += renderViolations(vios);
+      if (r.ok && count > 0) html += renderViolations(vios, r.slug);
       html += "</div>";
     }
     list.innerHTML = html;
@@ -1855,6 +1914,154 @@ export const PANEL_EXT = `(() => {
       running = false;
       updateRunGate();
     }
+  }
+
+  async function postFix(url, body) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "POST " + url + " -> " + res.status);
+    return data;
+  }
+
+  function onFixClick(btn) {
+    if (btn.disabled) return;
+    const slug = btn.getAttribute("data-slug");
+    const path = btn.getAttribute("data-path");
+    if (btn.getAttribute("data-fix") === "ai") return openAiFixModal(slug, path);
+    doScriptFix(btn, slug, path);
+  }
+
+  // A deterministic 'script' fix: run it, then re-run so the panel reflects the
+  // real post-fix state rather than an optimistic message.
+  async function doScriptFix(btn, slug, path) {
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Fixing…";
+    try {
+      const data = await postFix("/api/run/fix", { slug: slug, path: path });
+      if (!data.ok) throw new Error(data.error || "fix failed");
+      toast(slug + ": fix applied");
+      await doRun();
+    } catch (err) {
+      toast(err.message, "error");
+      btn.disabled = false;
+      btn.textContent = label;
+    }
+  }
+
+  function closeFixModal() {
+    const el = document.getElementById("co-fix-modal");
+    if (el) el.remove();
+  }
+
+  function openAiFixModal(slug, path) {
+    closeFixModal();
+    const overlay = document.createElement("div");
+    overlay.className = "co-fix-overlay";
+    overlay.id = "co-fix-modal";
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) closeFixModal();
+    });
+    const modal = document.createElement("div");
+    modal.className = "co-fix-modal";
+    modal.innerHTML =
+      '<div class="co-fix-mhead"><span class="co-fix-mtitle">Fix with AI · ' +
+      esc(slug) + "</span>" +
+      '<button type="button" class="co-fix-mclose" aria-label="Close">×</button></div>' +
+      '<div class="co-fix-mpath">' + esc(path) + "</div>" +
+      '<div class="co-fix-mbody" id="co-fix-mbody"></div>';
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+    modal.querySelector(".co-fix-mclose").addEventListener("click", closeFixModal);
+    renderAiChooser(slug, path);
+  }
+
+  // Two tiers, presented as a choice so neither is forced: server-side model
+  // (needs a key or a local endpoint) vs. delegating to the running Claude Code.
+  function renderAiChooser(slug, path) {
+    const body = document.getElementById("co-fix-mbody");
+    if (!body) return;
+    body.innerHTML =
+      '<p class="co-fix-mnote">An AI fix is non-deterministic, so it is proposed for review — ' +
+      "nothing is written until you apply it.</p>" +
+      '<div class="co-fix-mactions">' +
+      '<button type="button" class="co-run-btn" id="co-fix-gen">Generate fix with a model</button>' +
+      '<button type="button" class="co-fix-alt" id="co-fix-plan">Copy prompt for Claude Code</button>' +
+      "</div>";
+    body.querySelector("#co-fix-gen").addEventListener("click", () => doAiPropose(slug, path));
+    body.querySelector("#co-fix-plan").addEventListener("click", () => doAiPlan(slug, path));
+  }
+
+  async function doAiPlan(slug, path) {
+    const body = document.getElementById("co-fix-mbody");
+    if (body) body.innerHTML = '<p class="co-fix-mnote">Building prompt…</p>';
+    try {
+      const data = await postFix("/api/run/fix/plan", { slug: slug, path: path });
+      if (body) {
+        body.innerHTML =
+          '<p class="co-fix-mnote">Paste this into Claude Code (also written to ' +
+          esc(data.file) + "):</p>" +
+          '<pre class="co-fix-pre">' + esc(data.prompt) + "</pre>" +
+          '<div class="co-fix-mactions"><button type="button" class="co-run-btn" id="co-fix-copy">Copy</button></div>';
+        body.querySelector("#co-fix-copy").addEventListener("click", () => {
+          navigator.clipboard.writeText(data.prompt).then(
+            () => toast("Prompt copied"),
+            () => toast("Copy failed — select the text manually", "error"),
+          );
+        });
+      }
+    } catch (err) {
+      if (body) body.innerHTML = '<p class="co-fix-merr">' + esc(err.message) + "</p>";
+    }
+  }
+
+  async function doAiPropose(slug, path) {
+    const body = document.getElementById("co-fix-mbody");
+    if (body) body.innerHTML = '<p class="co-fix-mnote">Asking the model…</p>';
+    try {
+      const data = await postFix("/api/run/fix/ai", { slug: slug, path: path });
+      renderAiDiff(data);
+    } catch (err) {
+      if (body) {
+        body.innerHTML = '<p class="co-fix-merr">' + esc(err.message) + "</p>" +
+          '<div class="co-fix-mactions"><button type="button" class="co-fix-alt" id="co-fix-back">Back</button></div>';
+        body.querySelector("#co-fix-back").addEventListener("click", () => renderAiChooser(slug, path));
+      }
+    }
+  }
+
+  function renderAiDiff(data) {
+    const body = document.getElementById("co-fix-mbody");
+    if (!body) return;
+    body.innerHTML =
+      '<p class="co-fix-mnote">Proposed by ' + esc(data.provider) + " / " + esc(data.model) +
+      ". Review, then apply.</p>" +
+      '<div class="co-fix-diff"><div class="co-fix-pane"><div class="co-fix-plabel">Current</div>' +
+      '<pre class="co-fix-pre">' + esc(data.originalSource) + "</pre></div>" +
+      '<div class="co-fix-pane"><div class="co-fix-plabel">Proposed</div>' +
+      '<pre class="co-fix-pre">' + esc(data.newSource) + "</pre></div></div>" +
+      '<div class="co-fix-mactions"><button type="button" class="co-run-btn" id="co-fix-apply">Apply</button>' +
+      '<button type="button" class="co-fix-alt" id="co-fix-discard">Discard</button></div>';
+    body.querySelector("#co-fix-discard").addEventListener("click", closeFixModal);
+    body.querySelector("#co-fix-apply").addEventListener("click", async (e) => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      btn.textContent = "Applying…";
+      try {
+        await postFix("/api/run/fix/ai/apply", { path: data.path, newSource: data.newSource });
+        toast(data.slug + ": AI fix applied");
+        closeFixModal();
+        await doRun();
+      } catch (err) {
+        toast(err.message, "error");
+        btn.disabled = false;
+        btn.textContent = "Apply";
+      }
+    });
   }
 
   function removeAnalyzeBanner() {
