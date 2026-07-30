@@ -103,12 +103,12 @@ function readDispatchRuns(auditDb: Db, sinceMs: number): HookRun[] {
   }));
 }
 
-export interface ActivityTop {
+interface ActivityTop {
   key: string;
   runs: number;
   failures: number;
 }
-export interface ActivityBucket {
+interface ActivityBucket {
   t: number;
   runs: number;
   failures: number;

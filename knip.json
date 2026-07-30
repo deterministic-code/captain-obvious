@@ -1,0 +1,20 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "src/bin/captain-obvious.ts",
+    "src/server/serve.ts",
+    "bin/*.mjs",
+    "hooks/git/*.mjs",
+    "hooks/claude/*.mjs",
+    "**/__tests__/**/*.{test,spec}.{mjs,ts}",
+    "**/__tests__/test-helpers.mjs"
+  ],
+  "project": [
+    "src/**/*.ts",
+    "hooks/**/*.mjs",
+    "lib/**/*.mjs",
+    "bin/*.mjs"
+  ],
+  "ignore": ["web/dist/**", "**/*.d.mts"],
+  "includeEntryExports": true
+}

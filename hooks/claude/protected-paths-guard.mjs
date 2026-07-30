@@ -21,7 +21,7 @@ async function repoRootOf(cwd) {
  * I/O shim (reads stdin, spawns git, opens the DB); the decision lives in
  * src/rules/claudeGuard.ts, tested there.
  */
-export async function runClaudeGuard() {
+async function runClaudeGuard() {
   const chunks = [];
   for await (const chunk of process.stdin) chunks.push(chunk);
   const inputJson = Buffer.concat(chunks).toString("utf8");

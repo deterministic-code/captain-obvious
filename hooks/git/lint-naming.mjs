@@ -8,11 +8,7 @@ import {
   stripStringsAndComments,
 } from "./lint-shared.mjs";
 
-export {
-  isExcluded,
-  isLintable,
-  stripStringsAndComments,
-} from "./lint-shared.mjs";
+export { isLintable } from "./lint-shared.mjs";
 
 // JS/TS declarations only — Rust (.rs) is snake_case and C# (.cs) is PascalCase by their own conventions.
 export const NAMING_EXTS = new Set([

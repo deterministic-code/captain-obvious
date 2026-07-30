@@ -28,7 +28,6 @@ export function findViolations(src, limit = MAX_LINE_LENGTH) {
 
 export const lintFile = (path, cwd) => lintFileWith(path, cwd, findViolations);
 
-export { formatViolation };
 
 function usage() {
   process.stderr.write(

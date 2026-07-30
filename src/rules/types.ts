@@ -46,7 +46,7 @@ export interface Violation {
  * 'output' just reports to the user. Mirrors the db `FixKind` union (kept inline
  * so the rule layer stays decoupled from the db layer).
  */
-export interface RuleActionMeta {
+interface RuleActionMeta {
   kind: "inferred" | "script" | "output";
   /** For 'script' actions: the hook/script that applies the fix. */
   scriptPath?: string;

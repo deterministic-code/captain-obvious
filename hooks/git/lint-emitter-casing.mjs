@@ -224,7 +224,6 @@ export function findViolations(src) {
 
 export const lintFile = (path, cwd) => lintFileWith(path, cwd, findViolations);
 
-export { formatViolation };
 
 function usage() {
   process.stderr.write(

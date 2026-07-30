@@ -11,7 +11,7 @@ import { detect } from "../../lib/languages.mjs";
 import { latestEvent, logEvent } from "../db/audit.js";
 import { HIDDEN_DIRS } from "./run.js";
 
-export interface LanguageTally {
+interface LanguageTally {
   slug: string;
   name: string;
   files: number;

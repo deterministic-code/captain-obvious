@@ -23,7 +23,7 @@ function kindLabel(node) {
   return ts.SyntaxKind[node.kind];
 }
 
-export function fingerprintNode(node) {
+function fingerprintNode(node) {
   let count = 1;
   const parts = [];
   node.forEachChild((child) => {

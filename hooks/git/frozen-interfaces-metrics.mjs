@@ -7,7 +7,7 @@ import { emitHookReport, repoRootOf } from "./lint-shared.mjs";
 import { parseSourceFile } from "./fn-metrics.mjs";
 
 export const FROZEN_FILE = "interface-frozen.yaml";
-export const UPDATE_CMD = "npm run lint:frozen-interfaces:update";
+const UPDATE_CMD = "npm run lint:frozen-interfaces:update";
 const CHECK_MODES = new Set(["--staged", "--all", "--files"]);
 const FROZEN_HEADER =
   "# Frozen interface baselines — the external source of truth for which class/interface\n" +
