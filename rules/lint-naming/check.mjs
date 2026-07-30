@@ -6,9 +6,9 @@ import {
   lintFileWith,
   runFileHook,
   stripStringsAndComments,
-} from "../_kit/lint-shared.mjs";
+} from "@deterministic-code/co-rule-kit/lint-shared";
 
-export { isLintable } from "../_kit/lint-shared.mjs";
+export { isLintable } from "@deterministic-code/co-rule-kit/lint-shared";
 
 // JS/TS declarations only — Rust (.rs) is snake_case and C# (.cs) is PascalCase by their own conventions.
 export const NAMING_EXTS = new Set([

@@ -1,4 +1,40 @@
+converted 29 rules
 {
+  "workspaces": [
+    "core",
+    "rules/_kit",
+    "rules/gov-main-ci-green",
+    "rules/gov-no-push-to-main",
+    "rules/gov-require-pr",
+    "rules/lint-comments",
+    "rules/lint-complexity",
+    "rules/lint-coverage",
+    "rules/lint-dead-code",
+    "rules/lint-dup",
+    "rules/lint-dup-fn",
+    "rules/lint-dup-structural",
+    "rules/lint-emitter-casing",
+    "rules/lint-empty-catch",
+    "rules/lint-empty-tests",
+    "rules/lint-frozen-interfaces",
+    "rules/lint-max-file-lines",
+    "rules/lint-max-line-length",
+    "rules/lint-max-lines",
+    "rules/lint-max-params",
+    "rules/lint-max-statements",
+    "rules/lint-naming",
+    "rules/lint-prettier",
+    "rules/lint-protected-paths",
+    "rules/lint-solid-d",
+    "rules/lint-solid-i",
+    "rules/lint-solid-l",
+    "rules/lint-solid-o",
+    "rules/lint-solid-s",
+    "rules/lint-sync-calls",
+    "rules/lint-test-determinism",
+    "rules/lint-test-disabling-skipping",
+    "rules/lint-tests-with-code"
+  ],
   "plugins": [
     "@deterministic-code/co-rule-gov-main-ci-green",
     "@deterministic-code/co-rule-gov-no-push-to-main",
@@ -31,62 +67,5 @@
     "@deterministic-code/co-rule-lint-test-determinism",
     "@deterministic-code/co-rule-lint-test-disabling-skipping",
     "@deterministic-code/co-rule-lint-tests-with-code"
-  ],
-  "gitHooks": {
-    "preCommit": [
-      "lint-comments --staged",
-      "lint-complexity --staged",
-      "lint-prettier --staged",
-      "lint-emitter-casing --staged",
-      "lint-empty-catch --staged",
-      "lint-empty-tests --staged",
-      "lint-frozen-interfaces --staged",
-      "lint-max-lines --staged",
-      "lint-max-file-lines --staged",
-      "lint-max-line-length --staged",
-      "lint-max-params --staged",
-      "lint-max-statements --staged",
-      "lint-naming --staged",
-      "lint-solid-s --staged",
-      "lint-solid-o --staged",
-      "lint-solid-l --staged",
-      "lint-solid-i --staged",
-      "lint-solid-d --staged",
-      "lint-sync-calls --staged",
-      "lint-test-determinism --staged",
-      "lint-test-disabling-skipping --staged",
-      "lint-tests-with-code --staged"
-    ],
-    "prePush": [
-      "lint-dup --push",
-      "lint-dup-fn --push",
-      "lint-dup-structural --push",
-      "lint-coverage --push",
-      "run: npx tsc --noEmit"
-    ]
-  },
-  "npmScripts": {
-    "extraScripts": {
-      "lint:dead-code": "dead-code --all"
-    }
-  },
-  "claudeHooks": [
-    {
-      "event": "PreToolUse",
-      "matcher": "Edit|Write|NotebookEdit|Bash",
-      "hook": "main-branch-guard",
-      "timeout": 5
-    },
-    {
-      "event": "PreToolUse",
-      "matcher": "Edit|Write|NotebookEdit",
-      "hook": "protected-paths-guard",
-      "timeout": 5
-    },
-    {
-      "event": "Stop",
-      "hook": "stop-unmerged-guard",
-      "timeout": 15
-    }
   ]
 }

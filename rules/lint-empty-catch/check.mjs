@@ -10,7 +10,7 @@ import {
   listAllFiles,
   listStagedFiles,
   stripStringsAndComments,
-} from "../_kit/lint-shared.mjs";
+} from "@deterministic-code/co-rule-kit/lint-shared";
 
 export {
   SUPPORTED_EXTS,
@@ -18,7 +18,7 @@ export {
   isExcluded,
   isLintable,
   stripStringsAndComments,
-} from "../_kit/lint-shared.mjs";
+} from "@deterministic-code/co-rule-kit/lint-shared";
 
 export function findViolations(src) {
   const stripped = stripStringsAndComments(src);

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { isInvokedAsScript, runFileHook } from "../_kit/lint-shared.mjs";
-import { loadProtected } from "../_kit/protected-globs.mjs";
+import { isInvokedAsScript, runFileHook } from "@deterministic-code/co-rule-kit/lint-shared";
+import { loadProtected } from "@deterministic-code/co-rule-kit/protected-globs";
 
 function usage() {
   process.stderr.write(

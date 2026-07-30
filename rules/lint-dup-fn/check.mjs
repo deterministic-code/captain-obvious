@@ -5,21 +5,21 @@ import {
   rangesOverlap,
   reportRatchetViolations,
   runRatchetHook,
-} from "../_kit/dup-ratchet.mjs";
-import { subtreesForFile } from "../_kit/dup-structural-metrics.mjs";
-import { isStructuralFile } from "../lint-dup-structural/check.mjs";
+} from "@deterministic-code/co-rule-kit/dup-ratchet";
+import { subtreesForFile } from "@deterministic-code/co-rule-kit/dup-structural-metrics";
+import { isStructuralFile } from "@deterministic-code/co-rule-lint-dup-structural/check.mjs";
 import {
   FN_MIN_NODES,
   clusterViolation,
   functionClones,
-} from "../_kit/dup-fn-metrics.mjs";
+} from "@deterministic-code/co-rule-kit/dup-fn-metrics";
 import {
   emitJson,
   formatViolation,
   isInvokedAsScript,
   jsonMode,
   listAllFiles,
-} from "../_kit/lint-shared.mjs";
+} from "@deterministic-code/co-rule-kit/lint-shared";
 
 /** Test files legitimately repeat setup/callback shapes, and scaffold templates emit near-identical helpers per lane — neither is a reinvented production helper. */
 function isCloneCandidate(path) {

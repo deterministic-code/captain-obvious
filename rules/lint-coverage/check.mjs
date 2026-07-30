@@ -5,7 +5,7 @@ import {
   isInvokedAsScript,
   readSourceOrNull,
   repoRootOf,
-} from "../_kit/lint-shared.mjs";
+} from "@deterministic-code/co-rule-kit/lint-shared";
 
 /** Committed ratchet state: the per-metric coverage floor, at the repo root. */
 const BASELINE_FILE = "coverage-baseline.json";

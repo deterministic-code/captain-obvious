@@ -10,7 +10,7 @@ import {
   listAllFiles,
   listStagedFiles,
   stripStringsAndComments,
-} from "../_kit/lint-shared.mjs";
+} from "@deterministic-code/co-rule-kit/lint-shared";
 import { JS_TS_EXTS as SUPPORTED_EXTS } from "@deterministic-code/captain-obvious/languages";
 
 export { SUPPORTED_EXTS };

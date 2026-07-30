@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { runMetricHook } from "../_kit/fn-metrics.mjs";
-import { isInvokedAsScript } from "../_kit/lint-shared.mjs";
-import { ruleConfig } from "../_kit/config-bridge.mjs";
+import { runMetricHook } from "@deterministic-code/co-rule-kit/fn-metrics";
+import { isInvokedAsScript } from "@deterministic-code/co-rule-kit/lint-shared";
+import { ruleConfig } from "@deterministic-code/co-rule-kit/config-bridge";
 
 export const main = (argv, resolveConfig = ruleConfig) =>
   runMetricHook("statements", argv, resolveConfig);

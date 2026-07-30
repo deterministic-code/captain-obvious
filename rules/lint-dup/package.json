@@ -1,0 +1,20 @@
+{
+  "name": "@deterministic-code/co-rule-lint-dup",
+  "version": "0.1.2",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    "./plugin.mjs": "./plugin.mjs",
+    "./package.json": "./package.json",
+    "./check.mjs": "./check.mjs"
+  },
+  "files": [
+    "plugin.mjs",
+    "check.mjs"
+  ],
+  "dependencies": {
+    "@deterministic-code/co-rule-kit": "^0.1.2",
+    "@deterministic-code/captain-obvious": "^0.1.2",
+    "jscpd": "^3.5.10"
+  }
+}

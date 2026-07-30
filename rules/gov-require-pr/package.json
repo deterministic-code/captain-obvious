@@ -1,0 +1,13 @@
+{
+  "name": "@deterministic-code/co-rule-gov-require-pr",
+  "version": "0.1.2",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    "./plugin.mjs": "./plugin.mjs",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "plugin.mjs"
+  ]
+}

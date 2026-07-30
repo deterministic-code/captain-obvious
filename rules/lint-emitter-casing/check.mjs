@@ -4,7 +4,7 @@ import {
   isInvokedAsScript,
   lintFileWith,
   runFileHook,
-} from "../_kit/lint-shared.mjs";
+} from "@deterministic-code/co-rule-kit/lint-shared";
 
 const REGEX_PREV = new Set([..."(,=:[!&|?{;<>+-*%^~", ""]);
 

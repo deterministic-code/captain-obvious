@@ -6,7 +6,7 @@
 // Bypass for one invocation: ALLOW_EDIT_ON_MAIN=1.
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { isInvokedAsScript } from "../_kit/lint-shared.mjs";
+import { isInvokedAsScript } from "@deterministic-code/co-rule-kit/lint-shared";
 
 const execFileAsync = promisify(execFile);
 

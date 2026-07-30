@@ -5,7 +5,7 @@ import {
   isInvokedAsScript,
   isLintable,
   listStagedFiles,
-} from "../_kit/lint-shared.mjs";
+} from "@deterministic-code/co-rule-kit/lint-shared";
 
 function stripStrings(line) {
   // Replace string contents with placeholders so `//` or `/*` inside single/double/backtick quotes don't trip the scanner (escapes handled loosely; good enough for comment detection).

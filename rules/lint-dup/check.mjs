@@ -9,7 +9,7 @@ import {
   pushRatchetInputs,
   rangesOverlap,
   reportRatchetViolations,
-} from "../_kit/dup-ratchet.mjs";
+} from "@deterministic-code/co-rule-kit/dup-ratchet";
 import {
   EXCLUDED_PATH_PARTS,
   emitJson,
@@ -18,7 +18,7 @@ import {
   listStagedFiles,
   repoRootOf,
   resolveToolBin,
-} from "../_kit/lint-shared.mjs";
+} from "@deterministic-code/co-rule-kit/lint-shared";
 import { JSCPD_FORMAT_BY_EXT } from "@deterministic-code/captain-obvious/languages";
 
 const execFileAsync = promisify(execFile);

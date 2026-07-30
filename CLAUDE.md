@@ -5,34 +5,39 @@ guard hooks, installable into any repo. The package ships the **hook implementat
 consuming repo owns a `captain-obvious.config.json` that decides **which** hooks run, in what
 order, and which are advisory — so one package drives a strict repo and a lax one without forking.
 
-- **`rules/<slug>/`** — each rule is a **self-contained plugin module** (see "Rule plugins" below):
-  `plugin.mjs` (the `RulePlugin` descriptor: meta, settings control, dependencies, `checkEntry`),
-  `check.mjs` (the un-compiled runner the dispatcher spawns), and an optional `control.mjs`. Shared
-  check helpers live in **`rules/_shared/`** (`lint-shared`, `fn-metrics`, `solid-*-metrics`, `dup-*`,
-  `ast-fingerprint`, `protected-globs`, `config-bridge`). Vitest lives flat in **`rules/__tests__/`**.
-- **`src/`** — strict TypeScript, compiled to `dist/` by `tsc`. The engine that loads/registers/dispatches
-  the plugins lives here:
-  - `src/db/` — the SQLite catalog via `better-sqlite3` (`open`, `rules`, `fixes`, `actions`,
+The repo is an **npm workspaces monorepo**: the root is a private host; the engine and every rule
+are workspace packages. Dependency DAG: **rule package → `rules/_kit` → `core`**, all by package name.
+
+- **`rules/<slug>/`** — each rule is its **own npm package** `@deterministic-code/co-rule-<slug>`
+  (see "Rule plugins" below): `plugin.mjs` (the `RulePlugin` descriptor: meta, settings control,
+  dependencies, `checkEntry`), `check.mjs` (the un-compiled runner the dispatcher spawns), an optional
+  `control.mjs`, and a `package.json` declaring its deps (the kit + any tool). Shared check helpers are
+  the **`rules/_kit/`** package `@deterministic-code/co-rule-kit` (`lint-shared`, `fn-metrics`,
+  `solid-*-metrics`, `dup-*`, `ast-fingerprint`, and the `config-bridge`/`protected-globs` bridges that
+  import the core runtime by name). Vitest lives flat in **`rules/__tests__/`**.
+- **`core/`** — the engine package `@deterministic-code/captain-obvious`. `core/src/` is strict
+  TypeScript compiled to `core/dist/` by `tsc`:
+  - `core/src/db/` — the SQLite catalog via `better-sqlite3` (`open`, `rules`, `fixes`, `actions`,
     `languages`, `seed`, `lookups`, `types`, `args`).
-  - `src/rules/` — the plugin engine: `plugin.ts` (the `RulePlugin` interface), `load.ts` (scans
-    `rules/<slug>/plugin.mjs`, validates, returns `RULES`), `index.ts` (`RULES = await loadPlugins()`),
-    `config.ts` (per-rule config resolution for the check bridge), `deps.ts` (dependency verification),
-    `dispatch.ts`, `stages.ts`, `languages.ts`, `types.ts`.
-  - `src/server/` — the web control panel: `serve.ts` (routing + static SPA), `registry.ts`
-    (shapes `/api/*` from `data/captain-obvious.db`), `profiling.ts` (reads read-only `.profile/profile.db`).
-  - `src/bin/captain-obvious.ts` — the CLI entry (`add-rule`, `configure-rule`, `configure-action`,
-    `seed-rules`, `check-deps`, `show-rule`, `init`, `serve`, `add-language`).
-- **`lib/*.mjs`** — plain ESM install-time helpers (`claude-settings`, `config`, `git-hooks`,
-  `json-file`, `npm-scripts`). **`bin/install.mjs` / `bin/lint.mjs`** — the `captain-obvious-install`
-  and `captain-obvious-lint` bins, shipped as-is (not compiled).
-- **`hooks/git/dispatch.mjs`** — the thin git-hook entry that spawns the enabled rules' `check.mjs`.
-  **`hooks/claude/*.sh`** — the Claude Code guard hooks (`main-branch-guard`, `pre-merge-ci-guard`,
-  `stop-unmerged-guard`, `dispatch-guard`, session status).
-- **`db/schema.sql`** — registry schema. **`web/dist/`** — the prebuilt control-panel bundle (see below).
-- Node ≥ 18, ESM (`"type": "module"`). Commands: `npm test` (`vitest run --coverage` — covers both
-  `.ts` and `.mjs` tests and enforces 100% coverage via `vitest.config.ts` thresholds; thin shims are
-  excluded there), `npm run build` / `npm run prepare` (`tsc`, emits `dist/`). There is **no CI workflow
-  and no typecheck-only script** — a green `vitest` + a clean `tsc` are the only automated *merge* gates.
+  - `core/src/rules/` — the plugin engine: `plugin.ts` (the `RulePlugin` interface), `load.ts` (hybrid
+    discovery — the `plugins[]` list in `captain-obvious.config.json` plus a folder-scan for
+    not-yet-packaged rules; stamps each plugin's absolute `checkPath`), `index.ts`
+    (`RULES = await loadPlugins()`), `config.ts` (per-rule config for the check bridge), `deps.ts`
+    (dependency verification), `dispatch.ts`, `stages.ts`, `languages.ts`, `types.ts`.
+  - `core/src/server/` — the web control panel: `serve.ts` (routing + static SPA), `registry.ts`
+    (shapes `/api/*`), `profiling.ts`. `core/src/bin/captain-obvious.ts` — the CLI (`add-rule`,
+    `configure-rule`, `configure-action`, `seed-rules`, `check-deps`, `show-rule`, `init`, `serve`,
+    `add-language`).
+  - `core/lib/*.mjs` — install-time helpers. `core/bin/install.mjs` / `core/bin/lint.mjs` — the
+    `captain-obvious-install` / `captain-obvious-lint` bins, shipped as-is. `core/hooks/git/dispatch.mjs`
+    — the thin git-hook entry that spawns each rule's `check.mjs`; `core/hooks/claude/*.sh` — the Claude
+    Code guard hooks. `core/db/schema.sql` — registry schema. `core/web/dist/` — the prebuilt panel.
+  - The core publishes runtime subpaths for the kit's bridges: `./runtime/db`, `./runtime/config`,
+    `./runtime/protected-paths`, `./languages`.
+- Node ≥ 18, ESM. Commands from the **repo root**: `npm test` (`vitest run --coverage` — covers
+  `core/src`/`core/hooks`/`core/lib` + all `rules/*` `.mjs`, 100% enforced), `npm run build`
+  (`tsc -p core/tsconfig.json`, emits `core/dist/`). There is **no CI** — a green `vitest` + clean `tsc`
+  are the only automated *merge* gates.
   The repo now **self-applies its own hooks** via `captain-obvious.config.json` (run
   `captain-obvious-install` after clone to wire the local `.git/hooks` + Claude guards); those hooks are
   local, best-effort, and driven by the local registry DB, not a substitute for the vitest + tsc gate.

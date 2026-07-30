@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { runFrozenHook } from "../_kit/frozen-interfaces-metrics.mjs";
-import { isInvokedAsScript } from "../_kit/lint-shared.mjs";
+import { runFrozenHook } from "@deterministic-code/co-rule-kit/frozen-interfaces-metrics";
+import { isInvokedAsScript } from "@deterministic-code/co-rule-kit/lint-shared";
 
 export const main = (argv) => runFrozenHook(argv);
 

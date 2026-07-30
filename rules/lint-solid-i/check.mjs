@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { runSolidIHook } from "../_kit/solid-i-metrics.mjs";
-import { isInvokedAsScript } from "../_kit/lint-shared.mjs";
+import { runSolidIHook } from "@deterministic-code/co-rule-kit/solid-i-metrics";
+import { isInvokedAsScript } from "@deterministic-code/co-rule-kit/lint-shared";
 
 export const main = (argv) => runSolidIHook(argv);
 

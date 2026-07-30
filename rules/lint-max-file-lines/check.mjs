@@ -5,7 +5,7 @@ import {
   isLintable,
   lintFileWith,
   runFileHook,
-} from "../_kit/lint-shared.mjs";
+} from "@deterministic-code/co-rule-kit/lint-shared";
 
 export const MAX_FILE_LINES = 300;
 

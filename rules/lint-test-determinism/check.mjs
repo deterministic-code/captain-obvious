@@ -4,7 +4,7 @@ import {
   lintFileWith,
   runFileHook,
   stripStringsAndComments,
-} from "../_kit/lint-shared.mjs";
+} from "@deterministic-code/co-rule-kit/lint-shared";
 
 const TEST_FILE_RE = /\.(?:test|spec)\.(?:ts|tsx|mts|cts|mjs|cjs|js|jsx)$/;
 

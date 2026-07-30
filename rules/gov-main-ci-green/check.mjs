@@ -2,8 +2,8 @@
 // check-main-ci-green.mjs; this slug-named module is what the dispatcher spawns
 // (rules/<slug>/check.mjs), so it re-exports that check's main (the run-delegation
 // contract) and self-invokes it when run directly as a script.
-import { isInvokedAsScript } from "../_kit/lint-shared.mjs";
-import { main } from "../_kit/check-main-ci-green.mjs";
+import { isInvokedAsScript } from "@deterministic-code/co-rule-kit/lint-shared";
+import { main } from "@deterministic-code/co-rule-kit/check-main-ci-green";
 
 /** @public — imported dynamically by registry.test.ts via hookScriptPath. */
 export { main };

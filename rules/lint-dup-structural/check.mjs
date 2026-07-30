@@ -5,12 +5,12 @@ import {
   rangesOverlap,
   reportRatchetViolations,
   runRatchetHook,
-} from "../_kit/dup-ratchet.mjs";
+} from "@deterministic-code/co-rule-kit/dup-ratchet";
 import {
   cloneClusters,
   subtreesForFile,
   tableViolationsForFile,
-} from "../_kit/dup-structural-metrics.mjs";
+} from "@deterministic-code/co-rule-kit/dup-structural-metrics";
 import {
   emitJson,
   formatViolation,
@@ -18,7 +18,7 @@ import {
   isInvokedAsScript,
   jsonMode,
   listAllFiles,
-} from "../_kit/lint-shared.mjs";
+} from "@deterministic-code/co-rule-kit/lint-shared";
 import { JS_TS_EXTS } from "@deterministic-code/captain-obvious/languages";
 
 const GENERATED_PARTS = [

@@ -4,7 +4,7 @@ import {
   lintFileWith,
   runFileHook,
   stripStringsAndComments,
-} from "../_kit/lint-shared.mjs";
+} from "@deterministic-code/co-rule-kit/lint-shared";
 
 // Test files this rule scans. (Mirrors the subject-matcher in lint-tests-with-code;
 // kept local because the two rules ship independently.)

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { runSolidLHook } from "../_kit/solid-l-metrics.mjs";
-import { isInvokedAsScript } from "../_kit/lint-shared.mjs";
+import { runSolidLHook } from "@deterministic-code/co-rule-kit/solid-l-metrics";
+import { isInvokedAsScript } from "@deterministic-code/co-rule-kit/lint-shared";
 
 export const main = (argv) => runSolidLHook(argv);
 
