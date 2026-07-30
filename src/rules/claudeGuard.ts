@@ -1,4 +1,5 @@
 import { relative } from "node:path";
+import type { HookRunRecord } from "../db/audit.js";
 import { getDefaultProjectProtected } from "../db/projects.js";
 import type { Db } from "../db/open.js";
 import { selectDispatch } from "./dispatch.js";
@@ -7,9 +8,21 @@ import { matchProtected } from "./protectedPaths.js";
 /** Claude Code PreToolUse tools that carry a `file_path` we can guard. */
 const EDIT_TOOLS = new Set(["Edit", "Write", "NotebookEdit"]);
 
+/** The one claude-tool-stage rule this guard implements (see the registry invariant test). */
+const PROTECTED_PATHS_SLUG = "lint-protected-paths";
+
 export interface GuardDecision {
   deny: boolean;
   reason?: string;
+}
+
+/** The Activity row a guard evaluation produces; the shim stamps its timing. */
+export type GuardRun = Omit<HookRunRecord, "startedMs" | "durationMs">;
+
+export interface GuardResult {
+  decision: GuardDecision;
+  /** The hook_run to log for this PreToolUse, or null when the rule didn't run. */
+  run: GuardRun | null;
 }
 
 const ALLOW: GuardDecision = { deny: false };
@@ -42,17 +55,31 @@ export function evaluateGuard(
 }
 
 /**
- * The guard decision for a PreToolUse event against the registry `db`: runs only
- * when the `lint-protected-paths` rule is enabled at the `claude-tool` stage.
+ * The guard decision for a PreToolUse event against the registry `db`, plus the
+ * Activity row to log. `lint-protected-paths` runs only when enabled at the
+ * `claude-tool` stage; when it runs, every evaluation yields a `run` (a `failure`
+ * when it blocks, `success` when it allows) so the claude-tool path shows up in
+ * Activity the same way git-stage dispatches do. `run` is null when the rule is
+ * disabled — nothing ran, so nothing is logged.
  */
 export function guardDecision(
   inputJson: string,
   repoRoot: string,
   db: Db,
-): GuardDecision {
+): GuardResult {
   const selected = selectDispatch(db, "claude-tool");
-  if (!selected.some((d) => d.slug === "lint-protected-paths")) return ALLOW;
-  return evaluateGuard(inputJson, repoRoot, getDefaultProjectProtected(db));
+  if (!selected.some((d) => d.slug === PROTECTED_PATHS_SLUG)) {
+    return { decision: ALLOW, run: null };
+  }
+  const decision = evaluateGuard(inputJson, repoRoot, getDefaultProjectProtected(db));
+  return {
+    decision,
+    run: {
+      slug: PROTECTED_PATHS_SLUG,
+      stage: "claude-tool",
+      status: decision.deny ? "failure" : "success",
+    },
+  };
 }
 
 /** The PreToolUse JSON that tells Claude Code to deny the tool call. */

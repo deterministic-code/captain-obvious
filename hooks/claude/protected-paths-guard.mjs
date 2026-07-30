@@ -36,13 +36,27 @@ async function runClaudeGuard() {
   );
   const { openDb, resolveDbPath } = await import("../../dist/db/open.js");
   const db = openDb(resolveDbPath());
-  let decision;
+  const startedMs = Date.now();
+  let decision, run;
   try {
-    decision = guardDecision(inputJson, root, db);
+    ({ decision, run } = guardDecision(inputJson, root, db));
   } finally {
     db.close();
   }
+  // Emit the decision before logging so an audit-write failure (which the
+  // top-level fail-open catch swallows) can never turn a deny into an allow.
   if (decision.deny) process.stdout.write(`${formatDeny(decision.reason)}\n`);
+  if (run) {
+    const { openAuditDb, recordHookRun, resolveAuditDbPath } = await import(
+      "../../dist/db/audit.js"
+    );
+    const auditDb = openAuditDb(resolveAuditDbPath());
+    try {
+      recordHookRun(auditDb, { ...run, startedMs, durationMs: Date.now() - startedMs });
+    } finally {
+      auditDb.close();
+    }
+  }
 }
 
 runClaudeGuard().catch((err) => {
