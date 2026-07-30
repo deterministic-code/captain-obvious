@@ -664,6 +664,15 @@ export const PANEL_EXT = `(() => {
     }
   }
 
+  // Native <details> dropdowns (.co-dd — the filter multiselects and the pill "+"
+  // editors) don't self-close on an outside click. One document-level delegate
+  // closes every open one the click missed, covering all present and future .co-dd.
+  function onOutsideDropdownClick(e) {
+    for (const dd of document.querySelectorAll("details.co-dd[open]")) {
+      if (!dd.contains(e.target)) dd.open = false;
+    }
+  }
+
   function onHeaderClick(e) {
     const th = e.target.closest && e.target.closest("thead th");
     if (!th || th.closest("table") !== document.querySelector("table")) return;
@@ -3463,6 +3472,7 @@ export const PANEL_EXT = `(() => {
     // handler; the actions column is re-decorated but never re-bound.
     document.addEventListener("click", onActionClick);
     document.addEventListener("click", onHeaderClick);
+    document.addEventListener("click", onOutsideDropdownClick);
     decorate();
     await maybeShowAnalyzeBanner();
   }
