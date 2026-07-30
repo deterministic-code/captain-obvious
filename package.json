@@ -1,33 +1,18 @@
 {
-  "name": "@deterministic-code/captain-obvious",
-  "version": "0.1.2",
-  "description": "Deterministic, mechanical lint gates + Claude Code guard hooks, installable into any repo.",
+  "name": "captain-obvious-monorepo",
+  "version": "0.0.0",
+  "private": true,
   "type": "module",
   "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/deterministic-code/captain-obvious.git"
-  },
-  "bin": {
-    "captain-obvious": "dist/bin/captain-obvious.js",
-    "captain-obvious-install": "bin/install.mjs",
-    "captain-obvious-lint": "bin/lint.mjs"
-  },
-  "exports": {
-    "./install": "./bin/install.mjs",
-    "./package.json": "./package.json"
-  },
-  "files": [
-    "bin",
-    "lib",
-    "hooks",
-    "dist",
-    "db",
-    "web/dist"
+  "workspaces": [
+    "core",
+    "rules/_kit",
+    "rules/lint-max-lines",
+    "rules/lint-prettier"
   ],
   "scripts": {
-    "build": "tsc",
-    "prepare": "tsc && node bin/install.mjs",
+    "build": "tsc -p core/tsconfig.json",
+    "prepare": "tsc -p core/tsconfig.json && node core/bin/install.mjs",
     "test": "vitest run --coverage",
     "lint:comments": "captain-obvious-lint comments --staged",
     "lint:comments:all": "captain-obvious-lint comments --all",
@@ -87,22 +72,7 @@
     "lint:tests-with-code": "captain-obvious-lint tests-with-code --staged",
     "lint:tests-with-code:all": "captain-obvious-lint tests-with-code --all"
   },
-  "engines": {
-    "node": ">=18"
-  },
-  "dependencies": {
-    "better-sqlite3": "^13.0.1",
-    "jscpd": "^3.5.10",
-    "knip": "^6.24.0",
-    "picomatch": "^4.0.5",
-    "prettier": "^3.4.0",
-    "typescript": "^5.7.0",
-    "yaml": "^2.6.0"
-  },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.11",
-    "@types/node": "^22.10.0",
-    "@types/picomatch": "^4.0.3",
     "@vitest/coverage-v8": "^2.1.9",
     "happy-dom": "^20.11.1",
     "vitest": "^2.1.0"

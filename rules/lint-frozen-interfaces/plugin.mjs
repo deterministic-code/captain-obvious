@@ -1,0 +1,25 @@
+/** @type {import("../../src/rules/plugin.js").RulePlugin} */
+export default {
+  "meta": {
+    "slug": "lint-frozen-interfaces",
+    "name": "Frozen interfaces",
+    "category": "api-stability",
+    "description": "Prevents changes to signatures marked frozen (baseline in interface-frozen.yaml).",
+    "languages": [],
+    "config": null,
+    "ratchetable": true,
+    "modes": [
+      "push",
+      "staged",
+      "all",
+      "files",
+      "warn"
+    ],
+    "stages": [
+      "pre-commit"
+    ],
+    "actions": []
+  },
+  "dependencies": [],
+  "checkEntry": "./check.mjs"
+};

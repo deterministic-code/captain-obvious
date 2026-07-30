@@ -1,0 +1,40 @@
+/** @type {import("../../src/rules/plugin.js").RulePlugin} */
+export default {
+  "meta": {
+    "slug": "lint-max-line-length",
+    "name": "Max line length",
+    "category": "size",
+    "description": "Flags lines wider than the column limit.",
+    "languages": [
+      "typescript",
+      "javascript"
+    ],
+    "config": {
+      "maxLineLength": 100
+    },
+    "ratchetable": false,
+    "modes": [
+      "staged",
+      "all",
+      "files",
+      "warn"
+    ],
+    "stages": [
+      "pre-commit"
+    ],
+    "actions": []
+  },
+  "control": {
+    "kind": "declarative",
+    "fields": [
+      {
+        "key": "maxLineLength",
+        "label": "Max Line Length",
+        "type": "number",
+        "min": 1
+      }
+    ]
+  },
+  "dependencies": [],
+  "checkEntry": "./check.mjs"
+};

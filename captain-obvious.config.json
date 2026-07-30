@@ -1,4 +1,8 @@
 {
+  "plugins": [
+    "@deterministic-code/co-rule-lint-max-lines",
+    "@deterministic-code/co-rule-lint-prettier"
+  ],
   "gitHooks": {
     "preCommit": [
       "lint-comments --staged",
