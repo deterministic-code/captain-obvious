@@ -175,7 +175,9 @@ async function handle(
   if (!pathname.startsWith("/api/")) {
     if (method !== "GET") return sendJson(res, 405, { error: "method not allowed" });
     if (pathname === "/panel-ext.js") {
-      res.writeHead(200, { "content-type": MIME[".js"] });
+      // The injected panel script has a fixed URL and no content hash, so a
+      // stale copy would stick in the browser's disk cache — force revalidation.
+      res.writeHead(200, { "content-type": MIME[".js"], "cache-control": "no-cache" });
       res.end(PANEL_EXT);
       return;
     }
