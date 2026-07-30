@@ -157,11 +157,16 @@ describe("runRules — validation", () => {
   });
 
   it("throws a clean error when the folder is not a git repo", async () => {
+    // The repo root resolves fine (serve's cwd is a repo); only the target's
+    // work-tree probe fails, which is what should surface the clean error.
     execFileMock.mockImplementation(((
       _cmd: string,
-      _args: string[],
-      cb: (e: unknown) => void,
-    ) => cb(new Error("fatal: not a git repository"))) as never);
+      args: string[],
+      cb: (e: unknown, r: unknown) => void,
+    ) =>
+      args.includes("--show-toplevel")
+        ? cb(null, { stdout: `${process.cwd()}\n`, stderr: "" })
+        : cb(new Error("fatal: not a git repository"), null)) as never);
     await expect(
       runRules({ slugs: ["lint-naming"], path: dir }),
     ).rejects.toThrow(`not a git repository (or missing folder): ${dir}`);
@@ -209,6 +214,25 @@ describe("runRules — file mode (--files)", () => {
       string[],
       { cwd: string },
     ];
+    expect(args).toEqual([checkScriptPath("lint-naming"), "--files", filePath]);
+    expect(opts.cwd).toBe(dir);
+  });
+
+  it("resolves a relative path against the repo root, not the process cwd", async () => {
+    // Panel violation paths are root-relative; with the repo root = dir (≠ cwd),
+    // a bare "a.ts" must land under dir, not under process.cwd() (which has no such file).
+    execFileMock.mockImplementation(((
+      _cmd: string,
+      args: string[],
+      cb: (e: unknown, r: unknown) => void,
+    ) =>
+      cb(null, {
+        stdout: args.includes("--show-toplevel") ? `${dir}\n` : "true\n",
+        stderr: "",
+      })) as never);
+    const results = await runRules({ slugs: ["lint-naming"], path: "a.ts" });
+    expect(results[0].ok).toBe(true);
+    const [, args, opts] = spawnMock.mock.calls[0] as [string, string[], { cwd: string }];
     expect(args).toEqual([checkScriptPath("lint-naming"), "--files", filePath]);
     expect(opts.cwd).toBe(dir);
   });
