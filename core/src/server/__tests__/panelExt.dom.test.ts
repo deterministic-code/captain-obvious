@@ -73,6 +73,7 @@ let projectList: ProjectView[];
 let projectCreateCalls: { name: string; directories: string[] }[];
 let patchCalls: { url: string; body: Record<string, unknown> }[];
 let runCalls: { slugs: string[]; path: string }[];
+let runResult: unknown;
 let analyzeCalls: unknown[];
 let analyzeFails: boolean;
 let analyzeStatusResult: { analyzed: boolean; lastAnalyzed: string | null };
@@ -91,6 +92,7 @@ const RUN_RESULT = [
     ],
   },
   { slug: "lint-b", ok: true, violations: [] },
+  { slug: "lint-c", ok: false, violations: [], error: "boom" },
 ];
 const FILE_TEXT = "const a = 1\nconst bad = 2\nconst c = 3\n";
 
@@ -144,6 +146,7 @@ beforeEach(() => {
   projectCreateCalls = [];
   patchCalls = [];
   runCalls = [];
+  runResult = RUN_RESULT;
   analyzeCalls = [];
   analyzeFails = false;
   analyzeStatusResult = { analyzed: true, lastAnalyzed: "2026-01-01T00:00:00Z" };
@@ -213,7 +216,7 @@ beforeEach(() => {
     }
     if (url === "/api/run") {
       runCalls.push(JSON.parse(opts?.body as string));
-      return jsonRes(RUN_RESULT);
+      return jsonRes(runResult);
     }
     if (url === "/api/analyze/status") return jsonRes(analyzeStatusResult);
     if (url === "/api/analyze") {
@@ -719,6 +722,70 @@ describe("panelExt injected script", () => {
     results.appendChild(vio);
     return vio;
   }
+
+  function visibleRunSlugs(overlay: HTMLElement): (string | null)[] {
+    return [...overlay.querySelectorAll<HTMLElement>("#co-run-results-list .co-run-rule")]
+      .filter((b) => b.style.display !== "none")
+      .map((b) => b.getAttribute("data-slug"));
+  }
+
+  function setRunFilter(overlay: HTMLElement, id: string, value: string): void {
+    const sel = overlay.querySelector<HTMLSelectElement>("#" + id)!;
+    sel.value = value;
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  it("hides the output toolbar until a run produces results, then shows it", async () => {
+    await runInjected();
+    expect(document.querySelector<HTMLElement>("#co-run-results-bar")!.style.display).toBe("none");
+    const overlay = await runAndSelect();
+    expect(overlay.querySelector<HTMLElement>("#co-run-results-bar")!.style.display).toBe("flex");
+  });
+
+  it("offers exactly All / Violations / Successes / Errors in the Show filter", async () => {
+    const overlay = await runAndSelect();
+    const labels = [...overlay.querySelectorAll<HTMLOptionElement>("#co-run-show option")].map(
+      (o) => o.textContent,
+    );
+    expect(labels).toEqual(["All", "Violations", "Successes", "Errors"]);
+  });
+
+  it("narrows output blocks by result state via the Show dropdown", async () => {
+    const overlay = await runAndSelect();
+    expect(visibleRunSlugs(overlay)).toEqual(["lint-a", "lint-b", "lint-c"]);
+    setRunFilter(overlay, "co-run-show", "violations");
+    expect(visibleRunSlugs(overlay)).toEqual(["lint-a"]);
+    setRunFilter(overlay, "co-run-show", "successes");
+    expect(visibleRunSlugs(overlay)).toEqual(["lint-b"]);
+    setRunFilter(overlay, "co-run-show", "errors");
+    expect(visibleRunSlugs(overlay)).toEqual(["lint-c"]);
+    setRunFilter(overlay, "co-run-show", "all");
+    expect(visibleRunSlugs(overlay)).toEqual(["lint-a", "lint-b", "lint-c"]);
+  });
+
+  it("lists All rules plus each run rule and narrows to one, ANDed with Show", async () => {
+    const overlay = await runAndSelect();
+    const labels = [...overlay.querySelectorAll<HTMLOptionElement>("#co-run-rulefilter option")].map(
+      (o) => o.textContent,
+    );
+    expect(labels).toEqual(["All rules", "lint-a", "lint-b", "lint-c"]);
+    setRunFilter(overlay, "co-run-rulefilter", "lint-b");
+    expect(visibleRunSlugs(overlay)).toEqual(["lint-b"]);
+    // Rule=lint-b (a success) with Show=violations leaves nothing.
+    setRunFilter(overlay, "co-run-show", "violations");
+    expect(visibleRunSlugs(overlay)).toEqual([]);
+  });
+
+  it("resets the Rule filter to All when a fresh run drops the selected rule", async () => {
+    const overlay = await runAndSelect();
+    setRunFilter(overlay, "co-run-rulefilter", "lint-a");
+    expect(visibleRunSlugs(overlay)).toEqual(["lint-a"]);
+    runResult = [{ slug: "lint-b", ok: true, violations: [] }];
+    overlay.querySelector<HTMLButtonElement>("#co-run-btn")!.click();
+    for (let i = 0; i < 4; i++) await flush();
+    expect(overlay.querySelector<HTMLSelectElement>("#co-run-rulefilter")!.value).toBe("all");
+    expect(visibleRunSlugs(overlay)).toEqual(["lint-b"]);
+  });
 
   it("shows an editor placeholder until a result is opened", async () => {
     await runInjected();
