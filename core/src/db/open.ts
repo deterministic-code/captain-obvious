@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
+import { resolveModeLocation } from "./location.js";
 import { LANGUAGES } from "../rules/languages.js";
 
 /** better-sqlite3 database handle. */
@@ -33,13 +34,16 @@ export interface DbPathOpts {
 
 /**
  * Resolve which DB file to open. Precedence: explicit `--db` flag, then the
- * CAPTAIN_OBVIOUS_DB env var, then the package-local default. Tests point this
- * at a temp file or ":memory:".
+ * CAPTAIN_OBVIOUS_DB env var, then the local/global mode directory, then the
+ * package-local default (only when no repo root anchors a local DB). Tests point
+ * this at a temp file or ":memory:".
  */
 export function resolveDbPath(opts: DbPathOpts = {}): string {
   if (opts.db) return opts.db === ":memory:" ? opts.db : resolve(opts.db);
   const fromEnv = process.env.CAPTAIN_OBVIOUS_DB;
   if (fromEnv) return fromEnv === ":memory:" ? fromEnv : resolve(fromEnv);
+  const loc = resolveModeLocation();
+  if (loc) return resolve(loc.dir, "captain-obvious.db");
   return DEFAULT_DB_PATH;
 }
 

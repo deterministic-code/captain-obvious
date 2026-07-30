@@ -7,6 +7,7 @@ import {
   addActionType,
   createProject,
   getMeta,
+  getMode,
   getStats,
   listProjectRules,
   listRules,
@@ -224,6 +225,23 @@ describe("getStats", () => {
     expect(Object.values(stats.byStage).every((n) => n > 0)).toBe(true);
     const stagedTotal = Object.values(stats.byStage).reduce((a, b) => a + b, 0);
     expect(stagedTotal).toBeGreaterThanOrEqual(stats.total);
+  });
+});
+
+describe("getMode", () => {
+  const saved = process.env.CAPTAIN_OBVIOUS_MODE;
+  afterEach(() => {
+    if (saved === undefined) delete process.env.CAPTAIN_OBVIOUS_MODE;
+    else process.env.CAPTAIN_OBVIOUS_MODE = saved;
+  });
+
+  it("echoes the resolved paths and the active mode", () => {
+    process.env.CAPTAIN_OBVIOUS_MODE = "global";
+    expect(getMode("/db/registry.db", "/db/audit.db")).toEqual({
+      mode: "global",
+      dbPath: "/db/registry.db",
+      auditDbPath: "/db/audit.db",
+    });
   });
 });
 

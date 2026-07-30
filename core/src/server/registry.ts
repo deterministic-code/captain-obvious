@@ -17,6 +17,7 @@ import {
 import { configureRule } from "../db/rules.js";
 import { seedRules, type SeedSummary } from "../db/seed.js";
 import type { Db } from "../db/open.js";
+import { resolveMode, type Mode } from "../db/location.js";
 import type { ProjectRow, RuleRow } from "../db/types.js";
 import { RULES } from "../rules/index.js";
 import type { ControlSpec, RuleDependency } from "../rules/plugin.js";
@@ -275,6 +276,21 @@ export function getMeta(db: Db): MetaView {
       .all() as MetaView["languages"],
     stages: STAGES.map((s) => ({ slug: s.slug, name: s.name })),
   };
+}
+
+export interface ModeView {
+  mode: Mode;
+  dbPath: string;
+  auditDbPath: string;
+}
+
+/**
+ * GET /api/mode — which DB set the server opened: `local` (project-fixed) vs
+ * `global` (machine-wide), plus the resolved file paths for the panel's tooltip.
+ * Additive route — the prebuilt panel ignores it; panelExt renders the badge.
+ */
+export function getMode(dbPath: string, auditDbPath: string): ModeView {
+  return { mode: resolveMode(), dbPath, auditDbPath };
 }
 
 export interface StatsView {

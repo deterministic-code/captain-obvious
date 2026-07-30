@@ -1,4 +1,5 @@
 {
+  "mode": "local",
   "plugins": [
     "@deterministic-code/co-rule-gov-main-ci-green",
     "@deterministic-code/co-rule-gov-no-push-to-main",

@@ -16,6 +16,7 @@ import {
   addActionType,
   createProject,
   getMeta,
+  getMode,
   getStats,
   listProjectRules,
   listProjects,
@@ -138,13 +139,15 @@ export function startServer(opts: ServeOptions = {}): Promise<void> {
   const host = opts.host ?? "127.0.0.1";
   const dbPath = resolveDbPath({ db: opts.dbPath });
   const db = openDb(dbPath);
-  const auditDb = openAuditDb(resolveAuditDbPath());
+  const auditDbPath = resolveAuditDbPath();
+  const auditDb = openAuditDb(auditDbPath);
   useAuditLog(auditDb);
+  const mode = getMode(dbPath, auditDbPath);
   const cwd = process.cwd();
   ensureDefaultProject(db, cwd, resolveDefaultProjectName(cwd));
 
   const server = createServer((req, res) => {
-    handle(req, res, db, auditDb).catch((err) => {
+    handle(req, res, db, auditDb, mode).catch((err) => {
       const message = err instanceof Error ? err.message : String(err);
       if (!res.headersSent) sendJson(res, 400, { error: message });
       else res.end();
@@ -156,7 +159,9 @@ export function startServer(opts: ServeOptions = {}): Promise<void> {
       const url = `http://${host}:${port}`;
       process.stdout.write(
         `captain-obvious: control panel on ${url}\n` +
+          `  mode:      ${mode.mode}\n` +
           `  registry:  ${dbPath}\n` +
+          `  audit:     ${auditDbPath}\n` +
           `  profiling: ${PROFILE_DB}${existsSync(PROFILE_DB) ? "" : " (missing)"}\n`,
       );
       resolvePromise();
@@ -169,6 +174,7 @@ async function handle(
   res: ServerResponse,
   db: ReturnType<typeof openDb>,
   auditDb: ReturnType<typeof openAuditDb>,
+  mode: ReturnType<typeof getMode>,
 ): Promise<void> {
   const url = new URL(req.url ?? "/", "http://localhost");
   const { pathname } = url;
@@ -192,6 +198,9 @@ async function handle(
   }
   if (pathname === "/api/meta" && method === "GET") {
     return sendJson(res, 200, getMeta(db));
+  }
+  if (pathname === "/api/mode" && method === "GET") {
+    return sendJson(res, 200, mode);
   }
   if (pathname === "/api/stats" && method === "GET") {
     return sendJson(res, 200, getStats(db));

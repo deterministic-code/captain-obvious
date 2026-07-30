@@ -162,9 +162,22 @@ describe("resolveAuditDbPath", () => {
     expect(resolveAuditDbPath()).toBe(resolve("rel/audit.db"));
   });
 
-  it("falls back to the package-local default when neither opts nor env is set", () => {
+  it("resolves to the repo's local mode dir when neither opts nor env is set", () => {
     delete process.env.CAPTAIN_OBVIOUS_AUDIT_DB;
-    expect(resolveAuditDbPath()).toContain(join("data", "audit-log.db"));
+    expect(resolveAuditDbPath()).toContain(join(".captain-obvious", "audit-log.db"));
+  });
+
+  it("falls back to the package-local default outside any repo", () => {
+    delete process.env.CAPTAIN_OBVIOUS_AUDIT_DB;
+    const outside = mkdtempSync(join(tmpdir(), "co-norepo-"));
+    const cwd = process.cwd();
+    try {
+      process.chdir(outside);
+      expect(resolveAuditDbPath()).toContain(join("data", "audit-log.db"));
+    } finally {
+      process.chdir(cwd);
+      rmSync(outside, { recursive: true, force: true });
+    }
   });
 });
 

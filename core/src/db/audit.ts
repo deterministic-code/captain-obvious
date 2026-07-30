@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
+import { resolveModeLocation } from "./location.js";
 import type { Db } from "./open.js";
 
 /** Package root: two levels up from this module (src/db or dist/db). */
@@ -17,14 +18,16 @@ export interface AuditDbPathOpts {
 
 /**
  * Resolve the audit-log DB path. Precedence: explicit `--audit-db`, then the
- * CAPTAIN_OBVIOUS_AUDIT_DB env var, then the package-local default. Kept separate
- * from the registry path so the audit file can be pointed elsewhere or deleted
- * without affecting the catalog.
+ * CAPTAIN_OBVIOUS_AUDIT_DB env var, then the local/global mode directory, then the
+ * package-local default. Kept separate from the registry path so the audit file
+ * can be pointed elsewhere or deleted without affecting the catalog.
  */
 export function resolveAuditDbPath(opts: AuditDbPathOpts = {}): string {
   if (opts.db) return opts.db === ":memory:" ? opts.db : resolve(opts.db);
   const fromEnv = process.env.CAPTAIN_OBVIOUS_AUDIT_DB;
   if (fromEnv) return fromEnv === ":memory:" ? fromEnv : resolve(fromEnv);
+  const loc = resolveModeLocation();
+  if (loc) return resolve(loc.dir, "audit-log.db");
   return DEFAULT_AUDIT_DB_PATH;
 }
 
