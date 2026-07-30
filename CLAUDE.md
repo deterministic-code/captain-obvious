@@ -5,26 +5,39 @@ guard hooks, installable into any repo. The package ships the **hook implementat
 consuming repo owns a `captain-obvious.config.json` that decides **which** hooks run, in what
 order, and which are advisory — so one package drives a strict repo and a lax one without forking.
 
-- **`src/`** — strict TypeScript, compiled to `dist/` by `tsc`. The registry lives here:
-  - `src/db/` — the SQLite catalog via `better-sqlite3` (`open`, `rules`, `fixes`, `actions`,
+The repo is an **npm workspaces monorepo**: the root is a private host; the engine and every rule
+are workspace packages. Dependency DAG: **rule package → `rules/_kit` → `core`**, all by package name.
+
+- **`rules/<slug>/`** — each rule is its **own npm package** `@deterministic-code/co-rule-<slug>`
+  (see "Rule plugins" below): `plugin.mjs` (the `RulePlugin` descriptor: meta, settings control,
+  dependencies, `checkEntry`), `check.mjs` (the un-compiled runner the dispatcher spawns), an optional
+  `control.mjs`, and a `package.json` declaring its deps (the kit + any tool). Shared check helpers are
+  the **`rules/_kit/`** package `@deterministic-code/co-rule-kit` (`lint-shared`, `fn-metrics`,
+  `solid-*-metrics`, `dup-*`, `ast-fingerprint`, and the `config-bridge`/`protected-globs` bridges that
+  import the core runtime by name). Vitest lives flat in **`rules/__tests__/`**.
+- **`core/`** — the engine package `@deterministic-code/captain-obvious`. `core/src/` is strict
+  TypeScript compiled to `core/dist/` by `tsc`:
+  - `core/src/db/` — the SQLite catalog via `better-sqlite3` (`open`, `rules`, `fixes`, `actions`,
     `languages`, `seed`, `lookups`, `types`, `args`).
-  - `src/rules/` — the bundled rule set (`define`, `index`, `languages`, `types`) seeded into the DB.
-  - `src/server/` — the web control panel: `serve.ts` (routing + static SPA), `registry.ts`
-    (shapes `/api/*` from `data/captain-obvious.db`), `profiling.ts` (reads read-only `.profile/profile.db`).
-  - `src/bin/captain-obvious.ts` — the CLI entry (`add-rule`, `configure-rule`, `configure-action`,
-    `seed-rules`, `show-rule`, `init`, `serve`, `add-language`).
-- **`lib/*.mjs`** — plain ESM install-time helpers (`claude-settings`, `config`, `git-hooks`,
-  `json-file`, `npm-scripts`). **`bin/install.mjs` / `bin/lint.mjs`** — the `captain-obvious-install`
-  and `captain-obvious-lint` bins, shipped as-is (not compiled).
-- **`hooks/git/*.mjs`** — the lint hook implementations (`lint-comments`, `lint-naming`, `lint-dup*`,
-  `lint-solid-*`, `lint-empty-catch`, `lint-sync-calls`, `lint-frozen-interfaces`, `lint-prettier`,
-  metrics + ratchets) with vitest `__tests__/`. **`hooks/claude/*.sh`** — the Claude Code guard hooks
-  (`main-branch-guard`, `pre-merge-ci-guard`, `stop-unmerged-guard`, `dispatch-guard`, session status).
-- **`db/schema.sql`** — registry schema. **`web/dist/`** — the prebuilt control-panel bundle (see below).
-- Node ≥ 18, ESM (`"type": "module"`). Commands: `npm test` (`vitest run --coverage` — covers both
-  `.ts` and `.mjs` tests and enforces 100% coverage via `vitest.config.ts` thresholds; thin shims are
-  excluded there), `npm run build` / `npm run prepare` (`tsc`, emits `dist/`). There is **no CI workflow
-  and no typecheck-only script** — a green `vitest` + a clean `tsc` are the only automated *merge* gates.
+  - `core/src/rules/` — the plugin engine: `plugin.ts` (the `RulePlugin` interface), `load.ts` (hybrid
+    discovery — the `plugins[]` list in `captain-obvious.config.json` plus a folder-scan for
+    not-yet-packaged rules; stamps each plugin's absolute `checkPath`), `index.ts`
+    (`RULES = await loadPlugins()`), `config.ts` (per-rule config for the check bridge), `deps.ts`
+    (dependency verification), `dispatch.ts`, `stages.ts`, `languages.ts`, `types.ts`.
+  - `core/src/server/` — the web control panel: `serve.ts` (routing + static SPA), `registry.ts`
+    (shapes `/api/*`), `profiling.ts`. `core/src/bin/captain-obvious.ts` — the CLI (`add-rule`,
+    `configure-rule`, `configure-action`, `seed-rules`, `check-deps`, `show-rule`, `init`, `serve`,
+    `add-language`).
+  - `core/lib/*.mjs` — install-time helpers. `core/bin/install.mjs` / `core/bin/lint.mjs` — the
+    `captain-obvious-install` / `captain-obvious-lint` bins, shipped as-is. `core/hooks/git/dispatch.mjs`
+    — the thin git-hook entry that spawns each rule's `check.mjs`; `core/hooks/claude/*.sh` — the Claude
+    Code guard hooks. `core/db/schema.sql` — registry schema. `core/web/dist/` — the prebuilt panel.
+  - The core publishes runtime subpaths for the kit's bridges: `./runtime/db`, `./runtime/config`,
+    `./runtime/protected-paths`, `./languages`.
+- Node ≥ 18, ESM. Commands from the **repo root**: `npm test` (`vitest run --coverage` — covers
+  `core/src`/`core/hooks`/`core/lib` + all `rules/*` `.mjs`, 100% enforced), `npm run build`
+  (`tsc -p core/tsconfig.json`, emits `core/dist/`). There is **no CI** — a green `vitest` + clean `tsc`
+  are the only automated *merge* gates.
   The repo now **self-applies its own hooks** via `captain-obvious.config.json` (run
   `captain-obvious-install` after clone to wire the local `.git/hooks` + Claude guards); those hooks are
   local, best-effort, and driven by the local registry DB, not a substitute for the vitest + tsc gate.
@@ -36,8 +49,26 @@ A **rule performs the CHECK** (detection); its **actions handle remediation/outp
 zero actions. Actions live in the `fixes` table (one rule → 0..N), `kind`: `script` (deterministic fix
 command), `inferred` (fix delegated to the model), `output` (report-only). This is **separate from
 `rule_actions`** — the per-environment severity bindings (`warn` / `halt` / `delay_halt`) the web panel
-reads. Do not conflate the two. Seed actions via `RuleMeta.actions` (`undefined` = leave untouched on
-re-seed, `[]` = clear); CRUD in `src/db/fixes.ts`.
+reads. Do not conflate the two. Seed actions via `RulePluginMeta.actions` (`undefined` = leave untouched
+on re-seed, `[]` = clear); CRUD in `src/db/fixes.ts`.
+
+## Rule plugins — one folder, one rule
+
+Every rule is a self-contained module under `rules/<slug>/`, conforming to the `RulePlugin` interface
+(`src/rules/plugin.ts`). Setup discovers them by scanning the folder — drop a new `rules/<slug>/plugin.mjs`
+and it registers itself; there is no central list to edit.
+- **`plugin.mjs`** — a plain-ESM descriptor (JSDoc-typed against `RulePlugin`, *not* tsc-compiled, like
+  the checks) default-exporting `{ meta, control?, dependencies?, checkEntry }`. `load.ts` validates each
+  (`assertRulePlugin`) and `registerRule` (`src/db/rules.ts`) writes it to the catalog (languages,
+  categories, stages, fixes, `control_json`, `deps_json`).
+- **`check.mjs`** — the check, spawned un-compiled by `dispatch.ts` via `checkEntry`. It reads its
+  effective config (global overlaid by the default project) through `rules/_shared/config-bridge.mjs` →
+  `src/rules/config.ts`, so a panel edit to a threshold reaches the running check. `checkEntry: null`
+  marks a policy-only rule with no local runner (e.g. `gov-require-pr`).
+- **`control`** — the settings dialog: `{ kind: "declarative", fields }` (rendered generically by
+  `panelExt`) or `{ kind: "custom", key }` (the escape hatch resolving to `panelExt`'s `CUSTOM_CONTROLS`).
+- **`dependencies`** — external tools/packages the check needs; `check-deps` (and install) warn if any
+  are missing (`src/rules/deps.ts`, warn-only).
 
 ## Web control panel — additive API only
 

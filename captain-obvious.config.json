@@ -1,4 +1,37 @@
 {
+  "plugins": [
+    "@deterministic-code/co-rule-gov-main-ci-green",
+    "@deterministic-code/co-rule-gov-no-push-to-main",
+    "@deterministic-code/co-rule-gov-require-pr",
+    "@deterministic-code/co-rule-lint-comments",
+    "@deterministic-code/co-rule-lint-complexity",
+    "@deterministic-code/co-rule-lint-coverage",
+    "@deterministic-code/co-rule-lint-dead-code",
+    "@deterministic-code/co-rule-lint-dup",
+    "@deterministic-code/co-rule-lint-dup-fn",
+    "@deterministic-code/co-rule-lint-dup-structural",
+    "@deterministic-code/co-rule-lint-emitter-casing",
+    "@deterministic-code/co-rule-lint-empty-catch",
+    "@deterministic-code/co-rule-lint-empty-tests",
+    "@deterministic-code/co-rule-lint-frozen-interfaces",
+    "@deterministic-code/co-rule-lint-max-file-lines",
+    "@deterministic-code/co-rule-lint-max-line-length",
+    "@deterministic-code/co-rule-lint-max-lines",
+    "@deterministic-code/co-rule-lint-max-params",
+    "@deterministic-code/co-rule-lint-max-statements",
+    "@deterministic-code/co-rule-lint-naming",
+    "@deterministic-code/co-rule-lint-prettier",
+    "@deterministic-code/co-rule-lint-protected-paths",
+    "@deterministic-code/co-rule-lint-solid-d",
+    "@deterministic-code/co-rule-lint-solid-i",
+    "@deterministic-code/co-rule-lint-solid-l",
+    "@deterministic-code/co-rule-lint-solid-o",
+    "@deterministic-code/co-rule-lint-solid-s",
+    "@deterministic-code/co-rule-lint-sync-calls",
+    "@deterministic-code/co-rule-lint-test-determinism",
+    "@deterministic-code/co-rule-lint-test-disabling-skipping",
+    "@deterministic-code/co-rule-lint-tests-with-code"
+  ],
   "gitHooks": {
     "preCommit": [
       "lint-comments --staged",
@@ -38,8 +71,22 @@
     }
   },
   "claudeHooks": [
-    { "event": "PreToolUse", "matcher": "Edit|Write|NotebookEdit|Bash", "hook": "main-branch-guard", "timeout": 5 },
-    { "event": "PreToolUse", "matcher": "Edit|Write|NotebookEdit", "hook": "protected-paths-guard", "timeout": 5 },
-    { "event": "Stop", "hook": "stop-unmerged-guard", "timeout": 15 }
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|Write|NotebookEdit|Bash",
+      "hook": "main-branch-guard",
+      "timeout": 5
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|Write|NotebookEdit",
+      "hook": "protected-paths-guard",
+      "timeout": 5
+    },
+    {
+      "event": "Stop",
+      "hook": "stop-unmerged-guard",
+      "timeout": 15
+    }
   ]
 }

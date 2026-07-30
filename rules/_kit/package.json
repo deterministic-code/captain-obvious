@@ -1,0 +1,32 @@
+{
+  "name": "@deterministic-code/co-rule-kit",
+  "version": "0.2.0",
+  "description": "Shared check helpers for captain-obvious rule packages.",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    "./lint-shared": "./lint-shared.mjs",
+    "./fn-metrics": "./fn-metrics.mjs",
+    "./ast-fingerprint": "./ast-fingerprint.mjs",
+    "./dup-structural-metrics": "./dup-structural-metrics.mjs",
+    "./dup-fn-metrics": "./dup-fn-metrics.mjs",
+    "./dup-ratchet": "./dup-ratchet.mjs",
+    "./solid-s-metrics": "./solid-s-metrics.mjs",
+    "./solid-o-metrics": "./solid-o-metrics.mjs",
+    "./solid-l-metrics": "./solid-l-metrics.mjs",
+    "./solid-i-metrics": "./solid-i-metrics.mjs",
+    "./solid-d-metrics": "./solid-d-metrics.mjs",
+    "./frozen-interfaces-metrics": "./frozen-interfaces-metrics.mjs",
+    "./check-main-ci-green": "./check-main-ci-green.mjs",
+    "./config-bridge": "./config-bridge.mjs",
+    "./protected-globs": "./protected-globs.mjs",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "*.mjs"
+  ],
+  "dependencies": {
+    "@deterministic-code/captain-obvious": "^0.2.0",
+    "jscpd": "^3.5.10"
+  }
+}
