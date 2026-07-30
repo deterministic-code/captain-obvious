@@ -1714,7 +1714,7 @@ export const PANEL_EXT = `(() => {
     const bar = document.createElement("div");
     bar.className = "co-run-results-bar";
     bar.id = "co-run-results-bar";
-    bar.style.display = "none";
+    bar.style.display = "flex";
     const show = labeledSelect("Show:", "co-run-show", (v) => {
       runShow = v;
       applyRunFilter();
@@ -1764,12 +1764,13 @@ export const PANEL_EXT = `(() => {
     return html;
   }
 
-  // Sync the toolbar's Rule dropdown to the run's slugs and show/hide the bar.
-  // A run that drops the previously-selected rule falls back to "all".
+  // Sync the toolbar's Rule dropdown to the run's slugs. The bar stays visible at
+  // all times; with no slugs (before/during a run) the existing dropdown is left
+  // as-is. A run that drops the previously-selected rule falls back to "all".
   function syncRunResultsBar(slugs) {
     const bar = document.getElementById("co-run-results-bar");
     if (!bar) return;
-    bar.style.display = slugs.length ? "flex" : "none";
+    bar.style.display = "flex";
     if (!slugs.length) return;
     if (runRuleFilter !== "all" && slugs.indexOf(runRuleFilter) === -1) runRuleFilter = "all";
     const sel = document.getElementById("co-run-rulefilter");

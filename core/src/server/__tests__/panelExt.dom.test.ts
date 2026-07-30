@@ -735,9 +735,9 @@ describe("panelExt injected script", () => {
     sel.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
-  it("hides the output toolbar until a run produces results, then shows it", async () => {
+  it("shows the output toolbar at all times, even before a run", async () => {
     await runInjected();
-    expect(document.querySelector<HTMLElement>("#co-run-results-bar")!.style.display).toBe("none");
+    expect(document.querySelector<HTMLElement>("#co-run-results-bar")!.style.display).toBe("flex");
     const overlay = await runAndSelect();
     expect(overlay.querySelector<HTMLElement>("#co-run-results-bar")!.style.display).toBe("flex");
   });
