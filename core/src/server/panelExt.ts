@@ -37,6 +37,10 @@ export const PANEL_EXT = `(() => {
   let running = false;
   let browsePath = "";
   let violationsByPath = {};
+  // Run output filters: runShow narrows result blocks by state, runRuleFilter to
+  // one rule. Both operate on the already-fetched blocks (display toggle), no refetch.
+  let runShow = "all";
+  let runRuleFilter = "all";
   // Activity overlay: a global (not project-scoped) view of hook runs + config
   // changes. activityKeys drives the rule multiselect; activitySelectedRules is
   // the current filter; activityWindow is the time span.
@@ -941,7 +945,12 @@ export const PANEL_EXT = `(() => {
       ".co-ln-active .co-line{background:#fee2e2}" +
       ".co-caret .co-line{background:#fff5f5}" +
       ".co-caret-mark{color:#ef4444;font-weight:700}.co-caret-msg{color:#b91c1c}" +
-      ".co-run-results{height:38%;flex-shrink:0;overflow:auto;border-top:1px solid #e2e8f0;padding:12px;display:flex;flex-direction:column;gap:12px}" +
+      ".co-run-results{height:38%;flex-shrink:0;overflow:hidden;border-top:1px solid #e2e8f0;padding:12px;display:flex;flex-direction:column;gap:12px}" +
+      ".co-run-results-bar{flex-shrink:0;display:flex;gap:16px;align-items:center}" +
+      ".co-run-filter{display:flex;align-items:center;gap:6px}" +
+      ".co-run-filter-label{font-size:12px;font-weight:600;color:#64748b}" +
+      ".co-run-filter-select{padding:4px 8px;font-size:12px}" +
+      ".co-run-results-list{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:12px}" +
       ".co-run-rule{flex-shrink:0;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden}" +
       ".co-run-rule-head{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#f8fafc;border-bottom:1px solid #f1f5f9}" +
       ".co-run-slug{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600;color:#0f172a}" +
@@ -1651,12 +1660,86 @@ export const PANEL_EXT = `(() => {
       if (!t) return;
       openInEditor(t.getAttribute("data-path"), Number(t.getAttribute("data-line")));
     });
+    results.appendChild(buildRunResultsBar());
+    const list = document.createElement("div");
+    list.className = "co-run-results-list";
+    list.id = "co-run-results-list";
+    results.appendChild(list);
     main.appendChild(editor);
     main.appendChild(results);
     body.appendChild(main);
 
     overlay.appendChild(body);
     root.parentElement.insertBefore(overlay, root.nextSibling);
+  }
+
+  // The output panel's toolbar: a "Show" state filter (fixed) and a "Rule"
+  // filter (repopulated per run). Hidden until a run produces results.
+  const SHOW_OPTIONS = [
+    { value: "all", label: "All" },
+    { value: "violations", label: "Violations" },
+    { value: "successes", label: "Successes" },
+    { value: "errors", label: "Errors" },
+  ];
+  // Maps a "Show" selection to the data-status a block must carry to survive it.
+  const SHOW_STATUS = { violations: "violations", successes: "success", errors: "error" };
+
+  function labeledSelect(labelText, id, onChange) {
+    const wrap = document.createElement("label");
+    wrap.className = "co-run-filter";
+    const span = document.createElement("span");
+    span.className = "co-run-filter-label";
+    span.textContent = labelText;
+    const sel = document.createElement("select");
+    sel.className = "co-project-select co-run-filter-select";
+    sel.id = id;
+    sel.addEventListener("change", () => onChange(sel.value));
+    wrap.appendChild(span);
+    wrap.appendChild(sel);
+    return { wrap, sel };
+  }
+
+  function setSelectOptions(sel, options, value) {
+    sel.innerHTML = "";
+    for (const o of options) {
+      const opt = document.createElement("option");
+      opt.value = o.value;
+      opt.textContent = o.label;
+      sel.appendChild(opt);
+    }
+    sel.value = value;
+  }
+
+  function buildRunResultsBar() {
+    const bar = document.createElement("div");
+    bar.className = "co-run-results-bar";
+    bar.id = "co-run-results-bar";
+    bar.style.display = "none";
+    const show = labeledSelect("Show:", "co-run-show", (v) => {
+      runShow = v;
+      applyRunFilter();
+    });
+    setSelectOptions(show.sel, SHOW_OPTIONS, runShow);
+    const rule = labeledSelect("Rule:", "co-run-rulefilter", (v) => {
+      runRuleFilter = v;
+      applyRunFilter();
+    });
+    setSelectOptions(rule.sel, [{ value: "all", label: "All rules" }], runRuleFilter);
+    bar.appendChild(show.wrap);
+    bar.appendChild(rule.wrap);
+    return bar;
+  }
+
+  function applyRunFilter() {
+    const list = document.getElementById("co-run-results-list");
+    if (!list) return;
+    const wantStatus = SHOW_STATUS[runShow];
+    for (const block of list.querySelectorAll(".co-run-rule")) {
+      const okShow = !wantStatus || block.getAttribute("data-status") === wantStatus;
+      const okRule =
+        runRuleFilter === "all" || block.getAttribute("data-slug") === runRuleFilter;
+      block.style.display = okShow && okRule ? "" : "none";
+    }
   }
 
   function renderViolations(violations) {
@@ -1681,12 +1764,28 @@ export const PANEL_EXT = `(() => {
     return html;
   }
 
+  // Sync the toolbar's Rule dropdown to the run's slugs and show/hide the bar.
+  // A run that drops the previously-selected rule falls back to "all".
+  function syncRunResultsBar(slugs) {
+    const bar = document.getElementById("co-run-results-bar");
+    if (!bar) return;
+    bar.style.display = slugs.length ? "flex" : "none";
+    if (!slugs.length) return;
+    if (runRuleFilter !== "all" && slugs.indexOf(runRuleFilter) === -1) runRuleFilter = "all";
+    const sel = document.getElementById("co-run-rulefilter");
+    const options = [{ value: "all", label: "All rules" }].concat(
+      slugs.map((s) => ({ value: s, label: s })),
+    );
+    setSelectOptions(sel, options, runRuleFilter);
+  }
+
   function renderResults(data) {
-    const results = document.getElementById("co-run-results");
-    if (!results) return;
+    const list = document.getElementById("co-run-results-list");
+    if (!list) return;
     violationsByPath = {};
     if (!Array.isArray(data) || data.length === 0) {
-      results.innerHTML = '<div class="co-run-empty">No results.</div>';
+      list.innerHTML = '<div class="co-run-empty">No results.</div>';
+      syncRunResultsBar([]);
       return;
     }
     let html = "";
@@ -1699,7 +1798,9 @@ export const PANEL_EXT = `(() => {
           line: v.line, col: v.col, detail: v.detail, slug: r.slug,
         });
       }
-      html += '<div class="co-run-rule"><div class="co-run-rule-head">' +
+      const status = !r.ok ? "error" : count > 0 ? "violations" : "success";
+      html += '<div class="co-run-rule" data-slug="' + esc(r.slug) +
+        '" data-status="' + status + '"><div class="co-run-rule-head">' +
         '<span class="co-run-slug">' + esc(r.slug) + "</span>";
       if (!r.ok) {
         html += '<span class="co-run-pill co-run-pill-err">' +
@@ -1714,18 +1815,21 @@ export const PANEL_EXT = `(() => {
       if (r.ok && count > 0) html += renderViolations(vios);
       html += "</div>";
     }
-    results.innerHTML = html;
+    list.innerHTML = html;
+    syncRunResultsBar(data.map((r) => r.slug));
+    applyRunFilter();
   }
 
   async function doRun() {
     if (running || selectedSlugs.size === 0) return;
     const pathInput = document.getElementById("co-run-path");
     const status = document.getElementById("co-run-status");
-    const results = document.getElementById("co-run-results");
+    const list = document.getElementById("co-run-results-list");
     running = true;
     updateRunGate();
     if (status) status.textContent = "Running " + selectedSlugs.size + " rule(s)…";
-    if (results) results.innerHTML = "";
+    if (list) list.innerHTML = "";
+    syncRunResultsBar([]);
     try {
       const res = await fetch("/api/run", {
         method: "POST",
@@ -1742,8 +1846,8 @@ export const PANEL_EXT = `(() => {
       renderResults(await res.json());
       if (status) status.textContent = "";
     } catch (err) {
-      if (results) {
-        results.innerHTML = '<div class="co-run-error">' + esc(err.message) + "</div>";
+      if (list) {
+        list.innerHTML = '<div class="co-run-error">' + esc(err.message) + "</div>";
       }
       if (status) status.textContent = "";
     } finally {
