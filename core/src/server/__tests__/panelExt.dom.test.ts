@@ -193,6 +193,9 @@ beforeEach(() => {
     }
     if (url === "/api/rules") return jsonRes(RULES);
     if (url === "/api/meta") return jsonRes(META);
+    if (url === "/api/mode") {
+      return jsonRes({ mode: "local", dbPath: "/proj/.captain-obvious/captain-obvious.db", auditDbPath: "/proj/.captain-obvious/audit-log.db" });
+    }
     if (url === "/api/run/meta") {
       return jsonRes({ root: "/proj", runnableSlugs: ["lint-a", "lint-b"] });
     }
@@ -656,6 +659,14 @@ describe("panelExt injected script", () => {
     await runInjected();
     const table = document.querySelector("table")!;
     expect(table.parentElement!.classList.contains("co-table-wrap")).toBe(true);
+  });
+
+  it("shows a Local/Global mode badge in the header from /api/mode", async () => {
+    await runInjected();
+    const badge = document.querySelector<HTMLElement>(".co-mode-badge")!;
+    expect(badge.textContent).toBe("Local");
+    expect(badge.classList.contains("co-mode-global")).toBe(false);
+    expect(badge.title).toContain(".captain-obvious/captain-obvious.db");
   });
 
   it("browses the server filesystem: navigate into a dir and pick a file as target", async () => {

@@ -32,9 +32,23 @@ describe("resolveDbPath", () => {
     expect(resolveDbPath()).toBe(":memory:");
   });
 
-  it("uses the package-local default when nothing is set", () => {
+  it("resolves to the repo's local mode dir when nothing is set", () => {
     delete process.env.CAPTAIN_OBVIOUS_DB;
-    expect(resolveDbPath()).toMatch(/data\/captain-obvious\.db$/);
+    // vitest's cwd is the repo root, which owns a captain-obvious.config.json.
+    expect(resolveDbPath()).toMatch(/\.captain-obvious[/\\]captain-obvious\.db$/);
+  });
+
+  it("falls back to the package-local default outside any repo", () => {
+    delete process.env.CAPTAIN_OBVIOUS_DB;
+    const outside = mkdtempSync(join(tmpdir(), "co-norepo-"));
+    const cwd = process.cwd();
+    try {
+      process.chdir(outside);
+      expect(resolveDbPath()).toMatch(/data[/\\]captain-obvious\.db$/);
+    } finally {
+      process.chdir(cwd);
+      rmSync(outside, { recursive: true, force: true });
+    }
   });
 
   it("does not inherit an ambient CAPTAIN_OBVIOUS_DB from the runner", () => {

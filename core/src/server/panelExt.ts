@@ -55,6 +55,8 @@ export const PANEL_EXT = `(() => {
   // the header selector switches which project the rules table reflects/edits.
   let projects = [];
   let currentProjectId = null;
+  // GET /api/mode: which DB set the server opened (local vs global) + its paths.
+  let modeInfo = null;
   let enabledBySlug = {};
   // Column sort: sortKey names the active column (null = the catalog's natural
   // category/slug order); sortDir is 1 asc / -1 desc. The sort is re-applied on
@@ -1009,6 +1011,10 @@ export const PANEL_EXT = `(() => {
       // (appearance:none) so it matches the panel's flat controls; the dark rule
       // below re-declares the same background shorthand to swap the chevron color.
       ".co-project-wrap{display:flex;align-items:center;gap:10px;margin-left:auto}" +
+      // Local/global DB indicator: a flat chip that flips accent to amber when the
+      // registry is the shared machine-wide (global) DB rather than project-local.
+      ".co-mode-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;background:#eef2f7;color:#475569;border:1px solid #d7dfe8}" +
+      ".co-mode-badge.co-mode-global{background:#fef3c7;color:#92400e;border-color:#fcd34d}" +
       ".co-project-label{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#94a3b8}" +
       ".co-project-select{appearance:none;-webkit-appearance:none;font-size:13px;font-weight:600;padding:6px 32px 6px 12px;border:1px solid #cbd5e1;border-radius:8px;background:#fff url(\\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\\") no-repeat right 11px center;color:#0f172a;cursor:pointer;outline:none;box-shadow:0 1px 2px rgba(15,23,42,.05);transition:border-color .12s,box-shadow .12s}" +
       ".co-project-select:hover{border-color:#94a3b8}" +
@@ -1186,6 +1192,8 @@ export const PANEL_EXT = `(() => {
       D + ".co-run-pill-n{background:#7f1d1d;color:#fecaca}" +
       D + ".co-run-pill-err{background:#78350f;color:#fde68a}" +
       D + ".co-run-badge{background:#334155;color:#94a3b8}" +
+      D + ".co-mode-badge{background:#334155;color:#cbd5e1;border-color:#475569}" +
+      D + ".co-mode-badge.co-mode-global{background:#78350f;color:#fde68a;border-color:#b45309}" +
       D + ".co-set-chip{background:#334155}" +
       D + ".co-pill{background:#334155;border-color:#475569;color:#e2e8f0}" +
       D + ".co-pills-add-btn{background:#1e293b;border-color:#475569;color:#94a3b8}" +
@@ -2415,11 +2423,15 @@ export const PANEL_EXT = `(() => {
     if (!found || !found.nav) return;
     const bar = found.nav.parentElement || found.nav;
     if (bar.querySelector(".co-project-wrap")) {
+      renderModeBadge();
       renderProjectOptions();
       return;
     }
     const wrap = document.createElement("div");
     wrap.className = "co-project-wrap";
+    const modeBadge = document.createElement("span");
+    modeBadge.className = "co-mode-badge";
+    wrap.appendChild(modeBadge);
     wrap.appendChild(buildThemeControl());
     const label = document.createElement("span");
     label.className = "co-project-label";
@@ -2446,6 +2458,7 @@ export const PANEL_EXT = `(() => {
     });
     wrap.appendChild(gear);
     bar.appendChild(wrap);
+    renderModeBadge();
     renderProjectOptions();
   }
 
@@ -3101,6 +3114,27 @@ export const PANEL_EXT = `(() => {
     });
   }
 
+  async function loadMode() {
+    const res = await fetch("/api/mode");
+    if (!res.ok) throw new Error("GET /api/mode -> " + res.status);
+    modeInfo = await res.json();
+  }
+
+  // Refresh the header mode chip from modeInfo. Called on every decorate tick, so
+  // it settles once the async /api/mode load lands even if the chip was built
+  // first. Idempotent: skip the write once the text matches, or every tick would
+  // mutate the DOM and re-trigger the MutationObserver in an endless decorate loop.
+  function renderModeBadge() {
+    const badge = document.querySelector(".co-mode-badge");
+    if (!badge || !modeInfo) return;
+    const global = modeInfo.mode === "global";
+    const text = global ? "Global" : "Local";
+    if (badge.textContent === text) return;
+    badge.textContent = text;
+    badge.title = "Registry DB (" + modeInfo.mode + " mode): " + modeInfo.dbPath;
+    badge.classList.toggle("co-mode-global", global);
+  }
+
   async function loadData() {
     const projRes = await fetch("/api/projects");
     if (!projRes.ok) throw new Error("GET /api/projects -> " + projRes.status);
@@ -3461,7 +3495,9 @@ export const PANEL_EXT = `(() => {
     watchSystemTheme();
     injectStyle();
     loadHighlighter();
-    await loadData();
+    // Mode is independent of the rule data; load it alongside loadData so it adds
+    // no serial latency, but still resolves before the first decorate() below.
+    await Promise.all([loadMode(), loadData()]);
     await loadRunMeta();
     applyProjectRunRoot();
     buildRunView();

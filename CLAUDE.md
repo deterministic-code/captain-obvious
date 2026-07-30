@@ -5,6 +5,13 @@ guard hooks, installable into any repo. The package ships the **hook implementat
 consuming repo owns a `captain-obvious.config.json` that decides **which** hooks run, in what
 order, and which are advisory — so one package drives a strict repo and a lax one without forking.
 
+The config's optional `"mode"` key (`"local"` | `"global"`, default `local`, overridable by the
+`CAPTAIN_OBVIOUS_MODE` env var) picks where the registry + audit DBs live: **local** ties them to the
+project (`<repoRoot>/.captain-obvious/`), **global** shares one set machine-wide
+(`$XDG_CONFIG_HOME/captain-obvious` or `~/.config/captain-obvious`). Resolved synchronously in
+`core/src/db/location.ts`; the explicit `--db`/`CAPTAIN_OBVIOUS_DB` (and audit equivalents) still win.
+The panel's top-right badge (via `GET /api/mode`) shows which is active.
+
 The repo is an **npm workspaces monorepo**: the root is a private host; the engine and every rule
 are workspace packages. Dependency DAG: **rule package → `rules/_kit` → `core`**, all by package name.
 
