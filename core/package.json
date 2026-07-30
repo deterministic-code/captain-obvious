@@ -1,6 +1,6 @@
 {
   "name": "@deterministic-code/captain-obvious",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Deterministic, mechanical lint gates + Claude Code guard hooks, installable into any repo.",
   "type": "module",
   "license": "MIT",
@@ -15,6 +15,7 @@
   },
   "exports": {
     "./install": "./bin/install.mjs",
+    "./plugin": "./dist/rules/plugin.js",
     "./languages": "./lib/languages.mjs",
     "./runtime/db": "./dist/db/open.js",
     "./runtime/config": "./dist/rules/config.js",

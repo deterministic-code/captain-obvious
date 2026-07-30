@@ -1,4 +1,4 @@
-/** @type {import("../../src/rules/plugin.js").RulePlugin} */
+/** @type {import("@deterministic-code/captain-obvious/plugin").RulePlugin} */
 export default {
   "meta": {
     "slug": "lint-naming",

@@ -1,6 +1,6 @@
 {
   "name": "@deterministic-code/co-rule-lint-dup",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "type": "module",
   "license": "MIT",
   "exports": {
@@ -13,8 +13,8 @@
     "check.mjs"
   ],
   "dependencies": {
-    "@deterministic-code/co-rule-kit": "^0.1.2",
-    "@deterministic-code/captain-obvious": "^0.1.2",
+    "@deterministic-code/co-rule-kit": "^0.2.0",
+    "@deterministic-code/captain-obvious": "^0.2.0",
     "jscpd": "^3.5.10"
   }
 }
