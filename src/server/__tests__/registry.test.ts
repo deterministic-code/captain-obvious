@@ -313,8 +313,10 @@ describe("seed", () => {
     seed(db);
     const rules = listRules(db);
     const pp = rules.find((r) => r.slug === "lint-protected-paths");
+    const note = rules.find((r) => r.slug === "gov-require-pr");
     const naming = rules.find((r) => r.slug === "lint-naming");
     expect(pp?.settingsControls).toEqual(["protected-paths"]);
+    expect(note?.settingsControls).toEqual(["project-note"]);
     expect(naming?.settingsControls).toEqual([]);
   });
 });
