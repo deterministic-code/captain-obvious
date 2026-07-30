@@ -78,19 +78,14 @@ export const PANEL_EXT = `(() => {
   const ICON_THEME_DARK = svgIcon('<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>');
   const THEME_ICONS = { auto: ICON_THEME_AUTO, light: ICON_THEME_LIGHT, dark: ICON_THEME_DARK };
   const THEME_TITLES = { auto: "System theme", light: "Light theme", dark: "Dark theme" };
-  const ICON_COPY = svgIcon(
-    '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>' +
-    '<path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
-  );
   const ACTIONS_HTML =
     '<button type="button" class="co-act-btn" data-act="run" title="Run this rule" aria-label="Run this rule">' + ICON_RUN + "</button>" +
     '<button type="button" class="co-act-btn" data-act="activity" title="Open activity" aria-label="Open activity">' + ICON_ACTIVITY + "</button>" +
-    '<button type="button" class="co-act-btn" data-act="settings" title="Project settings" aria-label="Project settings">' + ICON_SETTINGS + "</button>" +
-    '<button type="button" class="co-act-btn" data-act="copy" title="Copy rule slug" aria-label="Copy rule slug">' + ICON_COPY + "</button>";
+    '<button type="button" class="co-act-btn" data-act="settings" title="Project settings" aria-label="Project settings">' + ICON_SETTINGS + "</button>";
 
   // Transient status toasts (bottom-right), stacked and self-dismissing. Used for
-  // the small config mutations the panel makes inline (enable, languages, save,
-  // copy) that otherwise give no visible confirmation.
+  // the small config mutations the panel makes inline (enable, languages, save)
+  // that otherwise give no visible confirmation.
   const TOAST_ICONS = {
     success: svgIcon('<path d="M20 6 9 17l-5-5"/>'),
     error: svgIcon('<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>'),
@@ -602,19 +597,6 @@ export const PANEL_EXT = `(() => {
     if (act === "run") openRunForRule(slug);
     else if (act === "activity") openActivityForRule(slug);
     else if (act === "settings") openRuleSettingsModal(slug);
-    else if (act === "copy") copySlug(slug);
-  }
-
-  function copySlug(slug) {
-    const clip = navigator.clipboard;
-    if (!clip || !clip.writeText) {
-      toast("Clipboard unavailable in this browser", "error");
-      return;
-    }
-    clip.writeText(slug).then(
-      () => toast("Copied " + slug + " to clipboard"),
-      (err) => toast("Couldn't copy " + slug + ": " + err.message, "error"),
-    );
   }
 
   function injectStyle() {
