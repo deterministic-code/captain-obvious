@@ -70,15 +70,33 @@ describe("guardDecision", () => {
   });
 
   it("denies a protected edit when the rule is enabled at claude-tool", () => {
-    expect(guardDecision(edit("/repo/db/schema.sql"), REPO, db).deny).toBe(true);
+    expect(guardDecision(edit("/repo/db/schema.sql"), REPO, db).decision.deny).toBe(
+      true,
+    );
   });
 
-  it("allows everything when lint-protected-paths is disabled", () => {
+  it("logs a failure hook_run for a denied protected edit", () => {
+    expect(guardDecision(edit("/repo/db/schema.sql"), REPO, db).run).toEqual({
+      slug: "lint-protected-paths",
+      stage: "claude-tool",
+      status: "failure",
+    });
+  });
+
+  it("logs a success hook_run when the rule runs but allows the edit", () => {
+    expect(guardDecision(edit("/repo/src/index.ts"), REPO, db)).toEqual({
+      decision: { deny: false },
+      run: { slug: "lint-protected-paths", stage: "claude-tool", status: "success" },
+    });
+  });
+
+  it("allows and logs nothing when lint-protected-paths is disabled", () => {
     db.prepare("UPDATE rules SET enabled = 0 WHERE slug = ?").run(
       "lint-protected-paths",
     );
     expect(guardDecision(edit("/repo/db/schema.sql"), REPO, db)).toEqual({
-      deny: false,
+      decision: { deny: false },
+      run: null,
     });
   });
 });
