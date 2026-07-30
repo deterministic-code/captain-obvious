@@ -29,18 +29,6 @@ CREATE TABLE IF NOT EXISTS action_types (
   name TEXT NOT NULL
 ) STRICT;
 
--- Hooks: integration points, one per environment --------------------------
-
-CREATE TABLE IF NOT EXISTS hooks (
-  id             INTEGER PRIMARY KEY,
-  environment_id INTEGER NOT NULL REFERENCES environments(id) ON DELETE CASCADE,
-  slug           TEXT NOT NULL,           -- 'dispatch-guard', 'pre-commit'
-  event          TEXT,                    -- 'PreToolUse','Stop','SessionStart','pre-commit'
-  description    TEXT,
-  enabled        INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
-  UNIQUE (environment_id, slug)
-) STRICT;
-
 -- Rules: the checks -------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS rules (
@@ -74,12 +62,17 @@ CREATE TABLE IF NOT EXISTS rule_categories (
   PRIMARY KEY (rule_id, category)
 ) STRICT;
 
--- Hook <-> Rule (which rules run under which hook) ------------------------
+-- Rule <-> Stage (many-to-many) -------------------------------------------
+-- Which git/tool stages a rule runs at (pre-commit, pre-push, claude-tool,
+-- server). The source of truth the dispatcher reads at runtime, so toggling a
+-- rule's stages in the control panel changes what runs with no reinstall.
+-- Seeded from RuleMeta.stages. Free text validated against the canonical stage
+-- list (src/rules/stages.ts); no stage lookup table.
 
-CREATE TABLE IF NOT EXISTS hook_rules (
-  hook_id INTEGER NOT NULL REFERENCES hooks(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS rule_stages (
   rule_id INTEGER NOT NULL REFERENCES rules(id) ON DELETE CASCADE,
-  PRIMARY KEY (hook_id, rule_id)
+  stage   TEXT NOT NULL,
+  PRIMARY KEY (rule_id, stage)
 ) STRICT;
 
 -- What a rule does when it fires ------------------------------------------
@@ -160,9 +153,8 @@ CREATE TABLE IF NOT EXISTS project_rule_actions (
   UNIQUE (project_id, rule_id, environment_id)
 ) STRICT;
 
-CREATE INDEX IF NOT EXISTS idx_hooks_env       ON hooks(environment_id);
-CREATE INDEX IF NOT EXISTS idx_hook_rules_rule ON hook_rules(rule_id);
 CREATE INDEX IF NOT EXISTS idx_rule_categories  ON rule_categories(rule_id);
+CREATE INDEX IF NOT EXISTS idx_rule_stages      ON rule_stages(rule_id);
 CREATE INDEX IF NOT EXISTS idx_rule_actions    ON rule_actions(rule_id);
 CREATE INDEX IF NOT EXISTS idx_fixes_rule      ON fixes(rule_id);
 CREATE INDEX IF NOT EXISTS idx_project_rules_project ON project_rules(project_id);

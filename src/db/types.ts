@@ -81,8 +81,8 @@ export interface AddRuleOpts {
   languages?: string[];
   /** Raw JSON string for config_json (validated as JSON before write). */
   config?: string;
-  /** Hook slugs to link. Each must already exist. */
-  hooks?: string[];
+  /** Stage slugs this rule runs at; linked in rule_stages. Each must be a known stage. */
+  stages?: string[];
 }
 
 /** A parsed `--set-action <type>[:<env>][:<delayMs>]` value. */
@@ -104,6 +104,8 @@ export interface ConfigureRuleOpts {
   addCategories?: string[];
   /** Categories to unlink. Removing the primary re-points rules.category to the first remaining (or null). */
   removeCategories?: string[];
+  /** Replace the rule's full stage set (rule_stages). Each must be a known stage. */
+  setStages?: string[];
   setAction?: ActionBinding;
   /** Environment slug to remove, or "all" to clear every binding. */
   removeAction?: string;

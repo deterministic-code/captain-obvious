@@ -4,18 +4,10 @@ import { fileURLToPath } from "node:url";
 import { openAuditDb, recordHookRun, resolveAuditDbPath } from "../db/audit.js";
 import { openDb, resolveDbPath, type Db } from "../db/open.js";
 import { RULES } from "./index.js";
-import type { Stage } from "./types.js";
+import { GIT_STAGE_FLAG, type GitStage, type Stage } from "./stages.js";
 
 /** Package root: two levels up from this module (src/rules or dist/rules). */
 const pkgRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
-
-/** Local git stages the dispatcher runs, and the mode flag each rule receives. */
-const STAGE_FLAG = {
-  "pre-commit": "--staged",
-  "pre-push": "--push",
-} as const;
-
-type LocalStage = keyof typeof STAGE_FLAG;
 
 export interface Dispatched {
   slug: string;
@@ -23,10 +15,12 @@ export interface Dispatched {
 }
 
 /**
- * The enabled rules bound to `stage`, in seed order. Stage is a package-static
- * property read from RULES; the DB supplies only `enabled` and the advisory flag.
- * A rule is advisory when it carries a default (all-environment) `warn` binding —
- * the DB-native replacement for the old `--warn` config entry.
+ * The enabled rules bound to `stage`, in seed order. Stage membership lives in
+ * the DB (rule_stages), so toggling a rule's stages in the panel changes what
+ * runs with no reinstall; the DB also supplies `enabled` and the advisory flag.
+ * Intersected with RULES so only rules that ship a hook impl dispatch. A rule is
+ * advisory when it carries a default (all-environment) `warn` binding — the
+ * DB-native replacement for the old `--warn` config entry.
  */
 export function selectDispatch(db: Db, stage: Stage): Dispatched[] {
   const enabled = new Set(
@@ -36,6 +30,17 @@ export function selectDispatch(db: Db, stage: Stage): Dispatched[] {
       }[]
     ).map((r) => r.slug),
   );
+  const staged = new Set(
+    (
+      db
+        .prepare(
+          `SELECT r.slug AS slug FROM rule_stages rs
+             JOIN rules r ON r.id = rs.rule_id
+            WHERE rs.stage = ?`,
+        )
+        .all(stage) as { slug: string }[]
+    ).map((r) => r.slug),
+  );
   const warnBinding = db.prepare(
     `SELECT 1 FROM rule_actions ra
        JOIN rules r ON r.id = ra.rule_id
@@ -43,7 +48,7 @@ export function selectDispatch(db: Db, stage: Stage): Dispatched[] {
       WHERE r.slug = ? AND ra.environment_id IS NULL AND t.slug = 'warn'`,
   );
   return RULES.filter(
-    (r) => r.meta.stages.includes(stage) && enabled.has(r.meta.slug),
+    (r) => staged.has(r.meta.slug) && enabled.has(r.meta.slug),
   ).map((r) => ({
     slug: r.meta.slug,
     advisory: warnBinding.get(r.meta.slug) !== undefined,
@@ -67,8 +72,10 @@ function runRule(slug: string, args: string[]): Promise<number> {
   });
 }
 
-function parseStage(value: string | undefined): LocalStage {
-  if (value === "pre-commit" || value === "pre-push") return value;
+function parseStage(value: string | undefined): GitStage {
+  if (value !== undefined && Object.hasOwn(GIT_STAGE_FLAG, value)) {
+    return value as GitStage;
+  }
   throw new Error(
     `dispatch: expected stage 'pre-commit' or 'pre-push', got ${value ?? "(none)"}`,
   );
@@ -81,7 +88,7 @@ function parseStage(value: string | undefined): LocalStage {
  */
 export async function runDispatch(argv: string[]): Promise<void> {
   const stage = parseStage(argv[0]);
-  const args = [STAGE_FLAG[stage], ...argv.slice(1)];
+  const args = [GIT_STAGE_FLAG[stage], ...argv.slice(1)];
   const db = openDb(resolveDbPath());
   const selected = selectDispatch(db, stage);
   db.close();

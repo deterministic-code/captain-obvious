@@ -19,9 +19,7 @@ import { seedRules, type SeedSummary } from "../db/seed.js";
 import type { Db } from "../db/open.js";
 import type { ProjectRow, RuleRow } from "../db/types.js";
 import { RULES } from "../rules/index.js";
-
-/** slug -> registry metadata (the DB has no `stage` column; it lives here). */
-const META_BY_SLUG = new Map(RULES.map((r) => [r.meta.slug, r.meta]));
+import { STAGES, stageOrder } from "../rules/stages.js";
 
 interface ActionView {
   type: string;
@@ -54,7 +52,14 @@ export interface RuleView {
    * render the fixed "Language independent" cell instead of the language picker.
    */
   languageIndependent: boolean;
+  /** The rule's earliest stage (canonical order) — the scalar the prebuilt panel reads. */
   stage: string | null;
+  /**
+   * The rule's full stage set in canonical order. Additive field — the prebuilt
+   * panel reads the scalar `stage`; panelExt reads this to render/edit the Stage
+   * column, and the dispatcher reads rule_stages directly.
+   */
+  stages: string[];
   enabled: boolean;
   config: Record<string, unknown> | null;
   defaultAction: ActionView | null;
@@ -143,6 +148,19 @@ export function listRules(db: Db): RuleView[] {
     languagesByRule.set(l.ruleId, list);
   }
 
+  const stageRows = db
+    .prepare("SELECT rule_id AS ruleId, stage FROM rule_stages")
+    .all() as { ruleId: number; stage: string }[];
+  const stagesByRule = new Map<number, string[]>();
+  for (const s of stageRows) {
+    const list = stagesByRule.get(s.ruleId) ?? [];
+    list.push(s.stage);
+    stagesByRule.set(s.ruleId, list);
+  }
+  for (const list of stagesByRule.values()) {
+    list.sort((a, b) => stageOrder(a) - stageOrder(b));
+  }
+
   // Rule actions (fixes table): one grouped read, then split per rule.
   const fixRows = db
     .prepare(
@@ -176,6 +194,7 @@ export function listRules(db: Db): RuleView[] {
       .filter((b) => b.environment !== null)
       .map((b) => ({ environment: b.environment as string, type: b.type }));
     const languages = languagesByRule.get(r.id) ?? [];
+    const stages = stagesByRule.get(r.id) ?? [];
     return {
       slug: r.slug,
       name: r.name,
@@ -184,7 +203,8 @@ export function listRules(db: Db): RuleView[] {
       categories: orderCategories(r.category, categoriesByRule.get(r.id) ?? []),
       languages,
       languageIndependent: languages.length === 0,
-      stage: META_BY_SLUG.get(r.slug)?.stages[0] ?? null,
+      stage: stages[0] ?? null,
+      stages,
       enabled: r.enabled === 1,
       config: parseConfig(r.config_json),
       defaultAction: def ? { type: def.type, delayMs: def.delayMs } : null,
@@ -204,9 +224,14 @@ export interface MetaView {
    * language filter and the per-row Languages picker.
    */
   languages: { slug: string; name: string }[];
+  /**
+   * The canonical stage list, in order. Additive field — the prebuilt panel
+   * ignores it; panelExt uses it to populate the per-row Stage picker.
+   */
+  stages: { slug: string; name: string }[];
 }
 
-/** GET /api/meta — dropdown sources for the action/environment/language selectors. */
+/** GET /api/meta — dropdown sources for the action/environment/language/stage selectors. */
 export function getMeta(db: Db): MetaView {
   return {
     actionTypes: db
@@ -220,6 +245,7 @@ export function getMeta(db: Db): MetaView {
         "SELECT slug, name FROM languages WHERE is_supported = 1 ORDER BY name",
       )
       .all() as MetaView["languages"],
+    stages: STAGES.map((s) => ({ slug: s.slug, name: s.name })),
   };
 }
 
@@ -239,15 +265,19 @@ export function getStats(db: Db): StatsView {
     .all() as Pick<RuleRow, "slug" | "category" | "enabled">[];
 
   const byCategory: Record<string, number> = {};
-  const byStage: Record<string, number> = {};
   let enabled = 0;
   for (const r of rules) {
     if (r.enabled === 1) enabled += 1;
     const cat = r.category ?? "uncategorized";
     byCategory[cat] = (byCategory[cat] ?? 0) + 1;
-    const stage = META_BY_SLUG.get(r.slug)?.stages[0] ?? "unknown";
-    byStage[stage] = (byStage[stage] ?? 0) + 1;
   }
+
+  // A rule counts once per stage it runs at, so this comes from rule_stages.
+  const stageRows = db
+    .prepare("SELECT stage, COUNT(*) AS n FROM rule_stages GROUP BY stage")
+    .all() as { stage: string; n: number }[];
+  const byStage: Record<string, number> = {};
+  for (const row of stageRows) byStage[row.stage] = row.n;
 
   const actionRows = db
     .prepare(
@@ -279,6 +309,10 @@ export interface RulePatch {
   removeAction?: string;
   /** The rule's full desired language set; diffed against the current links. */
   languages?: string[];
+  /** The rule's full desired category set (global catalog); diffed against the current links. */
+  categories?: string[];
+  /** The rule's full desired stage set (global catalog); replaces the current links. */
+  stages?: string[];
 }
 
 /** The rule's currently-linked language slugs. */
@@ -294,6 +328,20 @@ function currentLanguages(db: Db, slug: string): string[] {
       )
       .all(slug) as { slug: string }[]
   ).map((r) => r.slug);
+}
+
+/** The rule's currently-linked category slugs. */
+function currentCategories(db: Db, slug: string): string[] {
+  return (
+    db
+      .prepare(
+        `SELECT rc.category AS category
+           FROM rule_categories rc
+           JOIN rules r ON r.id = rc.rule_id
+          WHERE r.slug = ?`,
+      )
+      .all(slug) as { category: string }[]
+  ).map((r) => r.category);
 }
 
 /** PATCH /api/rules/:slug — apply one edit and return the updated view. */
@@ -324,6 +372,18 @@ export function patchRule(db: Db, slug: string, patch: RulePatch): RuleView {
     if (addLanguages.length > 0 || removeLanguages.length > 0) {
       configureRule(db, slug, { addLanguages, removeLanguages });
     }
+  }
+  if (patch.categories !== undefined) {
+    const current = new Set(currentCategories(db, slug));
+    const desired = new Set(patch.categories);
+    const addCategories = [...desired].filter((c) => !current.has(c));
+    const removeCategories = [...current].filter((c) => !desired.has(c));
+    if (addCategories.length > 0 || removeCategories.length > 0) {
+      configureRule(db, slug, { addCategories, removeCategories });
+    }
+  }
+  if (patch.stages !== undefined) {
+    configureRule(db, slug, { setStages: patch.stages });
   }
   const view = listRules(db).find((r) => r.slug === slug);
   if (!view) throw new Error(`unknown rule: ${slug}`);
