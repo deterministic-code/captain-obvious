@@ -1,10 +1,12 @@
 import { mkdtempSync, rmSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // @ts-expect-error - plain ESM test helper shared with the .mjs hook suites
 import {
   cleanupTmp,
+  gitIn,
   makeTempGitRepo,
 } from "../../../hooks/git/__tests__/test-helpers.mjs";
 import { listHookRuns, openAuditDb } from "../../db/audit.js";
@@ -77,6 +79,34 @@ describe("dispatch integration — real hooks run and log activity", () => {
       }
       // Exactly the enabled subset ran — no rule silently skipped or doubled.
       expect(runs).toHaveLength(SUBSET.length);
+    } finally {
+      audit.close();
+    }
+  }, 30_000);
+
+  it("records a failure hook_run when a real hook finds a violation", async () => {
+    const db = openDb(process.env.CAPTAIN_OBVIOUS_DB as string);
+    db.prepare(
+      "UPDATE rules SET enabled = CASE WHEN slug = 'lint-naming' THEN 1 ELSE 0 END",
+    ).run();
+    db.close();
+    // A staged snake_case declaration makes the real lint-naming hook exit non-zero.
+    await writeFile(join(repo, "bad.ts"), "const new_version = 1;\n");
+    await gitIn(repo, ["add", "bad.ts"]);
+
+    await expect(runDispatch(["pre-commit"])).rejects.toThrow("process.exit:1");
+    expect(exitSpy).toHaveBeenCalledWith(1);
+
+    const audit = openAuditDb(process.env.CAPTAIN_OBVIOUS_AUDIT_DB as string);
+    try {
+      // The failure is logged as an Activity row before the stage aborts.
+      expect(listHookRuns(audit)).toEqual([
+        expect.objectContaining({
+          slug: "lint-naming",
+          stage: "pre-commit",
+          status: "failure",
+        }),
+      ]);
     } finally {
       audit.close();
     }
