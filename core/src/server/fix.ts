@@ -21,8 +21,8 @@ import { getRuleFixes, type RuleAction } from "../db/fixes.js";
 import type { Db } from "../db/open.js";
 import { RULES } from "../rules/index.js";
 import type { RuleMeta, Violation } from "../rules/types.js";
-import { resolveRunTarget } from "./target.js";
-import { runRuleOnFile } from "./run.js";
+import { repoRoot, resolveRunTarget } from "./target.js";
+import { mapPool, runRuleOnFile, runRules, type RunRequest } from "./run.js";
 import { JS_TS_EXTS as LINTABLE_EXTS } from "../../lib/languages.mjs";
 
 export interface FixRequest {
@@ -175,22 +175,35 @@ function buildAgentFixPrompt(
   ]);
 }
 
-/** Instruction for a bare model (no tools) to return the corrected file content. */
-function buildModelFixPrompt(
-  meta: RuleMeta,
-  action: RuleAction | null,
-  relPath: string,
-  source: string,
-  violations: Violation[],
-): string {
-  return joinLines([
-    `You are fixing ${meta.name} (${meta.slug}) lint violations in the file ${relPath}.`,
-    `Rule intent: ${meta.description}`,
-    !!action?.description && `Fix guidance: ${action.description}`,
-    "",
+/** One rule's violations in a single file, with the metadata a fix prompt needs. */
+interface RuleFileGroup {
+  slug: string;
+  meta: RuleMeta;
+  action: RuleAction | null;
+  violations: Violation[];
+}
+
+/** The intent/guidance/violations block for one rule, shared by the agent and model prompts. */
+function ruleFixSection(g: RuleFileGroup): (string | false)[] {
+  return [
+    `Rule ${g.meta.name} (${g.meta.slug}):`,
+    `Rule intent: ${g.meta.description}`,
+    !!g.action?.description && `Fix guidance: ${g.action.description}`,
     "Violations:",
-    describeViolations(violations),
+    describeViolations(g.violations),
+  ];
+}
+
+/**
+ * Instruction for a bare model (no tools) to return one corrected file. A file
+ * may violate several rules at once, so every rule touching it is folded into a
+ * single prompt — one model call yields one coherent rewrite, not competing ones.
+ */
+function buildModelFixPrompt(relPath: string, source: string, rules: RuleFileGroup[]): string {
+  return joinLines([
+    `You are fixing lint violations in the file ${relPath}.`,
     "",
+    ...rules.flatMap((g) => [...ruleFixSection(g), ""]),
     "Current file content:",
     "```",
     source,
@@ -297,6 +310,10 @@ async function callOpenAiCompat(cfg: FixModelConfig, prompt: string): Promise<st
   return data.choices[0].message.content;
 }
 
+function callFixModel(cfg: FixModelConfig, prompt: string): Promise<string> {
+  return cfg.provider === "anthropic" ? callAnthropic(cfg, prompt) : callOpenAiCompat(cfg, prompt);
+}
+
 /**
  * Strip an optional wrapping code fence; the corrected file is the remainder,
  * normalized to end in exactly one newline (a source file always should, and the
@@ -331,11 +348,10 @@ export async function aiProposeFix(db: Db, body: FixRequest): Promise<AiProposal
   const violations = await fileViolations(slug, target);
   const source = await readFile(target, "utf8");
   const cfg = resolveFixModelConfig(process.env);
-  const prompt = buildModelFixPrompt(meta, action, relative(process.cwd(), target), source, violations);
-  const reply =
-    cfg.provider === "anthropic"
-      ? await callAnthropic(cfg, prompt)
-      : await callOpenAiCompat(cfg, prompt);
+  const prompt = buildModelFixPrompt(relative(process.cwd(), target), source, [
+    { slug, meta, action, violations },
+  ]);
+  const reply = await callFixModel(cfg, prompt);
   return {
     slug,
     path: target,
@@ -365,4 +381,121 @@ export async function aiApplyFix(body: AiApplyRequest): Promise<{ path: string; 
   }
   await writeFile(resolved, body.newSource, "utf8");
   return { path: resolved, ok: true };
+}
+
+/** A file and every rule that flagged a violation in it, for a whole-run fix. */
+interface FileFixGroup {
+  path: string;
+  rules: RuleFileGroup[];
+}
+
+/**
+ * Re-run the requested rules over the target and regroup every violation by the
+ * file it lives in (then by rule), so a whole-run fix can act per file. Violation
+ * paths are root-relative, resolved against the repo root like the per-file fix —
+ * so "fix all" and a single "Fix with AI" always land on the same file. A rule
+ * that failed to run is surfaced, not silently dropped.
+ */
+async function collectRunViolationsByFile(db: Db, body: RunRequest): Promise<FileFixGroup[]> {
+  const results = await runRules(body);
+  const root = await repoRoot();
+  const byPath = new Map<string, FileFixGroup>();
+  for (const r of results) {
+    if (!r.ok) throw new Error(r.error);
+    if (r.violations.length === 0) continue;
+    const { meta, action } = await fileFixContext(db, r.slug);
+    const perFile = new Map<string, Violation[]>();
+    for (const v of r.violations) {
+      if (!v.path) throw new Error(`${r.slug} reported a violation with no file path`);
+      const abs = resolve(root, v.path);
+      const vios = perFile.get(abs) ?? [];
+      if (vios.length === 0) perFile.set(abs, vios);
+      vios.push(v);
+    }
+    for (const [abs, violations] of perFile) {
+      const group = byPath.get(abs) ?? { path: abs, rules: [] };
+      if (group.rules.length === 0) byPath.set(abs, group);
+      group.rules.push({ slug: r.slug, meta, action, violations });
+    }
+  }
+  return [...byPath.values()].sort((a, b) => a.path.localeCompare(b.path));
+}
+
+/** One consolidated instruction for the running Claude Code agent to fix every violation in a run. */
+function buildAllAgentFixPrompt(groups: FileFixGroup[]): string {
+  const sections = groups.flatMap((g) => [
+    `## ${g.path}`,
+    "",
+    ...g.rules.flatMap((rf) => [...ruleFixSection(rf), ""]),
+  ]);
+  return joinLines([
+    "Fix all captain-obvious lint violations listed below.",
+    "",
+    "For each file, edit it in place so every listed rule passes. Keep each change minimal and behavior-preserving. Do not disable, ignore, or delete rules to silence a violation.",
+    "When done, re-run `captain-obvious-lint` to confirm the violations are gone.",
+    "",
+    ...sections,
+  ]);
+}
+
+export interface FixPlanAll {
+  prompt: string;
+  /** Where the prompt was also written, for an agent to pick up. */
+  file: string;
+}
+
+/**
+ * POST /api/run/fix/plan/all — build one prompt covering every violation in the
+ * run and hand it back (also written under `.claude/tmp/`) for the running Claude
+ * Code agent. No model call, no API key.
+ */
+export async function planAllFixes(db: Db, body: RunRequest): Promise<FixPlanAll> {
+  const groups = await collectRunViolationsByFile(db, body);
+  if (groups.length === 0) throw new Error("no violations to plan");
+  const prompt = buildAllAgentFixPrompt(groups);
+  const file = resolve(process.cwd(), ".claude", "tmp", "co-fix-all.md");
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(file, prompt + "\n", "utf8");
+  return { prompt, file };
+}
+
+export interface AiProposalAll {
+  proposals: AiProposal[];
+  /** Files that had violations but can't be AI-fixed (not a lintable source file). */
+  skipped: { path: string; reason: string }[];
+}
+
+/** One model call per file: fold every rule that flagged it into a single rewrite proposal. */
+async function proposeFileFix(cfg: FixModelConfig, g: FileFixGroup): Promise<AiProposal> {
+  const source = await readFile(g.path, "utf8");
+  const prompt = buildModelFixPrompt(relative(process.cwd(), g.path), source, g.rules);
+  const reply = await callFixModel(cfg, prompt);
+  return {
+    slug: g.rules.map((rf) => rf.slug).join(", "),
+    path: g.path,
+    provider: cfg.provider,
+    model: cfg.model,
+    originalSource: source,
+    newSource: extractSource(reply),
+  };
+}
+
+/**
+ * POST /api/run/fix/ai/all — Tier B/C for a whole run. Ask the model for a
+ * corrected version of every violated file (one call per file) and return them as
+ * proposals; nothing is written until the user applies each via `aiApplyFix`.
+ * Non-lintable files can't be written back, so they're reported as skipped.
+ */
+export async function aiProposeAllFixes(db: Db, body: RunRequest): Promise<AiProposalAll> {
+  const groups = await collectRunViolationsByFile(db, body);
+  if (groups.length === 0) throw new Error("no violations to fix");
+  const cfg = resolveFixModelConfig(process.env);
+  const skipped: AiProposalAll["skipped"] = [];
+  const fixable: FileFixGroup[] = [];
+  for (const g of groups) {
+    if (LINTABLE_EXTS.has(extname(g.path))) fixable.push(g);
+    else skipped.push({ path: g.path, reason: "not an AI-writable file" });
+  }
+  const proposals = await mapPool(fixable, 4, (g) => proposeFileFix(cfg, g));
+  return { proposals, skipped };
 }

@@ -18,8 +18,10 @@ import { openDb, type Db } from "../../db/open.js";
 import { addRule } from "../../db/rules.js";
 import {
   aiApplyFix,
+  aiProposeAllFixes,
   aiProposeFix,
   fixRule,
+  planAllFixes,
   planFix,
   resolveFixModelConfig,
 } from "../fix.js";
@@ -388,5 +390,126 @@ describe("aiApplyFix", () => {
     const res = await aiApplyFix({ path: filePath, newSource: "const myVar = 1;\n" });
     expect(res).toEqual({ path: filePath, ok: true });
     expect(readFileSync(filePath, "utf8")).toBe("const myVar = 1;\n");
+  });
+});
+
+// Dispatch a violation set per rule, keyed by the slug in the spawned check path.
+function spawnBySlug(bySlug: Record<string, unknown[]>): void {
+  spawnMock.mockImplementation(((_exec: string, args: string[]) => {
+    const script = args[0];
+    const slug = Object.keys(bySlug).find((s) => script.includes(s));
+    return fakeChild({ stdout: jsonLine(slug ? bySlug[slug] : []), code: 0 });
+  }) as never);
+}
+
+const vio = (path: string, detail: string) => ({ path, line: 1, col: 1, kind: "k", detail });
+
+describe("planAllFixes — one plan for the whole run", () => {
+  it("groups every violation by file then rule and writes .claude/tmp/co-fix-all.md", async () => {
+    setRuleFixes(db, "lint-naming", [{ kind: "inferred", description: "Rename to camelCase." }]);
+    const fileB = join(dir, "b.ts");
+    spawnBySlug({
+      "lint-naming": [vio(filePath, "rename my_var")],
+      "lint-max-lines": [vio(filePath, "file too long"), vio(fileB, "way too long")],
+    });
+
+    const plan = await planAllFixes(db, { slugs: ["lint-naming", "lint-max-lines"], path: dir });
+    expect(plan.file).toBe(join(dir, ".claude", "tmp", "co-fix-all.md"));
+    expect(existsSync(plan.file)).toBe(true);
+    // a.ts holds both rules; b.ts only the second — grouped and file-sorted.
+    expect(plan.prompt.indexOf("## " + filePath)).toBeLessThan(plan.prompt.indexOf("## " + fileB));
+    expect(plan.prompt).toContain("(lint-naming):");
+    expect(plan.prompt).toContain("(lint-max-lines):");
+    expect(plan.prompt).toContain("Rename to camelCase.");
+    expect(plan.prompt).toContain("rename my_var");
+    expect(plan.prompt).toContain("way too long");
+    expect(plan.prompt).toContain("re-run `captain-obvious-lint`");
+  });
+
+  it("throws when the run surfaced no violations", async () => {
+    spawnBySlug({});
+    await expect(planAllFixes(db, { slugs: ["lint-naming"], path: dir })).rejects.toThrow(
+      "no violations to plan",
+    );
+  });
+
+  it("surfaces a rule that failed to run instead of building a plan", async () => {
+    spawnMock.mockImplementation(() => fakeChild({ stderr: "check blew up\n", code: 2 }) as never);
+    await expect(planAllFixes(db, { slugs: ["lint-naming"], path: dir })).rejects.toThrow(
+      "check blew up",
+    );
+  });
+
+  it("surfaces a violation with no file path rather than fixing a phantom file", async () => {
+    spawnBySlug({ "lint-naming": [{ line: 1, col: 1, kind: "k", detail: "pathless" }] });
+    await expect(planAllFixes(db, { slugs: ["lint-naming"], path: dir })).rejects.toThrow(
+      "lint-naming reported a violation with no file path",
+    );
+  });
+});
+
+describe("aiProposeAllFixes — model proposals for the whole run", () => {
+  beforeEach(() => {
+    setRuleFixes(db, "lint-naming", [{ kind: "inferred", description: "Rename." }]);
+    writeFileSync(join(dir, "b.ts"), "const bad_name = 2;\n");
+  });
+
+  function stubModel(text: string) {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(fetchResponse({ ok: true, json: { content: [{ type: "text", text }] } }));
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("returns one proposal per lintable file, folding every rule for a file into its prompt", async () => {
+    vi.stubEnv("CO_FIX_API_KEY", "sk-test");
+    const fileB = join(dir, "b.ts");
+    spawnBySlug({
+      "lint-naming": [vio(filePath, "rename my_var")],
+      "lint-max-lines": [vio(filePath, "too long"), vio(fileB, "too long")],
+    });
+    const fetchMock = stubModel("fixed\n");
+
+    const { proposals, skipped } = await aiProposeAllFixes(db, {
+      slugs: ["lint-naming", "lint-max-lines"],
+      path: dir,
+    });
+    expect(skipped).toEqual([]);
+    expect(proposals.map((p) => p.path)).toEqual([filePath, fileB]);
+    expect(proposals[0]).toMatchObject({ slug: "lint-naming, lint-max-lines", newSource: "fixed\n" });
+    expect(proposals[1]).toMatchObject({ slug: "lint-max-lines", newSource: "fixed\n" });
+    const prompts = fetchMock.mock.calls.map((c) => JSON.parse(c[1].body).messages[0].content);
+    const aPrompt = prompts.find((p) => p.includes("file a.ts"));
+    expect(aPrompt).toContain("(lint-naming):");
+    expect(aPrompt).toContain("(lint-max-lines):");
+    // Nothing written — proposals are review-then-apply.
+    expect(readFileSync(filePath, "utf8")).toBe("const my_var = 1;\n");
+  });
+
+  it("skips a non-lintable file rather than proposing a fix for it", async () => {
+    vi.stubEnv("CO_FIX_API_KEY", "sk-test");
+    const md = join(dir, "notes.md");
+    spawnBySlug({ "lint-naming": [vio(md, "bad")] });
+    stubModel("fixed\n");
+
+    const { proposals, skipped } = await aiProposeAllFixes(db, { slugs: ["lint-naming"], path: dir });
+    expect(proposals).toEqual([]);
+    expect(skipped).toEqual([{ path: md, reason: "not an AI-writable file" }]);
+  });
+
+  it("throws when there is no key for a remote endpoint", async () => {
+    spawnBySlug({ "lint-naming": [vio(filePath, "rename")] });
+    await expect(aiProposeAllFixes(db, { slugs: ["lint-naming"], path: dir })).rejects.toThrow(
+      /no API key for anthropic/,
+    );
+  });
+
+  it("throws when the run surfaced no violations", async () => {
+    vi.stubEnv("CO_FIX_API_KEY", "sk-test");
+    spawnBySlug({});
+    await expect(aiProposeAllFixes(db, { slugs: ["lint-naming"], path: dir })).rejects.toThrow(
+      "no violations to fix",
+    );
   });
 });
