@@ -11,6 +11,17 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
+/**
+ * The git repo root of the process's working directory — the one anchor every
+ * rule agrees on. Whole-repo tools (knip, jscpd) already report paths relative
+ * to it; scoping runs here makes the file-scoped rules do the same, so the Run
+ * panel can resolve any violation's path against a single base.
+ */
+export async function repoRoot(): Promise<string> {
+  const { stdout } = await execFileAsync("git", ["rev-parse", "--show-toplevel"]);
+  return stdout.trim();
+}
+
 /** Throw a clean 400-worthy error unless `path` is inside a git work tree (the `--all` hooks need `git ls-files`). */
 async function assertGitRepo(path: string): Promise<void> {
   await execFileAsync("git", [
@@ -38,7 +49,7 @@ export interface RunTarget {
  * or isn't inside a git work tree.
  */
 export async function resolveRunTarget(rawPath?: string): Promise<RunTarget> {
-  const target = rawPath?.trim() ? resolve(rawPath.trim()) : process.cwd();
+  const target = rawPath?.trim() ? resolve(rawPath.trim()) : await repoRoot();
   const info = await stat(target).catch(() => {
     throw new Error(`no such file or folder: ${target}`);
   });
