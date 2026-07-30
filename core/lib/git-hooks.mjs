@@ -1,6 +1,6 @@
 import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
-import { join, relative } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -42,7 +42,9 @@ async function gitHooksDir(target) {
     cwd: target,
     encoding: "utf8",
   });
-  return join(target, stdout.trim());
+  // In a linked worktree `--git-path hooks` is absolute (the shared git dir), so
+  // resolve (not join) — an absolute path must win instead of nesting under target.
+  return resolve(target, stdout.trim());
 }
 
 /**
