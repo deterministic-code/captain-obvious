@@ -91,16 +91,20 @@ export interface FixResult {
   error?: string;
 }
 
+type ResolvedTarget = Awaited<ReturnType<typeof resolveRunTarget>>;
+
 /**
- * POST /api/run/fix — run a rule's deterministic `script` fix over `path` (a
- * folder scans its tree, a file just itself) and apply it in place. Logs the run
- * to the audit log so it shows in Activity, like a check.
+ * Run one rule's `script` fix against an already-resolved target and log it to
+ * the audit log (so it shows in Activity, like a check). The target is resolved
+ * by the caller so a whole-run sweep resolves it once and reuses it per rule.
  */
-export async function fixRule(db: Db, auditDb: Db, body: FixRequest): Promise<FixResult> {
-  const slug = requireSlug(body.slug);
-  ruleMeta(slug);
+async function runScriptFix(
+  db: Db,
+  auditDb: Db,
+  slug: string,
+  { cwd, isDir, target, modeArgs }: ResolvedTarget,
+): Promise<FixResult> {
   const action = requireAction(db, slug, "script");
-  const { cwd, isDir, target, modeArgs } = await resolveRunTarget(body.path);
   const started = Date.now();
   const outcome = action.scriptPath
     ? await runNodeFix(action.scriptPath, cwd, modeArgs)
@@ -118,6 +122,40 @@ export async function fixRule(db: Db, auditDb: Db, body: FixRequest): Promise<Fi
     output: outcome.output,
     ...(outcome.ok ? {} : { error: outcome.output || "fix command failed" }),
   };
+}
+
+/**
+ * POST /api/run/fix — run a rule's deterministic `script` fix over `path` (a
+ * folder scans its tree, a file just itself) and apply it in place.
+ */
+export async function fixRule(db: Db, auditDb: Db, body: FixRequest): Promise<FixResult> {
+  const slug = requireSlug(body.slug);
+  ruleMeta(slug);
+  return runScriptFix(db, auditDb, slug, await resolveRunTarget(body.path));
+}
+
+/** True when the rule declares a deterministic `script` fix (vs. AI-only). */
+function hasScriptFix(db: Db, slug: string): boolean {
+  return getRuleFixes(db, slug).some((a) => a.kind === "script");
+}
+
+export interface FixAllResult {
+  results: FixResult[];
+}
+
+/**
+ * POST /api/run/fix/all — the deterministic sweep. Run every requested rule that
+ * declares a `script` fix over the run target, in place, no model. Fixes run
+ * sequentially: several may rewrite the same files (e.g. prettier), so serial
+ * execution avoids write races. A run with no script-fixable rules throws.
+ */
+export async function fixAllScripts(db: Db, auditDb: Db, body: RunRequest): Promise<FixAllResult> {
+  const slugs = (body.slugs ?? []).filter((s) => hasScriptFix(db, s));
+  if (slugs.length === 0) throw new Error("no deterministic fixes to run");
+  const resolved = await resolveRunTarget(body.path);
+  const results: FixResult[] = [];
+  for (const slug of slugs) results.push(await runScriptFix(db, auditDb, slug, resolved));
+  return { results };
 }
 
 /**

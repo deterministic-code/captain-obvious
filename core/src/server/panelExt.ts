@@ -44,6 +44,12 @@ export const PANEL_EXT = `(() => {
   // The last run's target, captured so the run-level "fix all" buttons can re-run
   // the same rules/path on the server without re-reading the panel's DOM state.
   let lastRun = { slugs: [], path: "" };
+  // The last run's violated slugs split by fix kind (script-fixable vs AI-only),
+  // driving the two result sections' group-level fix buttons.
+  let lastRunSplit = { det: [], ai: [] };
+  // "Fix all with AI" default excludes deterministically-fixable rules; the modal's
+  // toggle flips this for the session so a re-open remembers the choice.
+  let aiIncludeDet = false;
   // Activity overlay: a global (not project-scoped) view of hook runs + config
   // changes. activityKeys drives the rule multiselect; activitySelectedRules is
   // the current filter; activityWindow is the time span.
@@ -978,6 +984,12 @@ export const PANEL_EXT = `(() => {
       ".co-run-fix-btn:hover{background:#f1f5f9}.co-run-fix-btn:disabled{opacity:.5;cursor:default}" +
       ".co-run-fix-ai{border-color:#c7d2fe;background:#eef2ff;color:#4338ca}.co-run-fix-ai:hover{background:#e0e7ff}" +
       ".co-run-fixall{margin-left:auto;display:flex;gap:8px}" +
+      ".co-run-group{flex-shrink:0;display:flex;flex-direction:column;gap:12px}" +
+      ".co-run-group-head{display:flex;align-items:center;gap:10px}" +
+      ".co-run-group-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#64748b}" +
+      ".co-run-group-count{font-size:11px;font-weight:600;color:#94a3b8}" +
+      ".co-run-group-fix{margin-left:auto}" +
+      ".co-fix-toggle{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#475569;margin:0 0 12px}" +
       ".co-fix-file + .co-fix-file{margin-top:18px;border-top:1px solid #e2e8f0;padding-top:14px}" +
       ".co-fix-skip{margin:6px 0 0;padding-left:18px;font-size:12px}" +
       ".co-fix-overlay{position:fixed;inset:0;z-index:60;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:24px}" +
@@ -1712,6 +1724,12 @@ export const PANEL_EXT = `(() => {
     results.className = "co-run-results";
     results.id = "co-run-results";
     results.addEventListener("click", (e) => {
+      const groupFix = e.target.closest(".co-run-group-fix");
+      if (groupFix) {
+        e.stopPropagation();
+        onGroupFixClick(groupFix);
+        return;
+      }
       const fix = e.target.closest(".co-run-fix-btn");
       if (fix) {
         e.stopPropagation();
@@ -1799,13 +1817,7 @@ export const PANEL_EXT = `(() => {
     plan.className = "co-run-fix-btn";
     plan.textContent = "Generate fix plan";
     plan.addEventListener("click", () => doPlanAll());
-    const ai = document.createElement("button");
-    ai.type = "button";
-    ai.className = "co-run-fix-btn co-run-fix-ai";
-    ai.textContent = "Fix all with AI";
-    ai.addEventListener("click", () => doAiFixAll());
     actions.appendChild(plan);
-    actions.appendChild(ai);
     bar.appendChild(actions);
     return bar;
   }
@@ -1824,6 +1836,13 @@ export const PANEL_EXT = `(() => {
       const okRule =
         runRuleFilter === "all" || block.getAttribute("data-slug") === runRuleFilter;
       block.style.display = okShow && okRule ? "" : "none";
+    }
+    // Hide a group heading once the filter has hidden all of its rule blocks.
+    for (const group of list.querySelectorAll(".co-run-group")) {
+      const anyVisible = [...group.querySelectorAll(".co-run-rule")].some(
+        (b) => b.style.display !== "none",
+      );
+      group.style.display = anyVisible ? "" : "none";
     }
   }
 
@@ -1888,6 +1907,38 @@ export const PANEL_EXT = `(() => {
     setSelectOptions(sel, options, runRuleFilter);
   }
 
+  function renderRuleBlock(r) {
+    const vios = r.violations || [];
+    const count = vios.length;
+    const status = !r.ok ? "error" : count > 0 ? "violations" : "success";
+    let html = '<div class="co-run-rule" data-slug="' + esc(r.slug) +
+      '" data-status="' + status + '"><div class="co-run-rule-head">' +
+      '<span class="co-run-slug">' + esc(r.slug) + "</span>";
+    if (!r.ok) {
+      html += '<span class="co-run-pill co-run-pill-err">' + esc(r.error || "error") + "</span>";
+    } else if (count === 0) {
+      html += '<span class="co-run-pill co-run-pill-ok">no violations</span>';
+    } else {
+      html += '<span class="co-run-pill co-run-pill-n">' + count +
+        (count === 1 ? " violation" : " violations") + "</span>";
+    }
+    html += "</div>";
+    if (r.ok && count > 0) html += renderViolations(vios, r.slug);
+    return html + "</div>";
+  }
+
+  // A titled section for one fix kind with a scoped whole-group fix button.
+  function renderGroup(title, rules, fixall, fixLabel, fixClass) {
+    if (rules.length === 0) return "";
+    const btn = '<button type="button" class="co-run-fix-btn co-run-group-fix ' + fixClass +
+      '" data-fixall="' + fixall + '">' + fixLabel + "</button>";
+    return '<div class="co-run-group"><div class="co-run-group-head">' +
+      '<span class="co-run-group-title">' + esc(title) + "</span>" +
+      '<span class="co-run-group-count">' + rules.length +
+      (rules.length === 1 ? " rule" : " rules") + "</span>" + btn + "</div>" +
+      rules.map(renderRuleBlock).join("") + "</div>";
+  }
+
   function renderResults(data) {
     const list = document.getElementById("co-run-results-list");
     if (!list) return;
@@ -1896,36 +1947,28 @@ export const PANEL_EXT = `(() => {
       list.innerHTML = '<div class="co-run-empty">No results.</div>';
       syncRunResultsBar([]);
       showFixAllActions(false);
+      lastRunSplit = { det: [], ai: [] };
       return;
     }
-    let html = "";
+    // Split violated rules by whether they have a deterministic (script) fix; the
+    // rest (clean or errored) render ungrouped after, so the Show filter still works.
+    const det = [], ai = [], rest = [];
     for (const r of data) {
-      const vios = r.violations || [];
-      const count = vios.length;
-      for (const v of vios) {
+      const count = (r.violations || []).length;
+      for (const v of r.violations || []) {
         const p = v.path || "(unknown)";
         (violationsByPath[p] = violationsByPath[p] || []).push({
           line: v.line, col: v.col, detail: v.detail, slug: r.slug,
         });
       }
-      const status = !r.ok ? "error" : count > 0 ? "violations" : "success";
-      html += '<div class="co-run-rule" data-slug="' + esc(r.slug) +
-        '" data-status="' + status + '"><div class="co-run-rule-head">' +
-        '<span class="co-run-slug">' + esc(r.slug) + "</span>";
-      if (!r.ok) {
-        html += '<span class="co-run-pill co-run-pill-err">' +
-          esc(r.error || "error") + "</span>";
-      } else if (count === 0) {
-        html += '<span class="co-run-pill co-run-pill-ok">no violations</span>';
-      } else {
-        html += '<span class="co-run-pill co-run-pill-n">' + count +
-          (count === 1 ? " violation" : " violations") + "</span>";
-      }
-      html += "</div>";
-      if (r.ok && count > 0) html += renderViolations(vios, r.slug);
-      html += "</div>";
+      if (r.ok && count > 0) (fixKinds(r.slug).script ? det : ai).push(r);
+      else rest.push(r);
     }
-    list.innerHTML = html;
+    lastRunSplit = { det: det.map((r) => r.slug), ai: ai.map((r) => r.slug) };
+    list.innerHTML =
+      renderGroup("Deterministic fixes", det, "script", "Fix all deterministic", "") +
+      renderGroup("AI fixes only", ai, "ai", "Fix all with AI", "co-run-fix-ai") +
+      rest.map(renderRuleBlock).join("");
     syncRunResultsBar(data.map((r) => r.slug));
     applyRunFilter();
     showFixAllActions(data.some((r) => r.ok && (r.violations || []).length > 0));
@@ -1986,6 +2029,32 @@ export const PANEL_EXT = `(() => {
     const path = btn.getAttribute("data-path");
     if (btn.getAttribute("data-fix") === "ai") return openAiFixModal(slug, path);
     doScriptFix(btn, slug, path);
+  }
+
+  function onGroupFixClick(btn) {
+    if (btn.disabled) return;
+    if (btn.getAttribute("data-fixall") === "script") return doScriptFixAll(btn, lastRunSplit.det);
+    doAiFixAll();
+  }
+
+  // The deterministic sweep: apply every script fix in the group, then re-run so
+  // the panel reflects the real post-fix state rather than an optimistic message.
+  async function doScriptFixAll(btn, slugs) {
+    const label = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Fixing…";
+    try {
+      const data = await postFix("/api/run/fix/all", { slugs: slugs, path: lastRun.path });
+      const results = data.results || [];
+      const failed = results.filter((r) => !r.ok);
+      if (failed.length) toast(failed.length + " of " + results.length + " fixes failed", "error");
+      else toast(results.length + " deterministic fix(es) applied");
+      await doRun();
+    } catch (err) {
+      toast(err.message, "error");
+      btn.disabled = false;
+      btn.textContent = label;
+    }
   }
 
   // A deterministic 'script' fix: run it, then re-run so the panel reflects the
@@ -2145,16 +2214,45 @@ export const PANEL_EXT = `(() => {
       items + "</ul></div>";
   }
 
+  // The AI-fixable slugs to propose over: AI-only by default, plus the
+  // deterministically-fixable ones when the modal's toggle is on.
+  function aiFixAllSlugs() {
+    return aiIncludeDet ? lastRunSplit.ai.concat(lastRunSplit.det) : lastRunSplit.ai.slice();
+  }
+
   // Run-level: ask the model to correct every violated file, one call per file,
   // and present each as a reviewable diff. Nothing is written until applied.
-  async function doAiFixAll() {
+  function doAiFixAll() {
     openFixModalShell("Fix all with AI", "Reviewing every violated file");
+    loadAiFixAll();
+  }
+
+  async function loadAiFixAll() {
     const body = document.getElementById("co-fix-mbody");
     if (body) body.innerHTML = '<p class="co-fix-mnote">Asking the model for each file…</p>';
     try {
-      renderAiFixAll(await postFix("/api/run/fix/ai/all", lastRun));
+      renderAiFixAll(await postFix("/api/run/fix/ai/all", { slugs: aiFixAllSlugs(), path: lastRun.path }));
     } catch (err) {
       if (body) body.innerHTML = '<p class="co-fix-merr">' + esc(err.message) + "</p>";
+    }
+  }
+
+  // Offered only when the run has deterministically-fixable rules — those are
+  // better fixed by the sweep, so they're excluded from the AI set unless opted in.
+  function includeDetToggleHtml() {
+    if (lastRunSplit.det.length === 0) return "";
+    return '<label class="co-fix-toggle"><input type="checkbox" id="co-fix-incdet"' +
+      (aiIncludeDet ? " checked" : "") + "> Include deterministic-fixable rules (" +
+      lastRunSplit.det.length + ")</label>";
+  }
+
+  function wireIncludeDetToggle(body) {
+    const inc = body.querySelector("#co-fix-incdet");
+    if (inc) {
+      inc.addEventListener("change", () => {
+        aiIncludeDet = inc.checked;
+        loadAiFixAll();
+      });
     }
   }
 
@@ -2170,13 +2268,15 @@ export const PANEL_EXT = `(() => {
     if (!body) return;
     const proposals = data.proposals || [];
     const skipped = data.skipped || [];
+    const toggle = includeDetToggleHtml();
     if (proposals.length === 0) {
-      body.innerHTML =
+      body.innerHTML = toggle +
         '<p class="co-fix-mnote">No AI-fixable files had violations.</p>' + skippedHtml(skipped);
+      wireIncludeDetToggle(body);
       return;
     }
     let appliedAny = false;
-    let html =
+    let html = toggle +
       '<p class="co-fix-mnote">' + proposals.length +
       (proposals.length === 1 ? " file" : " files") + " proposed by " +
       esc(proposals[0].provider) + " / " + esc(proposals[0].model) +
@@ -2192,6 +2292,7 @@ export const PANEL_EXT = `(() => {
         i + '">Apply</button></div></div>';
     });
     body.innerHTML = html;
+    wireIncludeDetToggle(body);
     const finish = () => {
       closeFixModal();
       if (appliedAny) doRun();

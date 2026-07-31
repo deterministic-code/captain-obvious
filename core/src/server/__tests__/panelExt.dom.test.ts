@@ -25,7 +25,7 @@ const RULES = [
     categories: ["naming"],
     stages: ["pre-commit", "pre-push"],
     languages: [],
-    actions: [{ kind: "output" }],
+    actions: [{ kind: "script", scriptBody: "prettier --write" }],
   },
   // No category/stage and language-independent: the filters can't exclude it, so it always shows.
   { slug: "lint-c", name: "C", categories: [], stages: [], languages: [], languageIndependent: true, actions: [] },
@@ -73,6 +73,8 @@ let projectList: ProjectView[];
 let projectCreateCalls: { name: string; directories: string[] }[];
 let patchCalls: { url: string; body: Record<string, unknown> }[];
 let runCalls: { slugs: string[]; path: string }[];
+let fixAllCalls: { slugs: string[]; path: string }[];
+let aiAllCalls: { slugs: string[]; path: string }[];
 let runResult: unknown;
 let analyzeCalls: unknown[];
 let analyzeFails: boolean;
@@ -146,6 +148,8 @@ beforeEach(() => {
   projectCreateCalls = [];
   patchCalls = [];
   runCalls = [];
+  fixAllCalls = [];
+  aiAllCalls = [];
   runResult = RUN_RESULT;
   analyzeCalls = [];
   analyzeFails = false;
@@ -220,6 +224,14 @@ beforeEach(() => {
     if (url === "/api/run") {
       runCalls.push(JSON.parse(opts?.body as string));
       return jsonRes(runResult);
+    }
+    if (url === "/api/run/fix/all") {
+      fixAllCalls.push(JSON.parse(opts?.body as string));
+      return jsonRes({ results: [{ slug: "lint-a", ok: true, output: "ok" }] });
+    }
+    if (url === "/api/run/fix/ai/all") {
+      aiAllCalls.push(JSON.parse(opts?.body as string));
+      return jsonRes({ proposals: [], skipped: [] });
     }
     if (url === "/api/analyze/status") return jsonRes(analyzeStatusResult);
     if (url === "/api/analyze") {
@@ -812,6 +824,60 @@ describe("panelExt injected script", () => {
     for (let i = 0; i < 4; i++) await flush();
     expect(overlay.querySelector<HTMLSelectElement>("#co-run-rulefilter")!.value).toBe("all");
     expect(visibleRunSlugs(overlay)).toEqual(["lint-b"]);
+  });
+
+  const TWO_GROUP_RESULT = [
+    { slug: "lint-a", ok: true, violations: [{ path: "x.ts", line: 1, col: 1, kind: "size", detail: "big" }] },
+    { slug: "lint-b", ok: true, violations: [{ path: "y.ts", line: 2, col: 1, kind: "naming", detail: "bad" }] },
+    { slug: "lint-c", ok: false, violations: [], error: "boom" },
+  ];
+  const groupMembers = (g: HTMLElement) =>
+    [...g.querySelectorAll(".co-run-rule")].map((b) => b.getAttribute("data-slug"));
+
+  it("groups violated rules by fix kind, with a scoped fix-all in each header", async () => {
+    runResult = TWO_GROUP_RESULT;
+    const overlay = await runAndSelect();
+    const groups = [...overlay.querySelectorAll<HTMLElement>("#co-run-results-list .co-run-group")];
+    expect(groups.map((g) => g.querySelector(".co-run-group-title")!.textContent)).toEqual([
+      "Deterministic fixes",
+      "AI fixes only",
+    ]);
+    // lint-b declares a script action (deterministic); lint-a is AI-only.
+    expect(groupMembers(groups[0])).toEqual(["lint-b"]);
+    expect(groupMembers(groups[1])).toEqual(["lint-a"]);
+    expect(groups[0].querySelector(".co-run-group-fix")!.textContent).toBe("Fix all deterministic");
+    expect(groups[0].querySelector(".co-run-group-count")!.textContent).toBe("1 rule");
+    expect(groups[1].querySelector(".co-run-group-fix")!.textContent).toBe("Fix all with AI");
+    // The errored rule (no fix) renders ungrouped after the two sections.
+    expect(
+      [...overlay.querySelectorAll<HTMLElement>("#co-run-results-list > .co-run-rule")].map((b) =>
+        b.getAttribute("data-slug"),
+      ),
+    ).toEqual(["lint-c"]);
+  });
+
+  it("Fix all deterministic sweeps the group's script fixes and re-runs", async () => {
+    runResult = TWO_GROUP_RESULT;
+    const overlay = await runAndSelect();
+    const before = runCalls.length;
+    overlay.querySelector<HTMLButtonElement>(".co-run-group-fix[data-fixall='script']")!.click();
+    for (let i = 0; i < 4; i++) await flush();
+    expect(fixAllCalls).toEqual([{ slugs: ["lint-b"], path: "/proj" }]);
+    expect(runCalls.length).toBe(before + 1);
+  });
+
+  it("Fix all with AI defaults to AI-only rules and can fold in deterministic ones", async () => {
+    runResult = TWO_GROUP_RESULT;
+    const overlay = await runAndSelect();
+    overlay.querySelector<HTMLButtonElement>(".co-run-group-fix[data-fixall='ai']")!.click();
+    for (let i = 0; i < 4; i++) await flush();
+    expect(aiAllCalls[0]).toEqual({ slugs: ["lint-a"], path: "/proj" });
+    const inc = document.querySelector<HTMLInputElement>("#co-fix-incdet")!;
+    expect(inc).not.toBeNull();
+    inc.checked = true;
+    inc.dispatchEvent(new Event("change", { bubbles: true }));
+    for (let i = 0; i < 4; i++) await flush();
+    expect(aiAllCalls[1]).toEqual({ slugs: ["lint-a", "lint-b"], path: "/proj" });
   });
 
   it("shows an editor placeholder until a result is opened", async () => {

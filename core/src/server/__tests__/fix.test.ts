@@ -20,6 +20,7 @@ import {
   aiApplyFix,
   aiProposeAllFixes,
   aiProposeFix,
+  fixAllScripts,
   fixRule,
   planAllFixes,
   planFix,
@@ -133,6 +134,57 @@ describe("fixRule — scriptBody (shell command prefix)", () => {
     await fixRule(db, auditDb, { slug: "lint-prettier", path: filePath });
     const args = spawnMock.mock.calls[0][1] as string[];
     expect(args).toEqual(["prettier", "--write", filePath]);
+  });
+});
+
+describe("fixAllScripts — deterministic sweep", () => {
+  beforeEach(() => {
+    setRuleFixes(db, "lint-prettier", [{ kind: "script", scriptBody: "prettier --write" }]);
+    setRuleFixes(db, "lint-max-lines", [{ kind: "script", scriptBody: "eslint --fix" }]);
+    setRuleFixes(db, "lint-naming", [{ kind: "inferred", description: "Rename." }]);
+    spawnMock.mockImplementation(() => fakeChild({ stdout: "ok\n", code: 0 }) as never);
+  });
+
+  it("runs only the script-fixable rules, in request order, one result each", async () => {
+    const { results } = await fixAllScripts(db, auditDb, {
+      slugs: ["lint-prettier", "lint-naming", "lint-max-lines"],
+      path: dir,
+    });
+    expect(results.map((r) => r.slug)).toEqual(["lint-prettier", "lint-max-lines"]);
+    expect(results.every((r) => r.ok)).toBe(true);
+    expect(spawnMock.mock.calls.map((c) => c[0])).toEqual(["prettier", "eslint"]);
+    expect(listHookRuns(auditDb).map((r) => r.slug).sort()).toEqual([
+      "lint-max-lines",
+      "lint-prettier",
+    ]);
+  });
+
+  it("throws before spawning when no requested rule has a deterministic fix", async () => {
+    await expect(
+      fixAllScripts(db, auditDb, { slugs: ["lint-naming"], path: dir }),
+    ).rejects.toThrow("no deterministic fixes to run");
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
+
+  it("throws on an empty or absent slug list", async () => {
+    await expect(fixAllScripts(db, auditDb, { slugs: [], path: dir })).rejects.toThrow(
+      "no deterministic fixes to run",
+    );
+    await expect(fixAllScripts(db, auditDb, { path: dir })).rejects.toThrow(
+      "no deterministic fixes to run",
+    );
+  });
+
+  it("surfaces a per-rule failure without aborting the remaining fixes", async () => {
+    spawnMock
+      .mockImplementationOnce(() => fakeChild({ stderr: "boom\n", code: 2 }) as never)
+      .mockImplementationOnce(() => fakeChild({ stdout: "ok\n", code: 0 }) as never);
+    const { results } = await fixAllScripts(db, auditDb, {
+      slugs: ["lint-prettier", "lint-max-lines"],
+      path: dir,
+    });
+    expect(results[0]).toMatchObject({ slug: "lint-prettier", ok: false, error: "boom" });
+    expect(results[1]).toMatchObject({ slug: "lint-max-lines", ok: true });
   });
 });
 

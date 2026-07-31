@@ -33,6 +33,7 @@ import {
   aiApplyFix,
   aiProposeAllFixes,
   aiProposeFix,
+  fixAllScripts,
   fixRule,
   planAllFixes,
   planFix,
@@ -265,6 +266,10 @@ async function handle(
   if (pathname === "/api/run/fix" && method === "POST") {
     const body = (await readBody(req)) as FixRequest;
     return sendJson(res, 200, await fixRule(db, auditDb, body));
+  }
+  if (pathname === "/api/run/fix/all" && method === "POST") {
+    const body = (await readBody(req)) as RunRequest;
+    return sendJson(res, 200, await fixAllScripts(db, auditDb, body));
   }
   if (pathname === "/api/run/fix/plan" && method === "POST") {
     const body = (await readBody(req)) as FixRequest;
