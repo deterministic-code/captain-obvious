@@ -12,7 +12,7 @@ export default {
     ratchetable: true,
     modes: ["push", "staged", "all", "files", "warn"],
     stages: ["pre-push"],
-    order: 5,
+    order: 6,
     actions: [],
   },
   dependencies: [
