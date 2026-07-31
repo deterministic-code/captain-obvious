@@ -1358,7 +1358,8 @@ export const PANEL_EXT = `(() => {
       // is tinted and marked with a left accent bar.
       ".co-table-wrap table tbody tr{cursor:grab}" +
       ".co-table-wrap table tbody tr.co-dragging{cursor:grabbing}" +
-      ".co-row-selected>td{background:#eff6ff!important;box-shadow:inset 3px 0 0 #3b82f6}" +
+      ".co-row-selected>td{background:#eff6ff!important}" +
+      ".co-row-selected>td:first-child{box-shadow:inset 3px 0 0 #3b82f6}" +
       // Reorder bar under the table.
       ".co-order-bar{display:flex;align-items:center;gap:10px;margin:10px 0 4px;padding:8px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px}" +
       ".co-order-label{font-size:13px;color:#475569;font-weight:600;margin-right:auto}" +
@@ -1468,7 +1469,8 @@ export const PANEL_EXT = `(() => {
       D + ".border-red-200{border-color:#7f1d1d}" +
       D + ".divide-slate-100 > :not([hidden]) ~ :not([hidden]){border-color:#334155}" +
       // Our co-* components: surfaces.
-      D + ".co-row-selected>td{background:#1e293b!important;box-shadow:inset 3px 0 0 #3b82f6}" +
+      D + ".co-row-selected>td{background:#1e293b!important}" +
+      D + ".co-row-selected>td:first-child{box-shadow:inset 3px 0 0 #3b82f6}" +
       D + ".co-order-bar{background:#0f172a;border-color:#334155}" +
       D + ".co-order-label{color:#cbd5e1}" +
       D + ".co-order-btn{background:#1e293b;border-color:#475569;color:#cbd5e1}" +
