@@ -4,7 +4,8 @@ import { join } from "node:path";
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { openAuditDb, listLogs, recordHookRun } from "../../db/audit.js";
-import type { Db } from "../../db/open.js";
+import { openDb, type Db } from "../../db/open.js";
+import { addRule } from "../../db/rules.js";
 import {
   activityFeed,
   activitySummary,
@@ -18,6 +19,7 @@ const HOUR = 3600_000;
 let dir: string;
 let profilePath: string;
 let audit: Db;
+let db: Db;
 
 interface EventInput {
   command?: string;
@@ -74,10 +76,20 @@ beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "co-activity-"));
   profilePath = join(dir, "profile.db");
   audit = openAuditDb(join(dir, "audit.db"));
+  // The registry the feed reads languages from. lint-dup carries two so the
+  // feed can prove it surfaces the full set; lint-naming carries one.
+  db = openDb(":memory:");
+  addRule(db, { slug: "lint-naming", name: "Naming", languages: ["typescript"] });
+  addRule(db, {
+    slug: "lint-dup",
+    name: "Dup",
+    languages: ["javascript", "typescript"],
+  });
 });
 
 afterEach(() => {
   audit.close();
+  db.close();
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -202,7 +214,7 @@ describe("activityFeed", () => {
       { subcommand: "lint:dup", startMs: now - 3 * HOUR },
     ]);
     addLog("rule.enabled", "enabled lint-naming", now - 2 * HOUR);
-    const feed = activityFeed(profilePath, audit, { last: "24h" });
+    const feed = activityFeed(profilePath, audit, db, { last: "24h" });
     expect(feed.map((e) => [e.source, e.key])).toEqual([
       ["hook", "lint:naming"],
       ["log", "rule.enabled"],
@@ -223,7 +235,7 @@ describe("activityFeed", () => {
     ]);
     addLog("rule.enabled", "enabled lint-naming", now - HOUR);
     addLog("rule.enabled", "enabled lint-dup", now - HOUR);
-    const feed = activityFeed(profilePath, audit, {
+    const feed = activityFeed(profilePath, audit, db, {
       last: "24h",
       rules: "lint:naming",
     });
@@ -240,35 +252,53 @@ describe("activityFeed", () => {
     addLog("rule.disabled", "c", now - 3 * HOUR);
     addLog("action.set", "b", now - 2 * HOUR);
     addLog("rule.enabled", "a", now - HOUR);
-    const feed = activityFeed(undefined, audit, { last: "24h", limit: 2 });
+    const feed = activityFeed(undefined, audit, db, { last: "24h", limit: 2 });
     expect(feed).toHaveLength(2);
     expect(feed.every((e) => e.source === "log")).toBe(true);
     expect(feed[0].detail).toBe("a");
   });
 
-  it("includes the dispatcher's runs as hook rows, stage-detailed, without the profile DB", () => {
+  it("carries the dispatcher's stage and rule languages on hook rows; log rows have neither", () => {
     const now = Date.now();
     addDispatchRun("lint-naming", now - HOUR, {
       stage: "pre-push",
       status: "failure",
     });
     addLog("rule.enabled", "enabled lint-dup", now - 2 * HOUR);
-    const feed = activityFeed(undefined, audit, { last: "24h" });
+    const feed = activityFeed(undefined, audit, db, { last: "24h" });
     expect(feed.map((e) => [e.source, e.key])).toEqual([
       ["hook", "lint:naming"],
       ["log", "rule.enabled"],
     ]);
     expect(feed[0]).toMatchObject({
       status: "failure",
-      detail: "pre-push lint-naming",
+      detail: "lint-naming",
+      stage: "pre-push",
+      languages: ["typescript"],
     });
+    // A config-change row is neither staged nor language-scoped.
+    expect(feed[1].stage).toBeUndefined();
+    expect(feed[1].languages).toBeUndefined();
+  });
+
+  it("surfaces every language a rule targets and empties the list for an unknown rule", () => {
+    const now = Date.now();
+    addDispatchRun("lint-dup", now - HOUR);
+    // lint-solid is never registered, so there is no language mapping for it.
+    addDispatchRun("lint-solid", now - 2 * HOUR);
+    const feed = activityFeed(undefined, audit, db, { last: "24h" });
+    expect(feed.find((e) => e.key === "lint:dup")?.languages).toEqual([
+      "javascript",
+      "typescript",
+    ]);
+    expect(feed.find((e) => e.key === "lint:solid")?.languages).toEqual([]);
   });
 
   it("filters dispatch runs by the selected key like profiler runs", () => {
     const now = Date.now();
     addDispatchRun("lint-naming", now - HOUR);
     addDispatchRun("lint-dup", now - HOUR);
-    const feed = activityFeed(undefined, audit, {
+    const feed = activityFeed(undefined, audit, db, {
       last: "24h",
       rules: "lint:naming",
     });

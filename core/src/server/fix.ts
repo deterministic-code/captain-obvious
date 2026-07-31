@@ -16,7 +16,7 @@
 import { spawn } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, relative, resolve } from "node:path";
-import { recordHookRun } from "../db/audit.js";
+import { logEvent, recordHookRun } from "../db/audit.js";
 import { getRuleFixes, type RuleAction } from "../db/fixes.js";
 import type { Db } from "../db/open.js";
 import { RULES } from "../rules/index.js";
@@ -111,6 +111,15 @@ export interface FixResult {
   error?: string;
 }
 
+/** A one-line `+A/-B lines` summary of a rewrite, for the audit log. */
+function summarizeLineDelta(oldSrc: string, newSrc: string): string {
+  const count = (s: string) => (s === "" ? 0 : s.split("\n").length);
+  const delta = count(newSrc) - count(oldSrc);
+  const added = delta > 0 ? delta : 0;
+  const removed = delta < 0 ? -delta : 0;
+  return `+${added}/-${removed} lines`;
+}
+
 type ResolvedTarget = Awaited<ReturnType<typeof resolveRunTarget>>;
 
 /**
@@ -136,6 +145,10 @@ async function runScriptFix(
     startedMs: started,
     durationMs: Date.now() - started,
   });
+  logEvent(
+    "fix.applied",
+    `script fix ${slug} on ${relative(process.cwd(), target)} — ${outcome.ok ? "success" : "failed"}`,
+  );
   return {
     slug,
     ok: outcome.ok,
@@ -473,11 +486,17 @@ export async function aiProposeFix(
 export interface AiApplyRequest {
   path?: string;
   newSource?: string;
+  /** Proposal context echoed back so the audit summary can name the model. */
+  slug?: string;
+  provider?: string;
+  model?: string;
 }
 
 /**
- * POST /api/run/fix/ai/apply — write an accepted AI proposal. Restricted to
- * lintable files (the only ones the panel can produce a proposal for).
+ * POST /api/run/fix/ai/apply — write an accepted AI proposal and log a summary so
+ * the inference-driven edit shows in Activity (unlike a script fix, nothing else
+ * records it). The on-disk file is still the original here — the propose step never
+ * wrote — so it doubles as the "before" for the line-delta summary.
  */
 export async function aiApplyFix(
   body: AiApplyRequest,
@@ -490,7 +509,14 @@ export async function aiApplyFix(
   if (!LINTABLE_EXTS.has(extname(resolved))) {
     throw new Error(`not a writable file: ${resolved}`);
   }
+  const original = await readFile(resolved, "utf8");
   await writeFile(resolved, body.newSource, "utf8");
+  const relPath = relative(process.cwd(), resolved);
+  const model = body.model?.trim();
+  logEvent(
+    "fix.applied",
+    `AI fix${model ? ` (${model})` : ""} on ${relPath} — ${summarizeLineDelta(original, body.newSource)}`,
+  );
   return { path: resolved, ok: true };
 }
 

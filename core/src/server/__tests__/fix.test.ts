@@ -20,7 +20,12 @@ vi.mock("node:child_process", () => ({
 
 import { spawn } from "node:child_process";
 import { checkScriptPath } from "../../rules/dispatch.js";
-import { listHookRuns, openAuditDb } from "../../db/audit.js";
+import {
+  listHookRuns,
+  listLogs,
+  openAuditDb,
+  useAuditLog,
+} from "../../db/audit.js";
 import { setRuleFixes } from "../../db/fixes.js";
 import { openDb, type Db } from "../../db/open.js";
 import { addRule } from "../../db/rules.js";
@@ -93,6 +98,8 @@ let filePath: string;
 beforeEach(() => {
   db = openDb(":memory:");
   auditDb = openAuditDb(":memory:");
+  // Fixes log their summary through the module sink, as the server wires it.
+  useAuditLog(auditDb);
   addRule(db, { slug: "lint-prettier", name: "Prettier" });
   addRule(db, { slug: "lint-naming", name: "Naming" });
   addRule(db, { slug: "lint-max-lines", name: "Max lines" });
@@ -107,6 +114,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  useAuditLog(undefined);
   db.close();
   auditDb.close();
   rmSync(dir, { recursive: true, force: true });
@@ -176,10 +184,15 @@ describe("fixRule — scriptBody (shell command prefix)", () => {
     });
   });
 
-  it("passes the file itself as the target for a file run", async () => {
+  it("passes the file itself as the target for a file run and logs a summary", async () => {
     await fixRule(db, auditDb, { slug: "lint-prettier", path: filePath });
     const args = spawnMock.mock.calls[0][1] as string[];
     expect(args).toEqual(["prettier", "--write", filePath]);
+    const logs = listLogs(auditDb);
+    expect(logs[0]).toMatchObject({
+      logType: "fix.applied",
+      message: "script fix lint-prettier on a.ts — success",
+    });
   });
 });
 
@@ -283,7 +296,7 @@ describe("fixRule — failures", () => {
     );
     const res = await fixRule(db, auditDb, {
       slug: "lint-prettier",
-      path: dir,
+      path: filePath,
     });
     expect(res).toEqual({
       slug: "lint-prettier",
@@ -292,6 +305,9 @@ describe("fixRule — failures", () => {
       error: "boom",
     });
     expect(listHookRuns(auditDb)[0]).toMatchObject({ status: "failure" });
+    expect(listLogs(auditDb)[0].message).toBe(
+      "script fix lint-prettier on a.ts — failed",
+    );
   });
 
   it("falls back to a generic error when a failed command wrote nothing", async () => {
@@ -637,13 +653,36 @@ describe("aiApplyFix", () => {
     );
   });
 
-  it("writes the accepted source and returns the resolved path", async () => {
+  it("writes the accepted source and logs a summary without a model name", async () => {
     const res = await aiApplyFix({
       path: filePath,
       newSource: "const myVar = 1;\n",
     });
     expect(res).toEqual({ path: filePath, ok: true });
     expect(readFileSync(filePath, "utf8")).toBe("const myVar = 1;\n");
+    // Same line count in and out → +0/-0; no model on the body → no "(…)".
+    expect(listLogs(auditDb)[0]).toMatchObject({
+      logType: "fix.applied",
+      message: "AI fix on a.ts — +0/-0 lines",
+    });
+  });
+
+  it("names the model and reports a net line removal", async () => {
+    writeFileSync(filePath, "a\nb\nc\n");
+    await aiApplyFix({
+      path: filePath,
+      newSource: "a\n",
+      model: "claude-sonnet-4-6",
+    });
+    expect(listLogs(auditDb)[0].message).toBe(
+      "AI fix (claude-sonnet-4-6) on a.ts — +0/-2 lines",
+    );
+  });
+
+  it("counts an empty original as zero lines when summarising additions", async () => {
+    writeFileSync(filePath, "");
+    await aiApplyFix({ path: filePath, newSource: "x\n" });
+    expect(listLogs(auditDb)[0].message).toBe("AI fix on a.ts — +2/-0 lines");
   });
 });
 
