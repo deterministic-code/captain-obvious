@@ -10,7 +10,7 @@ export default {
     config: null,
     ratchetable: false,
     modes: ["staged", "all", "files", "warn"],
-    stages: ["pre-commit", "tool"],
+    stages: ["pre-commit"],
     defaultAction: "warn",
     order: 24,
     actions: [],

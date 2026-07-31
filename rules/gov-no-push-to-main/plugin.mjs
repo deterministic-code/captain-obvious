@@ -12,7 +12,7 @@ export default {
     },
     ratchetable: false,
     modes: ["push", "warn"],
-    stages: ["pre-push", "tool"],
+    stages: ["pre-push"],
     defaultAction: "warn",
     order: 27,
     actions: [],

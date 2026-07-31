@@ -13,7 +13,7 @@ export default {
     },
     ratchetable: false,
     modes: [],
-    stages: ["tool", "server"],
+    stages: ["server"],
     defaultAction: "warn",
     order: 29,
     actions: [],
