@@ -1291,6 +1291,8 @@ export const PANEL_EXT = `(() => {
       ".co-act-src{flex:0 0 auto;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;border-radius:4px;padding:1px 6px}" +
       ".co-act-src-hook{background:#e0e7ff;color:#3730a3}.co-act-src-log{background:#f1f5f9;color:#475569}" +
       ".co-act-key{flex:0 0 auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#0f172a}" +
+      ".co-act-stage{flex:0 0 auto;font-size:11px;border-radius:4px;padding:1px 6px;background:#fef3c7;color:#92400e}" +
+      ".co-act-lang{flex:0 0 auto;font-size:11px;border-radius:4px;padding:1px 6px;background:#dcfce7;color:#166534}" +
       ".co-act-detail{flex:1;color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
       ".co-act-empty{padding:12px 4px;font-size:13px;color:#94a3b8}" +
       // Toasts.
@@ -1415,6 +1417,8 @@ export const PANEL_EXT = `(() => {
       D + ".co-act-bar{fill:#475569}" +
       D + ".co-act-src-hook{background:#312e81;color:#c7d2fe}" +
       D + ".co-act-src-log{background:#334155;color:#cbd5e1}" +
+      D + ".co-act-stage{background:#78350f;color:#fde68a}" +
+      D + ".co-act-lang{background:#14532d;color:#bbf7d0}" +
       D + ".co-toast{background:#1e293b;border-color:#334155;color:#e2e8f0}";
     document.head.appendChild(style);
   }
@@ -2361,7 +2365,13 @@ export const PANEL_EXT = `(() => {
       btn.disabled = true;
       btn.textContent = "Applying…";
       try {
-        await postFix("/api/run/fix/ai/apply", { path: data.path, newSource: data.newSource });
+        await postFix("/api/run/fix/ai/apply", {
+          path: data.path,
+          newSource: data.newSource,
+          slug: data.slug,
+          provider: data.provider,
+          model: data.model,
+        });
         toast(data.slug + ": AI fix applied");
         closeFixModal();
         await doRun();
@@ -2525,7 +2535,13 @@ export const PANEL_EXT = `(() => {
       btn.disabled = true;
       btn.textContent = "Applying…";
       try {
-        await postFix("/api/run/fix/ai/apply", { path: p.path, newSource: p.newSource });
+        await postFix("/api/run/fix/ai/apply", {
+          path: p.path,
+          newSource: p.newSource,
+          slug: p.slug,
+          provider: p.provider,
+          model: p.model,
+        });
         btn.textContent = "Applied";
         appliedAny = true;
       } catch (err) {
@@ -3823,12 +3839,18 @@ export const PANEL_EXT = `(() => {
       const badge =
         '<span class="co-act-src co-act-src-' + (ev.source === "hook" ? "hook" : "log") +
         '">' + ev.source + "</span>";
+      const stage = ev.stage
+        ? '<span class="co-act-stage">' + esc(ev.stage) + "</span>"
+        : "";
+      const langs = (ev.languages || [])
+        .map((l) => '<span class="co-act-lang">' + esc(l) + "</span>")
+        .join("");
       let pill = "";
       if (ev.status === "failure") pill = '<span class="co-run-pill co-run-pill-n">failure</span>';
       else if (ev.status === "success") pill = '<span class="co-run-pill co-run-pill-ok">success</span>';
       html +=
         '<div class="co-act-row"><span class="co-act-time">' + esc(when) + "</span>" +
-        badge + '<span class="co-act-key">' + esc(ev.key) + "</span>" + pill +
+        badge + stage + '<span class="co-act-key">' + esc(ev.key) + "</span>" + langs + pill +
         '<span class="co-act-detail">' + esc(ev.detail) + "</span></div>";
     }
     el.innerHTML = html;

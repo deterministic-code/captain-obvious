@@ -8,6 +8,7 @@
  */
 import Database from "better-sqlite3";
 import { listHookRuns, listLogs } from "../db/audit.js";
+import { languagesBySlug } from "../db/languages.js";
 import type { Db } from "../db/open.js";
 
 const US_PER_MS = 1000;
@@ -58,6 +59,8 @@ interface HookRun {
   startMs: number;
   failed: boolean;
   detail: string;
+  /** The git-hook stage (`pre-commit` | `pre-push` | `fix`); absent for profiler runs. */
+  stage?: string;
 }
 
 /** Window-filtered profiling rows, normalised to activity keys + ms. */
@@ -103,7 +106,8 @@ function readDispatchRuns(auditDb: Db, sinceMs: number): HookRun[] {
     key: slugToKey(r.slug),
     startMs: r.started,
     failed: r.status === "failure",
-    detail: `${r.stage} ${r.slug}`,
+    detail: r.slug,
+    stage: r.stage,
   }));
 }
 
@@ -187,6 +191,10 @@ export interface ActivityEvent {
   key: string;
   status?: string;
   detail: string;
+  /** The run's git-hook stage; only on hook rows with a known stage. */
+  stage?: string;
+  /** Language slugs the run's rule targets; only on hook rows for a known rule. */
+  languages?: string[];
 }
 export interface FeedQuery extends ActivityQuery {
   limit?: number;
@@ -201,12 +209,14 @@ export interface FeedQuery extends ActivityQuery {
 export function activityFeed(
   dbPath: string | undefined,
   auditDb: Db,
+  db: Db,
   query: FeedQuery,
 ): ActivityEvent[] {
   const secs = windowSeconds(query.last);
   const startMs = Date.now() - secs * 1000;
   const limit = query.limit ?? DEFAULT_LIMIT;
   const selected = parseRules(query.rules);
+  const langBySlug = languagesBySlug(db);
 
   const events: ActivityEvent[] = [];
 
@@ -222,6 +232,8 @@ export function activityFeed(
       key: r.key,
       status: r.failed ? "failure" : "success",
       detail: r.detail,
+      ...(r.stage ? { stage: r.stage } : {}),
+      languages: langBySlug.get(keyToSlug(r.key)) ?? [],
     });
   }
 
