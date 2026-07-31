@@ -17,7 +17,9 @@ if (!name) {
   process.exit(2);
 }
 
-const child = spawn(process.execPath, [scriptFor(name), ...args], { stdio: "inherit" });
+const child = spawn(process.execPath, [scriptFor(name), ...args], {
+  stdio: "inherit",
+});
 child.on("exit", (code, signal) => {
   if (signal) {
     process.kill(process.pid, signal);

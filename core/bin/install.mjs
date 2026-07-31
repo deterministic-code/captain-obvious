@@ -9,7 +9,11 @@ import { installNpmScripts } from "../lib/npm-scripts.mjs";
 
 const pkgRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-const exists = (p) => access(p).then(() => true, () => false);
+const exists = (p) =>
+  access(p).then(
+    () => true,
+    () => false,
+  );
 
 // Best-effort: warn about external tools a rule's check needs but that aren't
 // installed. Skipped when dist isn't built yet (install can precede the build);
@@ -26,7 +30,9 @@ async function warnMissingDependencies() {
   const { RULES } = await import(
     pathToFileURL(resolve(pkgRoot, "dist", "rules", "index.js")).href
   );
-  for (const { slug, dep } of missingRequired(verifyDependencies(RULES, probeDependency))) {
+  for (const { slug, dep } of missingRequired(
+    verifyDependencies(RULES, probeDependency),
+  )) {
     const why = dep.reason ? ` — ${dep.reason}` : "";
     process.stdout.write(
       `captain-obvious: warning — rule ${slug} needs ${dep.kind} '${dep.name}'${why}, not found\n`,
@@ -51,9 +57,21 @@ async function main() {
   const { path, config } = await loadConfig(target, configPath);
   process.stdout.write(`captain-obvious: installing from ${path}\n`);
   const written = [
-    ...(await installGitHooks({ target, pkgRoot, gitHooks: config.gitHooks ?? {} })),
-    ...(await installClaudeHooks({ target, pkgRoot, claudeHooks: config.claudeHooks })),
-    ...(await installNpmScripts({ target, gitHooks: config.gitHooks ?? {}, npmScripts: config.npmScripts })),
+    ...(await installGitHooks({
+      target,
+      pkgRoot,
+      gitHooks: config.gitHooks ?? {},
+    })),
+    ...(await installClaudeHooks({
+      target,
+      pkgRoot,
+      claudeHooks: config.claudeHooks,
+    })),
+    ...(await installNpmScripts({
+      target,
+      gitHooks: config.gitHooks ?? {},
+      npmScripts: config.npmScripts,
+    })),
   ];
   for (const file of written) {
     process.stdout.write(`captain-obvious: wrote ${file}\n`);

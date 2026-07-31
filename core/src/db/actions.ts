@@ -34,7 +34,10 @@ export function configureActionType(
       opts.name,
       existing.id,
     );
-    logEvent("action_type.updated", `renamed action type ${slug} to ${opts.name}`);
+    logEvent(
+      "action_type.updated",
+      `renamed action type ${slug} to ${opts.name}`,
+    );
   }
   return byId(db, existing.id);
 }

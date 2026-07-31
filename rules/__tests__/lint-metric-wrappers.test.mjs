@@ -41,6 +41,8 @@ describe("lint metric wrappers delegate to runMetricHook", () => {
   ])("%s: clean pass writes its OK line", async (script, main, flag) => {
     await main(["node", "hook", "--files", clean], NO_CONFIG);
     expect(io.exitSpy).not.toHaveBeenCalled();
-    expect(io.text(io.stdoutSpy)).toContain(`${script}: no ${flag} violations.`);
+    expect(io.text(io.stdoutSpy)).toContain(
+      `${script}: no ${flag} violations.`,
+    );
   });
 });

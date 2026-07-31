@@ -71,7 +71,11 @@ export function guardDecision(
   if (!selected.some((d) => d.slug === PROTECTED_PATHS_SLUG)) {
     return { decision: ALLOW, run: null };
   }
-  const decision = evaluateGuard(inputJson, repoRoot, getDefaultProjectProtected(db));
+  const decision = evaluateGuard(
+    inputJson,
+    repoRoot,
+    getDefaultProjectProtected(db),
+  );
   return {
     decision,
     run: {

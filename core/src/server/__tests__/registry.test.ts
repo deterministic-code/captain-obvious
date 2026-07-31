@@ -48,7 +48,11 @@ describe("listRules categories", () => {
   });
 
   it("returns the categories present when a rule has no primary", () => {
-    addRule(db, { slug: "lint-no-primary", name: "NP", categories: ["naming"] });
+    addRule(db, {
+      slug: "lint-no-primary",
+      name: "NP",
+      categories: ["naming"],
+    });
     const v = view("lint-no-primary");
     expect(v.category).toBeNull();
     expect(v.categories).toEqual(["naming"]);
@@ -103,7 +107,9 @@ describe("listRules actions and bindings", () => {
     });
     const v = view("lint-act");
     expect(v.defaultAction).toEqual({ type: "halt", delayMs: null });
-    expect(v.envActions).toEqual([{ environment: "claude", type: "delay_halt" }]);
+    expect(v.envActions).toEqual([
+      { environment: "claude", type: "delay_halt" },
+    ]);
   });
 
   it("has a null default action and empty envActions when unbound", () => {
@@ -153,7 +159,11 @@ describe("listRules actions and bindings", () => {
   });
 
   it("flags a rule as language-independent exactly when it has no languages", () => {
-    addRule(db, { slug: "lint-scoped", name: "Scoped", languages: ["typescript"] });
+    addRule(db, {
+      slug: "lint-scoped",
+      name: "Scoped",
+      languages: ["typescript"],
+    });
     addRule(db, { slug: "lint-agnostic", name: "Agnostic" });
     expect(view("lint-scoped").languageIndependent).toBe(false);
     expect(view("lint-agnostic").languageIndependent).toBe(true);
@@ -179,7 +189,9 @@ describe("getMeta", () => {
   });
 
   it("flags the fix actions with requiresFix so the panel can gate them", () => {
-    const bySlug = new Map(getMeta(db).actionTypes.map((a) => [a.slug, a.requiresFix]));
+    const bySlug = new Map(
+      getMeta(db).actionTypes.map((a) => [a.slug, a.requiresFix]),
+    );
     expect(bySlug.get("fix")).toBe(true);
     expect(bySlug.get("fix_and_warn")).toBe(true);
     expect(bySlug.get("fix_and_halt")).toBe(true);
@@ -201,7 +213,12 @@ describe("getMeta", () => {
 
 describe("getStats", () => {
   it("counts totals, enabled/disabled, and the three breakdowns", () => {
-    addRule(db, { slug: "lint-a", name: "A", category: "size", stages: ["pre-commit"] });
+    addRule(db, {
+      slug: "lint-a",
+      name: "A",
+      category: "size",
+      stages: ["pre-commit"],
+    });
     addRule(db, {
       slug: "lint-b",
       name: "B",
@@ -311,7 +328,9 @@ describe("patchRule", () => {
 
   it("sets the category set by diffing add/remove against current links", () => {
     addRule(db, { slug: "lint-pcat", name: "PCat", category: "size" });
-    const v = patchRule(db, "lint-pcat", { categories: ["naming", "complexity"] });
+    const v = patchRule(db, "lint-pcat", {
+      categories: ["naming", "complexity"],
+    });
     expect([...v.categories].sort()).toEqual(["complexity", "naming"]);
   });
 
@@ -323,7 +342,9 @@ describe("patchRule", () => {
 
   it("replaces the stage set (canonical order) via setStages", () => {
     addRule(db, { slug: "lint-pst", name: "PSt", stages: ["pre-commit"] });
-    const v = patchRule(db, "lint-pst", { stages: ["pre-push", "claude-tool"] });
+    const v = patchRule(db, "lint-pst", {
+      stages: ["pre-push", "claude-tool"],
+    });
     expect(v.stages).toEqual(["pre-push", "claude-tool"]);
     expect(v.stage).toBe("pre-push");
   });
@@ -336,10 +357,11 @@ describe("patchRule", () => {
     expect(v.order).toBeLessThan(
       listRules(db).find((r) => r.slug === "lint-pm-a")!.order,
     );
-    expect(listRules(db).map((r) => r.slug).slice(0, 2)).toEqual([
-      "lint-pm-b",
-      "lint-pm-a",
-    ]);
+    expect(
+      listRules(db)
+        .map((r) => r.slug)
+        .slice(0, 2),
+    ).toEqual(["lint-pm-b", "lint-pm-a"]);
   });
 
   it("throws for an unknown rule when the patch is a no-op", () => {
@@ -397,11 +419,9 @@ describe("seed", () => {
       fields: [{ key: "maxLines", label: "Max lines", type: "number", min: 1 }],
     };
     const deps = [{ kind: "npm", name: "prettier" }];
-    db.prepare("UPDATE rules SET control_json = ?, deps_json = ? WHERE slug = ?").run(
-      JSON.stringify(control),
-      JSON.stringify(deps),
-      "lint-max-lines",
-    );
+    db.prepare(
+      "UPDATE rules SET control_json = ?, deps_json = ? WHERE slug = ?",
+    ).run(JSON.stringify(control), JSON.stringify(deps), "lint-max-lines");
     const rule = listRules(db).find((r) => r.slug === "lint-max-lines");
     expect(rule?.control).toEqual(control);
     expect(rule?.deps).toEqual(deps);
@@ -435,7 +455,9 @@ describe("listProjectRules / patchProjectRule overlay", () => {
     const inherited = projectView(p.id, "lint-x");
     expect(inherited.config).toEqual({ maxLines: 300 });
     expect(inherited.defaultAction).toEqual({ type: "halt", delayMs: null });
-    expect(inherited.envActions).toEqual([{ environment: "claude", type: "warn" }]);
+    expect(inherited.envActions).toEqual([
+      { environment: "claude", type: "warn" },
+    ]);
   });
 
   it("overlays the project's config and fully replaces bindings once set", () => {
@@ -467,7 +489,11 @@ describe("listProjectRules / patchProjectRule overlay", () => {
   });
 
   it("applies enabled, languages, and removeAction through the patch", () => {
-    addRule(db, { slug: "lint-z", name: "Z", languages: ["typescript", "javascript"] });
+    addRule(db, {
+      slug: "lint-z",
+      name: "Z",
+      languages: ["typescript", "javascript"],
+    });
     configureRule(db, "lint-z", {
       setAction: { type: "halt", environment: null, delayMs: null },
     });

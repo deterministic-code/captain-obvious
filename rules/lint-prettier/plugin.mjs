@@ -1,38 +1,30 @@
 /** @type {import("@deterministic-code/captain-obvious/plugin").RulePlugin} */
 export default {
-  "meta": {
-    "slug": "lint-prettier",
-    "name": "Prettier formatting",
-    "category": "formatting",
-    "description": "Flags files that are not Prettier-formatted (prettier --check); the fix action runs prettier --write.",
-    "languages": [
-      "typescript",
-      "javascript"
-    ],
-    "config": null,
-    "ratchetable": false,
-    "modes": [
-      "staged",
-      "all",
-      "files",
-      "warn"
-    ],
-    "stages": [
-      "pre-commit"
-    ],
-    "actions": [
+  meta: {
+    slug: "lint-prettier",
+    name: "Prettier formatting",
+    category: "formatting",
+    description:
+      "Flags files that are not Prettier-formatted (prettier --check); the fix action runs prettier --write.",
+    languages: ["typescript", "javascript"],
+    config: null,
+    ratchetable: false,
+    modes: ["staged", "all", "files", "warn"],
+    stages: ["pre-commit"],
+    actions: [
       {
-        "kind": "script",
-        "scriptPath": "rules/lint-prettier/check.mjs",
-        "description": "Reformat with prettier --write (invoke the hook with --fix)."
-      }
-    ]
+        kind: "script",
+        scriptPath: "rules/lint-prettier/check.mjs",
+        description:
+          "Reformat with prettier --write (invoke the hook with --fix).",
+      },
+    ],
   },
-  "dependencies": [
+  dependencies: [
     {
-      "kind": "npm",
-      "name": "prettier"
-    }
+      kind: "npm",
+      name: "prettier",
+    },
   ],
-  "checkEntry": "./check.mjs"
+  checkEntry: "./check.mjs",
 };

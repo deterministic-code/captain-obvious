@@ -29,7 +29,9 @@ function actionTypeId(slug: string): number {
 
 function ruleId(slug: string): number {
   return (
-    db.prepare("SELECT id FROM rules WHERE slug = ?").get(slug) as { id: number }
+    db.prepare("SELECT id FROM rules WHERE slug = ?").get(slug) as {
+      id: number;
+    }
   ).id;
 }
 
@@ -64,7 +66,9 @@ describe("selectDispatch", () => {
 
   it("omits a disabled rule", () => {
     expect(slugsFor("pre-commit")).toContain("lint-naming");
-    db.prepare("UPDATE rules SET enabled = 0 WHERE slug = ?").run("lint-naming");
+    db.prepare("UPDATE rules SET enabled = 0 WHERE slug = ?").run(
+      "lint-naming",
+    );
     expect(slugsFor("pre-commit")).not.toContain("lint-naming");
   });
 

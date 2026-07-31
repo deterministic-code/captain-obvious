@@ -28,7 +28,9 @@ describe("configureActionType", () => {
   });
 
   it("renames an existing type", () => {
-    const row = configureActionType(db, "delay_halt", { name: "Deferred halt" });
+    const row = configureActionType(db, "delay_halt", {
+      name: "Deferred halt",
+    });
     expect(row).toMatchObject({ slug: "delay_halt", name: "Deferred halt" });
   });
 

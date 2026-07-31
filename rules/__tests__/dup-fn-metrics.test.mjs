@@ -145,8 +145,20 @@ describe("clusterTier + clusterViolation", () => {
   // and the anchor falls back to cluster[0]; an unnamed member renders "(anon)".
   test("all-canonical cluster falls back to the first site and shows (anon)", () => {
     const cluster = [
-      { path: "/repo/emitter-sdk/a.mjs", name: null, start: 2, end: 8, nodeCount: 20 },
-      { path: "/repo/emitter-sdk/b.mjs", name: "named", start: 5, end: 11, nodeCount: 20 },
+      {
+        path: "/repo/emitter-sdk/a.mjs",
+        name: null,
+        start: 2,
+        end: 8,
+        nodeCount: 20,
+      },
+      {
+        path: "/repo/emitter-sdk/b.mjs",
+        name: "named",
+        start: 5,
+        end: 11,
+        nodeCount: 20,
+      },
     ];
     const v = clusterViolation(cluster, "/repo");
     expect(v.path).toBe("emitter-sdk/a.mjs");

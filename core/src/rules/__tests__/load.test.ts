@@ -114,7 +114,9 @@ describe("assertRulePlugin", () => {
   it("rejects non-array stages", () => {
     const p = validPlugin();
     (p.meta as { stages: unknown }).stages = "pre-commit";
-    expect(() => assertRulePlugin(p, "r")).toThrow(/meta.stages must be an array/);
+    expect(() => assertRulePlugin(p, "r")).toThrow(
+      /meta.stages must be an array/,
+    );
   });
 
   it("rejects an unknown stage", () => {
@@ -126,7 +128,9 @@ describe("assertRulePlugin", () => {
   it("rejects a non-string, non-null checkEntry", () => {
     const p = validPlugin();
     (p as { checkEntry: unknown }).checkEntry = 7;
-    expect(() => assertRulePlugin(p, "r")).toThrow(/checkEntry must be a string or null/);
+    expect(() => assertRulePlugin(p, "r")).toThrow(
+      /checkEntry must be a string or null/,
+    );
   });
 
   it("rejects a non-object control", () => {

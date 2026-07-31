@@ -1,5 +1,8 @@
 #!/usr/bin/env node
-import { isInvokedAsScript, runFileHook } from "@deterministic-code/co-rule-kit/lint-shared";
+import {
+  isInvokedAsScript,
+  runFileHook,
+} from "@deterministic-code/co-rule-kit/lint-shared";
 import { loadProtected } from "@deterministic-code/co-rule-kit/protected-globs";
 
 function usage() {

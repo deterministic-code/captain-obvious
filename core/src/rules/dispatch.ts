@@ -15,7 +15,9 @@ export interface Dispatched {
 }
 
 /** A rule's absolute check-runner path, stamped by the loader (rules/<slug>/check.mjs). */
-const CHECK_PATH = new Map(RULES.map((r) => [r.meta.slug, r.checkPath ?? null]));
+const CHECK_PATH = new Map(
+  RULES.map((r) => [r.meta.slug, r.checkPath ?? null]),
+);
 
 /**
  * The `script` fix a fix-bound rule must run. The panel only offers the fix
@@ -25,7 +27,9 @@ const CHECK_PATH = new Map(RULES.map((r) => [r.meta.slug, r.checkPath ?? null]))
 function scriptFixAction(db: Db, slug: string): RuleAction {
   const fix = getRuleFixes(db, slug).find((a) => a.kind === "script");
   if (!fix) {
-    throw new Error(`rule ${slug} is bound to a fix action but declares no script fix`);
+    throw new Error(
+      `rule ${slug} is bound to a fix action but declares no script fix`,
+    );
   }
   return fix;
 }
@@ -77,20 +81,25 @@ export function selectDispatch(db: Db, stage: Stage): Dispatched[] {
       r.checkEntry !== null &&
       staged.has(r.meta.slug) &&
       enabled.has(r.meta.slug),
-  ).sort((a, b) => {
-    // Both rules passed the `enabled` filter, so both are rows in `rules` and
-    // present in the order map — the assertions can't be undefined.
-    const d = order.get(a.meta.slug)! - order.get(b.meta.slug)!;
-    return d !== 0 ? d : a.meta.slug.localeCompare(b.meta.slug);
-  }).map((r) => {
-    const bound = defaultBinding.get(r.meta.slug) as { slug: string } | undefined;
-    const action = bound?.slug ?? DEFAULT_ACTION;
-    return {
-      slug: r.meta.slug,
-      action,
-      fix: actionBehavior(action).runsFix ? scriptFixAction(db, r.meta.slug) : null,
-    };
-  });
+  )
+    .sort((a, b) => {
+      // Both rules passed the `enabled` filter, so both are rows in `rules` and
+      // present in the order map — the assertions can't be undefined.
+      const d = order.get(a.meta.slug)! - order.get(b.meta.slug)!;
+      return d !== 0 ? d : a.meta.slug.localeCompare(b.meta.slug);
+    })
+    .map((r) => {
+      const bound = defaultBinding.get(r.meta.slug) as
+        { slug: string } | undefined;
+      const action = bound?.slug ?? DEFAULT_ACTION;
+      return {
+        slug: r.meta.slug,
+        action,
+        fix: actionBehavior(action).runsFix
+          ? scriptFixAction(db, r.meta.slug)
+          : null,
+      };
+    });
 }
 
 /** Absolute path to a rule's check runner, as stamped by the loader. */
@@ -108,7 +117,11 @@ function spawnProcess(
   cwd?: string,
 ): Promise<number> {
   return new Promise((resolveCode, reject) => {
-    const child = spawn(command, args, cwd ? { stdio: "inherit", cwd } : { stdio: "inherit" });
+    const child = spawn(
+      command,
+      args,
+      cwd ? { stdio: "inherit", cwd } : { stdio: "inherit" },
+    );
     child.on("error", reject);
     child.on("exit", (code, signal) => {
       if (signal) reject(new Error(`${label} killed by ${signal}`));
@@ -124,19 +137,30 @@ function runRule(slug: string, args: string[]): Promise<number> {
 /** git plumbing, capturing stdout; rejects on a non-zero exit. */
 function runGit(args: string[], cwd: string): Promise<string> {
   return new Promise((resolveOut, reject) => {
-    const child = spawn("git", args, { cwd, stdio: ["ignore", "pipe", "inherit"] });
+    const child = spawn("git", args, {
+      cwd,
+      stdio: ["ignore", "pipe", "inherit"],
+    });
     let out = "";
     child.stdout?.on("data", (d) => (out += d));
     child.on("error", reject);
     child.on("exit", (code) =>
-      code === 0 ? resolveOut(out) : reject(new Error(`git ${args[0]} exited ${code}`)),
+      code === 0
+        ? resolveOut(out)
+        : reject(new Error(`git ${args[0]} exited ${code}`)),
     );
   });
 }
 
 function stagedFiles(cwd: string): Promise<string[]> {
-  return runGit(["diff", "--cached", "--name-only", "--diff-filter=ACMR"], cwd).then((out) =>
-    out.split("\n").map((l) => l.trim()).filter(Boolean),
+  return runGit(
+    ["diff", "--cached", "--name-only", "--diff-filter=ACMR"],
+    cwd,
+  ).then((out) =>
+    out
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean),
   );
 }
 

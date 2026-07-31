@@ -44,7 +44,11 @@ function ruleMeta(slug: string): RuleMeta {
   return rule.meta;
 }
 
-function requireAction(db: Db, slug: string, kind: RuleAction["kind"]): RuleAction {
+function requireAction(
+  db: Db,
+  slug: string,
+  kind: RuleAction["kind"],
+): RuleAction {
   const action = getRuleFixes(db, slug).find((a) => a.kind === kind);
   if (!action) throw new Error(`rule has no ${kind} fix: ${slug}`);
   return action;
@@ -62,7 +66,9 @@ function collect(child: ReturnType<typeof spawn>): Promise<SpawnOutcome> {
     child.stdout?.on("data", (d) => (out += d));
     child.stderr?.on("data", (d) => (out += d));
     child.on("error", (e) => resolvePromise({ ok: false, output: e.message }));
-    child.on("close", (code) => resolvePromise({ ok: code === 0, output: out.trim() }));
+    child.on("close", (code) =>
+      resolvePromise({ ok: code === 0, output: out.trim() }),
+    );
   });
 }
 
@@ -74,8 +80,14 @@ function collect(child: ReturnType<typeof spawn>): Promise<SpawnOutcome> {
  * `scriptPath` — `cwd` is the lint target, so a relative path would resolve
  * against the wrong tree (ENOENT for any file/subfolder target).
  */
-function runNodeFix(runner: string, cwd: string, modeArgs: string[]): Promise<SpawnOutcome> {
-  return collect(spawn(process.execPath, [runner, "--fix", ...modeArgs], { cwd }));
+function runNodeFix(
+  runner: string,
+  cwd: string,
+  modeArgs: string[],
+): Promise<SpawnOutcome> {
+  return collect(
+    spawn(process.execPath, [runner, "--fix", ...modeArgs], { cwd }),
+  );
 }
 
 /**
@@ -83,7 +95,11 @@ function runNodeFix(runner: string, cwd: string, modeArgs: string[]): Promise<Sp
  * --write`) that receives the target as a final argv element. Split on
  * whitespace and spawned without a shell, so a path with spaces stays one arg.
  */
-function runShellFix(scriptBody: string, cwd: string, targetArg: string): Promise<SpawnOutcome> {
+function runShellFix(
+  scriptBody: string,
+  cwd: string,
+  targetArg: string,
+): Promise<SpawnOutcome> {
   const parts = scriptBody.trim().split(/\s+/);
   return collect(spawn(parts[0], [...parts.slice(1), targetArg], { cwd }));
 }
@@ -132,7 +148,11 @@ async function runScriptFix(
  * POST /api/run/fix — run a rule's deterministic `script` fix over `path` (a
  * folder scans its tree, a file just itself) and apply it in place.
  */
-export async function fixRule(db: Db, auditDb: Db, body: FixRequest): Promise<FixResult> {
+export async function fixRule(
+  db: Db,
+  auditDb: Db,
+  body: FixRequest,
+): Promise<FixResult> {
   const slug = requireSlug(body.slug);
   ruleMeta(slug);
   return runScriptFix(db, auditDb, slug, await resolveRunTarget(body.path));
@@ -153,12 +173,17 @@ export interface FixAllResult {
  * sequentially: several may rewrite the same files (e.g. prettier), so serial
  * execution avoids write races. A run with no script-fixable rules throws.
  */
-export async function fixAllScripts(db: Db, auditDb: Db, body: RunRequest): Promise<FixAllResult> {
+export async function fixAllScripts(
+  db: Db,
+  auditDb: Db,
+  body: RunRequest,
+): Promise<FixAllResult> {
   const slugs = (body.slugs ?? []).filter((s) => hasScriptFix(db, s));
   if (slugs.length === 0) throw new Error("no deterministic fixes to run");
   const resolved = await resolveRunTarget(body.path);
   const results: FixResult[] = [];
-  for (const slug of slugs) results.push(await runScriptFix(db, auditDb, slug, resolved));
+  for (const slug of slugs)
+    results.push(await runScriptFix(db, auditDb, slug, resolved));
   return { results };
 }
 
@@ -173,7 +198,8 @@ async function fileFixContext(
   slug: string,
 ): Promise<{ meta: RuleMeta; action: RuleAction | null }> {
   const meta = ruleMeta(slug);
-  const action = getRuleFixes(db, slug).find((a) => a.kind === "inferred") ?? null;
+  const action =
+    getRuleFixes(db, slug).find((a) => a.kind === "inferred") ?? null;
   return { meta, action };
 }
 
@@ -183,7 +209,10 @@ async function resolveFileTarget(rawPath?: string): Promise<string> {
   return target;
 }
 
-async function fileViolations(slug: string, file: string): Promise<Violation[]> {
+async function fileViolations(
+  slug: string,
+  file: string,
+): Promise<Violation[]> {
   const result = await runRuleOnFile(slug, file);
   if (!result.ok) throw new Error(result.error);
   return result.violations;
@@ -191,7 +220,9 @@ async function fileViolations(slug: string, file: string): Promise<Violation[]> 
 
 function describeViolations(violations: Violation[]): string {
   if (violations.length === 0) return "(no violations reported for this file)";
-  return violations.map((v) => `- line ${v.line}:${v.col} [${v.kind}] ${v.detail}`).join("\n");
+  return violations
+    .map((v) => `- line ${v.line}:${v.col} [${v.kind}] ${v.detail}`)
+    .join("\n");
 }
 
 function joinLines(lines: (string | false)[]): string {
@@ -241,7 +272,11 @@ function ruleFixSection(g: RuleFileGroup): (string | false)[] {
  * may violate several rules at once, so every rule touching it is folded into a
  * single prompt — one model call yields one coherent rewrite, not competing ones.
  */
-function buildModelFixPrompt(relPath: string, source: string, rules: RuleFileGroup[]): string {
+function buildModelFixPrompt(
+  relPath: string,
+  source: string,
+  rules: RuleFileGroup[],
+): string {
   return joinLines([
     `You are fixing lint violations in the file ${relPath}.`,
     "",
@@ -272,8 +307,18 @@ export async function planFix(db: Db, body: FixRequest): Promise<FixPlan> {
   const slug = requireSlug(body.slug);
   const { meta, action } = await fileFixContext(db, slug);
   const target = await resolveFileTarget(body.path);
-  const prompt = buildAgentFixPrompt(meta, action, target, await fileViolations(slug, target));
-  const file = resolve(process.cwd(), ".claude", "tmp", `co-fix-${slug}-${basename(target)}.md`);
+  const prompt = buildAgentFixPrompt(
+    meta,
+    action,
+    target,
+    await fileViolations(slug, target),
+  );
+  const file = resolve(
+    process.cwd(),
+    ".claude",
+    "tmp",
+    `co-fix-${slug}-${basename(target)}.md`,
+  );
   await mkdir(dirname(file), { recursive: true });
   await writeFile(file, prompt + "\n", "utf8");
   return { slug, path: target, prompt, file };
@@ -320,28 +365,44 @@ export function resolveFixModelConfig(env: NodeJS.ProcessEnv): FixModelConfig {
   return { provider, model, apiKey, baseUrl };
 }
 
-async function postJson(url: string, headers: Record<string, string>, payload: unknown): Promise<unknown> {
+async function postJson(
+  url: string,
+  headers: Record<string, string>,
+  payload: unknown,
+): Promise<unknown> {
   const res = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json", ...headers },
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
-    throw new Error(`${new URL(url).host} ${res.status}: ${(await res.text()).slice(0, 500)}`);
+    throw new Error(
+      `${new URL(url).host} ${res.status}: ${(await res.text()).slice(0, 500)}`,
+    );
   }
   return res.json();
 }
 
-async function callAnthropic(cfg: FixModelConfig, prompt: string): Promise<string> {
+async function callAnthropic(
+  cfg: FixModelConfig,
+  prompt: string,
+): Promise<string> {
   const data = (await postJson(
     `${cfg.baseUrl}/v1/messages`,
     { "x-api-key": cfg.apiKey, "anthropic-version": "2023-06-01" },
-    { model: cfg.model, max_tokens: 8192, messages: [{ role: "user", content: prompt }] },
+    {
+      model: cfg.model,
+      max_tokens: 8192,
+      messages: [{ role: "user", content: prompt }],
+    },
   )) as { content: { type: string; text?: string }[] };
   return data.content.map((c) => c.text ?? "").join("");
 }
 
-async function callOpenAiCompat(cfg: FixModelConfig, prompt: string): Promise<string> {
+async function callOpenAiCompat(
+  cfg: FixModelConfig,
+  prompt: string,
+): Promise<string> {
   const headers: Record<string, string> = cfg.apiKey
     ? { authorization: `Bearer ${cfg.apiKey}` }
     : {};
@@ -353,7 +414,9 @@ async function callOpenAiCompat(cfg: FixModelConfig, prompt: string): Promise<st
 }
 
 function callFixModel(cfg: FixModelConfig, prompt: string): Promise<string> {
-  return cfg.provider === "anthropic" ? callAnthropic(cfg, prompt) : callOpenAiCompat(cfg, prompt);
+  return cfg.provider === "anthropic"
+    ? callAnthropic(cfg, prompt)
+    : callOpenAiCompat(cfg, prompt);
 }
 
 /**
@@ -383,7 +446,10 @@ export interface AiProposal {
  * file and return it as a proposal. Does NOT write — the panel shows the diff and
  * only `aiApplyFix` commits it.
  */
-export async function aiProposeFix(db: Db, body: FixRequest): Promise<AiProposal> {
+export async function aiProposeFix(
+  db: Db,
+  body: FixRequest,
+): Promise<AiProposal> {
   const slug = requireSlug(body.slug);
   const { meta, action } = await fileFixContext(db, slug);
   const target = await resolveFileTarget(body.path);
@@ -413,10 +479,13 @@ export interface AiApplyRequest {
  * POST /api/run/fix/ai/apply — write an accepted AI proposal. Restricted to
  * lintable files (the only ones the panel can produce a proposal for).
  */
-export async function aiApplyFix(body: AiApplyRequest): Promise<{ path: string; ok: true }> {
+export async function aiApplyFix(
+  body: AiApplyRequest,
+): Promise<{ path: string; ok: true }> {
   const path = body.path?.trim();
   if (!path) throw new Error("path is required");
-  if (typeof body.newSource !== "string") throw new Error("newSource is required");
+  if (typeof body.newSource !== "string")
+    throw new Error("newSource is required");
   const resolved = resolve(path);
   if (!LINTABLE_EXTS.has(extname(resolved))) {
     throw new Error(`not a writable file: ${resolved}`);
@@ -438,7 +507,10 @@ interface FileFixGroup {
  * so "fix all" and a single "Fix with AI" always land on the same file. A rule
  * that failed to run is surfaced, not silently dropped.
  */
-async function collectRunViolationsByFile(db: Db, body: RunRequest): Promise<FileFixGroup[]> {
+async function collectRunViolationsByFile(
+  db: Db,
+  body: RunRequest,
+): Promise<FileFixGroup[]> {
   const results = await runRules(body);
   const root = await repoRoot();
   const byPath = new Map<string, FileFixGroup>();
@@ -448,7 +520,8 @@ async function collectRunViolationsByFile(db: Db, body: RunRequest): Promise<Fil
     const { meta, action } = await fileFixContext(db, r.slug);
     const perFile = new Map<string, Violation[]>();
     for (const v of r.violations) {
-      if (!v.path) throw new Error(`${r.slug} reported a violation with no file path`);
+      if (!v.path)
+        throw new Error(`${r.slug} reported a violation with no file path`);
       const abs = resolve(root, v.path);
       const vios = perFile.get(abs) ?? [];
       if (vios.length === 0) perFile.set(abs, vios);
@@ -491,7 +564,10 @@ export interface FixPlanAll {
  * run and hand it back (also written under `.claude/tmp/`) for the running Claude
  * Code agent. No model call, no API key.
  */
-export async function planAllFixes(db: Db, body: RunRequest): Promise<FixPlanAll> {
+export async function planAllFixes(
+  db: Db,
+  body: RunRequest,
+): Promise<FixPlanAll> {
   const groups = await collectRunViolationsByFile(db, body);
   if (groups.length === 0) throw new Error("no violations to plan");
   const prompt = buildAllAgentFixPrompt(groups);
@@ -508,9 +584,16 @@ export interface AiProposalAll {
 }
 
 /** One model call per file: fold every rule that flagged it into a single rewrite proposal. */
-async function proposeFileFix(cfg: FixModelConfig, g: FileFixGroup): Promise<AiProposal> {
+async function proposeFileFix(
+  cfg: FixModelConfig,
+  g: FileFixGroup,
+): Promise<AiProposal> {
   const source = await readFile(g.path, "utf8");
-  const prompt = buildModelFixPrompt(relative(process.cwd(), g.path), source, g.rules);
+  const prompt = buildModelFixPrompt(
+    relative(process.cwd(), g.path),
+    source,
+    g.rules,
+  );
   const reply = await callFixModel(cfg, prompt);
   return {
     slug: g.rules.map((rf) => rf.slug).join(", "),
@@ -528,7 +611,10 @@ async function proposeFileFix(cfg: FixModelConfig, g: FileFixGroup): Promise<AiP
  * proposals; nothing is written until the user applies each via `aiApplyFix`.
  * Non-lintable files can't be written back, so they're reported as skipped.
  */
-export async function aiProposeAllFixes(db: Db, body: RunRequest): Promise<AiProposalAll> {
+export async function aiProposeAllFixes(
+  db: Db,
+  body: RunRequest,
+): Promise<AiProposalAll> {
   const groups = await collectRunViolationsByFile(db, body);
   if (groups.length === 0) throw new Error("no violations to fix");
   const cfg = resolveFixModelConfig(process.env);

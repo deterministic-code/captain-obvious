@@ -26,7 +26,9 @@ export async function installClaudeHooks({ target, pkgRoot, claudeHooks }) {
   const settings = await readJson(path);
   settings.hooks ??= {};
   for (const event of Object.keys(settings.hooks)) {
-    settings.hooks[event] = settings.hooks[event].filter((entry) => !entry._captainObvious);
+    settings.hooks[event] = settings.hooks[event].filter(
+      (entry) => !entry._captainObvious,
+    );
   }
   for (const spec of claudeHooks) {
     settings.hooks[spec.event] ??= [];

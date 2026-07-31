@@ -18,7 +18,10 @@ const execFileAsync = promisify(execFile);
  * panel can resolve any violation's path against a single base.
  */
 export async function repoRoot(): Promise<string> {
-  const { stdout } = await execFileAsync("git", ["rev-parse", "--show-toplevel"]);
+  const { stdout } = await execFileAsync("git", [
+    "rev-parse",
+    "--show-toplevel",
+  ]);
   return stdout.trim();
 }
 

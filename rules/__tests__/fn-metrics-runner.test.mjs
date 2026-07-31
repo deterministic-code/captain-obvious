@@ -89,7 +89,12 @@ describe("fn-metrics / runMetricHook", () => {
   test("--files clean pass writes an OK line and does not exit", async () => {
     await writeFile(join(repo, "clean.ts"), CLEAN, "utf8");
     await withCwd(repo, () =>
-      runMetricHook("complexity", ["node", "hook", "--files", join(repo, "clean.ts")]),
+      runMetricHook("complexity", [
+        "node",
+        "hook",
+        "--files",
+        join(repo, "clean.ts"),
+      ]),
     );
     expect(io.exitSpy).not.toHaveBeenCalled();
     expect(io.text(io.stdoutSpy)).toContain(
@@ -118,7 +123,12 @@ describe("fn-metrics / runMetricHook", () => {
     await writeFile(join(repo, "big.ts"), OVER_COMPLEXITY, "utf8");
     await withCwd(repo, () =>
       expect(
-        runMetricHook("complexity", ["node", "hook", "--files", join(repo, "big.ts")]),
+        runMetricHook("complexity", [
+          "node",
+          "hook",
+          "--files",
+          join(repo, "big.ts"),
+        ]),
       ).rejects.toThrow("__exit__:1"),
     );
     const err = io.text(io.stderrSpy);
@@ -135,7 +145,12 @@ describe("fn-metrics / runMetricHook", () => {
     );
     await withCwd(repo, () =>
       expect(
-        runMetricHook("params", ["node", "hook", "--files", join(repo, "many.ts")]),
+        runMetricHook("params", [
+          "node",
+          "hook",
+          "--files",
+          join(repo, "many.ts"),
+        ]),
       ).rejects.toThrow("__exit__:1"),
     );
     expect(io.text(io.stderrSpy)).toContain(
@@ -146,7 +161,12 @@ describe("fn-metrics / runMetricHook", () => {
   test("--files skips a non-analyzable path (test file) as a clean pass", async () => {
     await writeFile(join(repo, "x.test.ts"), OVER_COMPLEXITY, "utf8");
     await withCwd(repo, () =>
-      runMetricHook("complexity", ["node", "hook", "--files", join(repo, "x.test.ts")]),
+      runMetricHook("complexity", [
+        "node",
+        "hook",
+        "--files",
+        join(repo, "x.test.ts"),
+      ]),
     );
     expect(io.exitSpy).not.toHaveBeenCalled();
     expect(io.text(io.stdoutSpy)).toContain("no complexity violations.");
@@ -154,7 +174,12 @@ describe("fn-metrics / runMetricHook", () => {
 
   test("--files tolerates a missing path (ENOENT) as no violations", async () => {
     await withCwd(repo, () =>
-      runMetricHook("lines", ["node", "hook", "--files", join(repo, "gone.ts")]),
+      runMetricHook("lines", [
+        "node",
+        "hook",
+        "--files",
+        join(repo, "gone.ts"),
+      ]),
     );
     expect(io.exitSpy).not.toHaveBeenCalled();
     expect(io.text(io.stdoutSpy)).toContain("no max-lines violations.");
@@ -164,7 +189,12 @@ describe("fn-metrics / runMetricHook", () => {
     await mkdir(join(repo, "adir.ts"), { recursive: true });
     await withCwd(repo, () =>
       expect(
-        runMetricHook("lines", ["node", "hook", "--files", join(repo, "adir.ts")]),
+        runMetricHook("lines", [
+          "node",
+          "hook",
+          "--files",
+          join(repo, "adir.ts"),
+        ]),
       ).rejects.toThrow(/EISDIR/),
     );
   });
@@ -172,7 +202,9 @@ describe("fn-metrics / runMetricHook", () => {
   test("--all audits every tracked file and passes on a clean tree", async () => {
     await writeFile(join(repo, "clean.ts"), CLEAN, "utf8");
     await commitAllIn(repo, "clean tree");
-    await withCwd(repo, () => runMetricHook("complexity", ["node", "hook", "--all"]));
+    await withCwd(repo, () =>
+      runMetricHook("complexity", ["node", "hook", "--all"]),
+    );
     expect(io.exitSpy).not.toHaveBeenCalled();
     expect(io.text(io.stdoutSpy)).toContain("no complexity violations.");
   });
@@ -205,7 +237,9 @@ describe("fn-metrics / runMetricHook", () => {
       "utf8",
     );
     await gitIn(repo, ["add", "mixed.ts"]);
-    await withCwd(repo, () => runMetricHook("complexity", ["node", "hook", "--staged"]));
+    await withCwd(repo, () =>
+      runMetricHook("complexity", ["node", "hook", "--staged"]),
+    );
     expect(io.exitSpy).not.toHaveBeenCalled();
     expect(io.text(io.stdoutSpy)).toContain(
       "no complexity violations in staged diff.",
@@ -215,7 +249,9 @@ describe("fn-metrics / runMetricHook", () => {
   test("--staged clean pass appends the 'in staged diff' qualifier", async () => {
     await writeFile(join(repo, "clean.ts"), CLEAN, "utf8");
     await gitIn(repo, ["add", "clean.ts"]);
-    await withCwd(repo, () => runMetricHook("complexity", ["node", "hook", "--staged"]));
+    await withCwd(repo, () =>
+      runMetricHook("complexity", ["node", "hook", "--staged"]),
+    );
     expect(io.text(io.stdoutSpy)).toContain(
       "no complexity violations in staged diff.",
     );
@@ -226,7 +262,9 @@ describe("fn-metrics / runMetricHook", () => {
     await commitAllIn(repo, "over-limit tree");
     process.env.CO_JSON = "1";
     try {
-      await withCwd(repo, () => runMetricHook("complexity", ["node", "hook", "--all"]));
+      await withCwd(repo, () =>
+        runMetricHook("complexity", ["node", "hook", "--all"]),
+      );
     } finally {
       delete process.env.CO_JSON;
     }
@@ -240,9 +278,9 @@ describe("fn-metrics / runMetricHook", () => {
 
   test("an unknown mode prints usage and exits 2", async () => {
     await withCwd(repo, () =>
-      expect(runMetricHook("lines", ["node", "hook", "--bogus"])).rejects.toThrow(
-        "__exit__:2",
-      ),
+      expect(
+        runMetricHook("lines", ["node", "hook", "--bogus"]),
+      ).rejects.toThrow("__exit__:2"),
     );
     expect(io.text(io.stderrSpy)).toContain("Usage (JS/TS only");
   });

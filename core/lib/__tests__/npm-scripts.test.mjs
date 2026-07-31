@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { readJson, writeJson } from "../json-file.mjs";
 import { installNpmScripts } from "../npm-scripts.mjs";
 
-const SCRATCH = "/private/tmp/claude-501/-Users-ryan-Projects-captain-obvious/21d816db-ca11-437f-a0f2-ca45be7dd636/scratchpad";
+const SCRATCH =
+  "/private/tmp/claude-501/-Users-ryan-Projects-captain-obvious/21d816db-ca11-437f-a0f2-ca45be7dd636/scratchpad";
 
 describe("npm-scripts / installNpmScripts", () => {
   let target;
@@ -21,7 +22,11 @@ describe("npm-scripts / installNpmScripts", () => {
 
   test("returns [] when npmScripts is explicitly disabled", async () => {
     expect(
-      await installNpmScripts({ target, gitHooks: {}, npmScripts: { enabled: false } }),
+      await installNpmScripts({
+        target,
+        gitHooks: {},
+        npmScripts: { enabled: false },
+      }),
     ).toEqual([]);
   });
 
@@ -35,10 +40,17 @@ describe("npm-scripts / installNpmScripts", () => {
     expect(written).toEqual([pkgPath()]);
 
     const pkg = await readJson(pkgPath());
-    expect(pkg.scripts["lint:comments"]).toBe("captain-obvious-lint comments --staged");
-    expect(pkg.scripts["lint:comments:all"]).toBe("captain-obvious-lint comments --all");
+    expect(pkg.scripts["lint:comments"]).toBe(
+      "captain-obvious-lint comments --staged",
+    );
+    expect(pkg.scripts["lint:comments:all"]).toBe(
+      "captain-obvious-lint comments --all",
+    );
     expect(pkg.scripts["lint:comments:push"]).toBeUndefined();
-    expect(pkg.captainObvious.managedScripts).toEqual(["lint:comments", "lint:comments:all"]);
+    expect(pkg.captainObvious.managedScripts).toEqual([
+      "lint:comments",
+      "lint:comments:all",
+    ]);
   });
 
   test("adds a :push alias for prePush hooks flagged with --push", async () => {
@@ -48,7 +60,9 @@ describe("npm-scripts / installNpmScripts", () => {
       npmScripts: {},
     });
     const pkg = await readJson(pkgPath());
-    expect(pkg.scripts["lint:dup:push"]).toBe("captain-obvious-lint dup --push");
+    expect(pkg.scripts["lint:dup:push"]).toBe(
+      "captain-obvious-lint dup --push",
+    );
   });
 
   test("skips bare `run:` passthrough entries", async () => {
@@ -70,7 +84,9 @@ describe("npm-scripts / installNpmScripts", () => {
       npmScripts: { extraScripts: { "lint:dead-code": "dead-code --all" } },
     });
     const pkg = await readJson(pkgPath());
-    expect(pkg.scripts["lint:dead-code"]).toBe("captain-obvious-lint dead-code --all");
+    expect(pkg.scripts["lint:dead-code"]).toBe(
+      "captain-obvious-lint dead-code --all",
+    );
   });
 
   test("prunes previously-managed scripts that are no longer generated", async () => {

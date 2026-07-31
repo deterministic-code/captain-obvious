@@ -30,9 +30,9 @@ export const ACTION_BEHAVIOR: Readonly<Record<string, ActionBehavior>> = {
 };
 
 /** Action slugs that run the rule's deterministic fix — only offered for fixable rules. */
-export const FIX_ACTIONS: readonly string[] = Object.keys(ACTION_BEHAVIOR).filter(
-  (slug) => ACTION_BEHAVIOR[slug].runsFix,
-);
+export const FIX_ACTIONS: readonly string[] = Object.keys(
+  ACTION_BEHAVIOR,
+).filter((slug) => ACTION_BEHAVIOR[slug].runsFix);
 
 /**
  * The behavior for a binding slug. The `action_types` catalog is extensible

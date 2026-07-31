@@ -1,40 +1,31 @@
 /** @type {import("@deterministic-code/captain-obvious/plugin").RulePlugin} */
 export default {
-  "meta": {
-    "slug": "lint-complexity",
-    "name": "Cyclomatic complexity",
-    "category": "complexity",
-    "description": "Flags functions whose cyclomatic complexity exceeds the limit.",
-    "languages": [
-      "typescript",
-      "javascript"
-    ],
-    "config": {
-      "maxComplexity": 15
+  meta: {
+    slug: "lint-complexity",
+    name: "Cyclomatic complexity",
+    category: "complexity",
+    description:
+      "Flags functions whose cyclomatic complexity exceeds the limit.",
+    languages: ["typescript", "javascript"],
+    config: {
+      maxComplexity: 15,
     },
-    "ratchetable": false,
-    "modes": [
-      "staged",
-      "all",
-      "files",
-      "warn"
-    ],
-    "stages": [
-      "pre-commit"
-    ],
-    "actions": []
+    ratchetable: false,
+    modes: ["staged", "all", "files", "warn"],
+    stages: ["pre-commit"],
+    actions: [],
   },
-  "control": {
-    "kind": "declarative",
-    "fields": [
+  control: {
+    kind: "declarative",
+    fields: [
       {
-        "key": "maxComplexity",
-        "label": "Max Complexity",
-        "type": "number",
-        "min": 1
-      }
-    ]
+        key: "maxComplexity",
+        label: "Max Complexity",
+        type: "number",
+        min: 1,
+      },
+    ],
   },
-  "dependencies": [],
-  "checkEntry": "./check.mjs"
+  dependencies: [],
+  checkEntry: "./check.mjs",
 };

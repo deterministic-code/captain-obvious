@@ -17,7 +17,10 @@ export const STAGES = [
 export type Stage = (typeof STAGES)[number]["slug"];
 
 /** Stages with a local git runner (pre-commit / pre-push). */
-export type GitStage = Extract<(typeof STAGES)[number], { gitFlag: string }>["slug"];
+export type GitStage = Extract<
+  (typeof STAGES)[number],
+  { gitFlag: string }
+>["slug"];
 
 /** Local git stages mapped to the lint-mode flag their rules receive. */
 export const GIT_STAGE_FLAG = Object.fromEntries(

@@ -30,7 +30,7 @@ function open(dbPath: string): Database.Database {
 export function profilingMeta(dbPath: string): ProfilingMeta {
   const db = open(dbPath);
   try {
-    const row = db.prepare('SELECT COUNT(*) AS n FROM event').get() as {
+    const row = db.prepare("SELECT COUNT(*) AS n FROM event").get() as {
       n: number;
     };
     return { dbPath, count: row.n };

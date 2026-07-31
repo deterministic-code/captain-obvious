@@ -175,16 +175,16 @@ describe("lint-dup / main dispatch (in-process, real jscpd)", () => {
     } finally {
       delete process.env.CO_JSON;
     }
-    expect(JSON.parse(io.text(io.stdoutSpy).trim())).toEqual({ violations: [] });
+    expect(JSON.parse(io.text(io.stdoutSpy).trim())).toEqual({
+      violations: [],
+    });
   });
 
   test("--staged with a newly-staged duplicate block flags it and exits 1", async () => {
     await seedTwoCopies();
     await gitIn(repo, ["add", "-A"]);
 
-    await expect(main(["node", "s", "--staged"])).rejects.toThrow(
-      /__exit__:1/,
-    );
+    await expect(main(["node", "s", "--staged"])).rejects.toThrow(/__exit__:1/);
     expect(io.text(io.stderrSpy)).toContain("newly-introduced duplicate block");
   });
 

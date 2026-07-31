@@ -31,7 +31,13 @@ export type ControlField =
       help?: string;
     }
   | { key: string; label: string; type: "boolean"; help?: string }
-  | { key: string; label: string; type: "string"; placeholder?: string; help?: string }
+  | {
+      key: string;
+      label: string;
+      type: "string";
+      placeholder?: string;
+      help?: string;
+    }
   | { key: string; label: string; type: "list"; help?: string }
   | {
       key: string;

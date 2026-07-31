@@ -22,12 +22,8 @@ vi.mock("node:child_process", () => ({
   },
 }));
 
-const {
-  blockingJobFailures,
-  pickVerdict,
-  fetchMainTestsVerdict,
-  main,
-} = await import("../_kit/check-main-ci-green.mjs");
+const { blockingJobFailures, pickVerdict, fetchMainTestsVerdict, main } =
+  await import("../_kit/check-main-ci-green.mjs");
 
 function ghList(runs) {
   ghResponders.list = () => ({ stdout: JSON.stringify(runs) });
@@ -150,7 +146,9 @@ describe("fetchMainTestsVerdict", () => {
   });
 
   test("a failure whose only failed jobs are non-blocking becomes non-blocking-failure", async () => {
-    ghList([{ conclusion: "failure", displayTitle: "red", url: "u", databaseId: 7 }]);
+    ghList([
+      { conclusion: "failure", displayTitle: "red", url: "u", databaseId: 7 },
+    ]);
     ghView([
       { name: "unit", conclusion: "success" },
       { name: "rust (cargo test)", conclusion: "failure" },
@@ -160,21 +158,27 @@ describe("fetchMainTestsVerdict", () => {
   });
 
   test("a failure with a blocking unit failure stays a hard failure", async () => {
-    ghList([{ conclusion: "failure", displayTitle: "red", url: "u", databaseId: 8 }]);
+    ghList([
+      { conclusion: "failure", displayTitle: "red", url: "u", databaseId: 8 },
+    ]);
     ghView([{ name: "unit", conclusion: "failure" }]);
     const res = await fetchMainTestsVerdict();
     expect(res.verdict.conclusion).toBe("failure");
   });
 
   test("a failure whose job list is unavailable (gh view fails) stays a hard failure", async () => {
-    ghList([{ conclusion: "failure", displayTitle: "red", url: "u", databaseId: 9 }]);
+    ghList([
+      { conclusion: "failure", displayTitle: "red", url: "u", databaseId: 9 },
+    ]);
     ghViewRaw({ err: Object.assign(new Error("boom"), { code: 3 }) });
     const res = await fetchMainTestsVerdict();
     expect(res.verdict.conclusion).toBe("failure");
   });
 
   test("a failure whose gh view fails without a code falls back to err.message in the warning", async () => {
-    ghList([{ conclusion: "failure", displayTitle: "red", url: "u", databaseId: 11 }]);
+    ghList([
+      { conclusion: "failure", displayTitle: "red", url: "u", databaseId: 11 },
+    ]);
     ghViewRaw({ err: new Error("gh crashed") });
     const res = await fetchMainTestsVerdict();
     // No blocking-job data → the failure remains blocking.
@@ -182,7 +186,9 @@ describe("fetchMainTestsVerdict", () => {
   });
 
   test("a failure whose gh view returns non-JSON stays a hard failure", async () => {
-    ghList([{ conclusion: "failure", displayTitle: "red", url: "u", databaseId: 10 }]);
+    ghList([
+      { conclusion: "failure", displayTitle: "red", url: "u", databaseId: 10 },
+    ]);
     ghViewRaw({ stdout: "totally not json" });
     const res = await fetchMainTestsVerdict();
     expect(res.verdict.conclusion).toBe("failure");
@@ -250,24 +256,34 @@ describe("main", () => {
   });
 
   test("non-blocking failure allows the commit", async () => {
-    ghList([{ conclusion: "failure", displayTitle: "red", url: "u", databaseId: 7 }]);
+    ghList([
+      { conclusion: "failure", displayTitle: "red", url: "u", databaseId: 7 },
+    ]);
     ghView([{ name: "rust (cargo test)", conclusion: "failure" }]);
     await main(["node", "s.mjs"]);
     expect(exitSpy).not.toHaveBeenCalled();
-    expect(stdoutText()).toMatch(/only outside the blocking unit\/integration jobs/);
+    expect(stdoutText()).toMatch(
+      /only outside the blocking unit\/integration jobs/,
+    );
   });
 
   test("hard failure blocks and exits 1", async () => {
-    ghList([{ conclusion: "failure", displayTitle: "red", url: "u", databaseId: 8 }]);
+    ghList([
+      { conclusion: "failure", displayTitle: "red", url: "u", databaseId: 8 },
+    ]);
     ghView([{ name: "unit", conclusion: "failure" }]);
     await expect(main(["node", "s.mjs"], { env: {} })).rejects.toThrow(
       /__exit__:1/,
     );
-    expect(stderrText()).toMatch(/BLOCKED: the latest completed Tests run on main FAILED/);
+    expect(stderrText()).toMatch(
+      /BLOCKED: the latest completed Tests run on main FAILED/,
+    );
   });
 
   test("hard failure with ALLOW_COMMIT_ON_RED_MAIN=1 allows the commit", async () => {
-    ghList([{ conclusion: "failure", displayTitle: "red", url: "u", databaseId: 8 }]);
+    ghList([
+      { conclusion: "failure", displayTitle: "red", url: "u", databaseId: 8 },
+    ]);
     ghView([{ name: "unit", conclusion: "failure" }]);
     await main(["node", "s.mjs"], { env: { ALLOW_COMMIT_ON_RED_MAIN: "1" } });
     expect(exitSpy).not.toHaveBeenCalled();

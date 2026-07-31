@@ -107,7 +107,8 @@ export async function browse(rawPath?: string): Promise<BrowseView> {
       files.push({ name: d.name, type: "file", path: join(path, d.name) });
     }
   }
-  const byName = (a: BrowseEntry, b: BrowseEntry) => a.name.localeCompare(b.name);
+  const byName = (a: BrowseEntry, b: BrowseEntry) =>
+    a.name.localeCompare(b.name);
   const parent = dirname(path);
   return {
     path,
@@ -136,7 +137,11 @@ export async function readSource(rawPath?: string): Promise<FileView> {
   return { path, text };
 }
 
-function errResult(slug: string, stderr: string, code: number | null): RunResult {
+function errResult(
+  slug: string,
+  stderr: string,
+  code: number | null,
+): RunResult {
   return {
     slug,
     ok: false,
@@ -179,15 +184,25 @@ function runRuleCollect(
     child.on("close", (code) => {
       const line = out.trim().split("\n").filter(Boolean).pop();
       const violations = code === 0 && line ? parseViolations(line) : null;
-      if (violations === null) return resolvePromise(errResult(slug, err, code));
+      if (violations === null)
+        return resolvePromise(errResult(slug, err, code));
       resolvePromise({ slug, ok: true, violations });
     });
   });
 }
 
-function runOne(slug: string, cwd: string, modeArgs: string[]): Promise<RunResult> {
+function runOne(
+  slug: string,
+  cwd: string,
+  modeArgs: string[],
+): Promise<RunResult> {
   if (!KNOWN.has(slug)) {
-    return Promise.resolve({ slug, ok: false, violations: [], error: "unknown rule" });
+    return Promise.resolve({
+      slug,
+      ok: false,
+      violations: [],
+      error: "unknown rule",
+    });
   }
   if (!RUNNABLE.has(slug)) {
     return Promise.resolve({
@@ -240,7 +255,10 @@ export async function runRules(body: RunRequest): Promise<RunResult[]> {
  * this to get authoritative, fresh violations for the file it's about to fix,
  * rather than trusting whatever the panel last rendered.
  */
-export async function runRuleOnFile(slug: string, file: string): Promise<RunResult> {
+export async function runRuleOnFile(
+  slug: string,
+  file: string,
+): Promise<RunResult> {
   const { cwd, modeArgs } = await resolveRunTarget(file);
   return runOne(slug, cwd, modeArgs);
 }

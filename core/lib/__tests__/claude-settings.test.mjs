@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { readJson, writeJson } from "../json-file.mjs";
 import { installClaudeHooks } from "../claude-settings.mjs";
 
-const SCRATCH = "/private/tmp/claude-501/-Users-ryan-Projects-captain-obvious/21d816db-ca11-437f-a0f2-ca45be7dd636/scratchpad";
+const SCRATCH =
+  "/private/tmp/claude-501/-Users-ryan-Projects-captain-obvious/21d816db-ca11-437f-a0f2-ca45be7dd636/scratchpad";
 
 describe("claude-settings / installClaudeHooks", () => {
   let dir;
@@ -24,11 +25,15 @@ describe("claude-settings / installClaudeHooks", () => {
   const settingsPath = () => join(target, ".claude", "settings.json");
 
   test("returns [] when claudeHooks is undefined", async () => {
-    expect(await installClaudeHooks({ target, pkgRoot, claudeHooks: undefined })).toEqual([]);
+    expect(
+      await installClaudeHooks({ target, pkgRoot, claudeHooks: undefined }),
+    ).toEqual([]);
   });
 
   test("returns [] when claudeHooks is empty", async () => {
-    expect(await installClaudeHooks({ target, pkgRoot, claudeHooks: [] })).toEqual([]);
+    expect(
+      await installClaudeHooks({ target, pkgRoot, claudeHooks: [] }),
+    ).toEqual([]);
   });
 
   test("writes a hook entry with the resolved bash command and default timeout", async () => {
@@ -55,7 +60,14 @@ describe("claude-settings / installClaudeHooks", () => {
     await installClaudeHooks({
       target,
       pkgRoot,
-      claudeHooks: [{ event: "PreToolUse", hook: "dispatch-guard", timeout: 30, matcher: "Bash" }],
+      claudeHooks: [
+        {
+          event: "PreToolUse",
+          hook: "dispatch-guard",
+          timeout: 30,
+          matcher: "Bash",
+        },
+      ],
     });
     const settings = await readJson(settingsPath());
     const entry = settings.hooks.PreToolUse[0];
@@ -67,8 +79,14 @@ describe("claude-settings / installClaudeHooks", () => {
     await writeJson(settingsPath(), {
       hooks: {
         PreToolUse: [
-          { matcher: "Bash", hooks: [{ type: "command", command: "echo mine" }] },
-          { _captainObvious: true, hooks: [{ type: "command", command: "stale" }] },
+          {
+            matcher: "Bash",
+            hooks: [{ type: "command", command: "echo mine" }],
+          },
+          {
+            _captainObvious: true,
+            hooks: [{ type: "command", command: "stale" }],
+          },
         ],
       },
     });
@@ -83,7 +101,9 @@ describe("claude-settings / installClaudeHooks", () => {
     const commands = settings.hooks.PreToolUse.map((e) => e.hooks[0].command);
     expect(commands).toContain("echo mine");
     expect(commands).not.toContain("stale");
-    expect(settings.hooks.PreToolUse.filter((e) => e._captainObvious)).toHaveLength(1);
+    expect(
+      settings.hooks.PreToolUse.filter((e) => e._captainObvious),
+    ).toHaveLength(1);
   });
 
   test("groups multiple hooks by their event, creating the event array on demand", async () => {

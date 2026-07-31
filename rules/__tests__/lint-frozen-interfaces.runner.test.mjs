@@ -147,7 +147,9 @@ describe("frozen-interfaces manifest edge cases", () => {
     // to ALL_SCOPES and still catches an added constructor arg.
     const baseline = await addTarget(root, {}, { key: KEY, scopeRaw: "" });
     const scopeless = { [KEY]: { fingerprint: baseline[KEY].fingerprint } };
-    await writeSource(SRC.replace("EmitPlan {", "EmitPlan {\n  constructor(x) {}"));
+    await writeSource(
+      SRC.replace("EmitPlan {", "EmitPlan {\n  constructor(x) {}"),
+    );
     const violations = await collectViolations(root, scopeless);
     expect(violations[0].detail).toContain("constructor");
   });
@@ -155,7 +157,11 @@ describe("frozen-interfaces manifest edge cases", () => {
   test("refreshManifest defaults a scopeless entry to all scopes", async () => {
     const scopeless = { [KEY]: {} };
     const refreshed = await refreshManifest(root, scopeless);
-    expect(refreshed[KEY].scope).toEqual(["heritage", "constructor", "members"]);
+    expect(refreshed[KEY].scope).toEqual([
+      "heritage",
+      "constructor",
+      "members",
+    ]);
   });
 
   test("a manifest entry with no fingerprint is flagged as un-baselined", async () => {

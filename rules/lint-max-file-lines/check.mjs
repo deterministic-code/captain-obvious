@@ -31,7 +31,6 @@ export function findViolations(src, limit = MAX_FILE_LINES) {
 
 export const lintFile = (path, cwd) => lintFileWith(path, cwd, findViolations);
 
-
 function usage() {
   process.stderr.write(
     "Usage:\n  node scripts/hooks/lint-max-file-lines.mjs --staged [--warn]\n  node scripts/hooks/lint-max-file-lines.mjs --all [--warn]\n  node scripts/hooks/lint-max-file-lines.mjs --files <path> [...] [--warn]\n",

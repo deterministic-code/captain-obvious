@@ -16,7 +16,11 @@ const execFileAsync = promisify(execFile);
  * resolve the changed-file set + diff args and hand them to the hook's own
  * `ratchetGate`; `--all`/`--files` defer to the hook's report-mode callbacks.
  */
-async function runFilesMode(repoRoot, argv, { tool, fileFilter, collectFiles }) {
+async function runFilesMode(
+  repoRoot,
+  argv,
+  { tool, fileFilter, collectFiles },
+) {
   const files = argv.slice(3).filter(fileFilter);
   if (files.length === 0) {
     if (jsonMode()) return emitJson([]);

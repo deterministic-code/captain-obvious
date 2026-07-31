@@ -22,7 +22,9 @@ describe("matchProtected", () => {
   });
 
   it("matches dotfile roots (dot: true)", () => {
-    expect(matchProtected(".github/workflows/ci.yml", [".github/**"])).toBe(true);
+    expect(matchProtected(".github/workflows/ci.yml", [".github/**"])).toBe(
+      true,
+    );
   });
 
   it("matches when any glob in the set matches", () => {

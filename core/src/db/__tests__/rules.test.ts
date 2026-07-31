@@ -44,7 +44,9 @@ function categories(slug: string): string[] {
 
 function sortIndex(slug: string): number {
   return (
-    db.prepare("SELECT sort_index AS i FROM rules WHERE slug = ?").get(slug) as {
+    db
+      .prepare("SELECT sort_index AS i FROM rules WHERE slug = ?")
+      .get(slug) as {
       i: number;
     }
   ).i;
@@ -112,7 +114,9 @@ describe("addRule", () => {
     expect(() =>
       addRule(db, { slug: "lint-x", name: "X", languages: ["cobol"] }),
     ).toThrow(/unknown language/);
-    const found = db.prepare("SELECT * FROM rules WHERE slug = ?").get("lint-x");
+    const found = db
+      .prepare("SELECT * FROM rules WHERE slug = ?")
+      .get("lint-x");
     expect(found).toBeUndefined();
   });
 
@@ -141,7 +145,9 @@ describe("addRule", () => {
     });
     const stages = (
       db
-        .prepare("SELECT stage FROM rule_stages WHERE rule_id = ? ORDER BY stage")
+        .prepare(
+          "SELECT stage FROM rule_stages WHERE rule_id = ? ORDER BY stage",
+        )
         .all(row.id) as { stage: string }[]
     ).map((r) => r.stage);
     expect(stages).toEqual(["claude-tool", "pre-commit"]);
@@ -165,13 +171,19 @@ describe("addRule", () => {
 
 describe("configureRule", () => {
   beforeEach(() => {
-    addRule(db, { slug: "lint-max-lines", name: "Max lines", languages: ["typescript"] });
+    addRule(db, {
+      slug: "lint-max-lines",
+      name: "Max lines",
+      languages: ["typescript"],
+    });
   });
 
   it("toggles enabled", () => {
     const row = configureRule(db, "lint-max-lines", { enabled: false });
     expect(row.enabled).toBe(0);
-    expect(configureRule(db, "lint-max-lines", { enabled: true }).enabled).toBe(1);
+    expect(configureRule(db, "lint-max-lines", { enabled: true }).enabled).toBe(
+      1,
+    );
   });
 
   it("adds and removes language links", () => {
@@ -182,14 +194,18 @@ describe("configureRule", () => {
   });
 
   it("adds and removes category links", () => {
-    configureRule(db, "lint-max-lines", { addCategories: ["size", "complexity"] });
+    configureRule(db, "lint-max-lines", {
+      addCategories: ["size", "complexity"],
+    });
     expect(categories("lint-max-lines")).toEqual(["complexity", "size"]);
     configureRule(db, "lint-max-lines", { removeCategories: ["complexity"] });
     expect(categories("lint-max-lines")).toEqual(["size"]);
   });
 
   it("replaces the full stage set with setStages", () => {
-    configureRule(db, "lint-max-lines", { setStages: ["pre-commit", "pre-push"] });
+    configureRule(db, "lint-max-lines", {
+      setStages: ["pre-commit", "pre-push"],
+    });
     expect(ruleStages("lint-max-lines")).toEqual(["pre-commit", "pre-push"]);
     configureRule(db, "lint-max-lines", { setStages: ["claude-tool"] });
     expect(ruleStages("lint-max-lines")).toEqual(["claude-tool"]);
@@ -328,7 +344,11 @@ describe("reorderRule", () => {
     expect(order()).toEqual(["rule-a", "rule-b", "rule-c"]);
     reorderRule(db, "rule-c", "up");
     expect(order()).toEqual(["rule-a", "rule-c", "rule-b"]);
-    expect([sortIndex("rule-a"), sortIndex("rule-c"), sortIndex("rule-b")]).toEqual([0, 1, 2]);
+    expect([
+      sortIndex("rule-a"),
+      sortIndex("rule-c"),
+      sortIndex("rule-b"),
+    ]).toEqual([0, 1, 2]);
   });
 
   it("moves a rule down past its neighbor", () => {

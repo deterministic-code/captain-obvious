@@ -454,7 +454,10 @@ describe("lintFile", () => {
   // With no cwd, the path is used as-is (no resolve) — pass an absolute path.
   test("absolute path with no cwd is read directly", async () => {
     const abs = join(tmp, "frontend/e2e/direct.spec.ts");
-    await writeFile(abs, `test('bad', async ({ page }) => { await page.request.get('/'); });\n`);
+    await writeFile(
+      abs,
+      `test('bad', async ({ page }) => { await page.request.get('/'); });\n`,
+    );
     const v = await lintFile(abs);
     expect(v.length).toBeGreaterThan(0);
     expect(v[0].path).toBe(abs);

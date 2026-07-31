@@ -162,7 +162,9 @@ describe("frozen-interfaces / member signature normalization", () => {
     expect(Object.keys(fp.members)[0]).toContain("Symbol.iterator");
   });
   test("overloaded interface methods merge into a union signature", () => {
-    const fp = firstDecl("interface I { f(a: string): void; f(a: number): void }");
+    const fp = firstDecl(
+      "interface I { f(a: string): void; f(a: number): void }",
+    );
     expect(fp.members.f).toBe("(a: string): void | (a: number): void");
   });
   test("an unnamed call signature falls back to the <anon> member key", () => {

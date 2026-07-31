@@ -107,8 +107,12 @@ describe("patchProjectRule", () => {
 
   it("scopes language changes to one project", () => {
     const a = createProject(db, { name: "Gamma" });
-    const view = patchProjectRule(db, a.id, "lint-ts", { languages: ["javascript"] });
+    const view = patchProjectRule(db, a.id, "lint-ts", {
+      languages: ["javascript"],
+    });
     expect(view.languages).toEqual(["javascript"]);
-    expect(ruleView(listRules(db), "lint-ts").languages).toEqual(["typescript"]);
+    expect(ruleView(listRules(db), "lint-ts").languages).toEqual([
+      "typescript",
+    ]);
   });
 });

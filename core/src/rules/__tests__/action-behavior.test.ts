@@ -46,11 +46,17 @@ describe("actionBehavior", () => {
   });
 
   it("treats an unknown/custom action slug as the blocking default", () => {
-    expect(actionBehavior("quarantine")).toEqual(ACTION_BEHAVIOR[DEFAULT_ACTION]);
+    expect(actionBehavior("quarantine")).toEqual(
+      ACTION_BEHAVIOR[DEFAULT_ACTION],
+    );
     expect(DEFAULT_ACTION).toBe("halt");
   });
 
   it("lists exactly the fix-running actions", () => {
-    expect([...FIX_ACTIONS].sort()).toEqual(["fix", "fix_and_halt", "fix_and_warn"]);
+    expect([...FIX_ACTIONS].sort()).toEqual([
+      "fix",
+      "fix_and_halt",
+      "fix_and_warn",
+    ]);
   });
 });

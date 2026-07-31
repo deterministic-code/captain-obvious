@@ -4,7 +4,13 @@ import { describe, expect, it } from "vitest";
 import { RULES } from "../index.js";
 import type { RuleCategory } from "../types.js";
 
-const pkgRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..");
+const pkgRoot = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "..",
+  "..",
+);
 
 const CATEGORIES: RuleCategory[] = [
   "duplication",
@@ -59,7 +65,8 @@ describe("RULES registry", () => {
   it("targets only supported languages; language-independent rules declare none", () => {
     for (const r of RULES) {
       const agnostic =
-        r.meta.category === "governance" || LANGUAGE_INDEPENDENT.has(r.meta.slug);
+        r.meta.category === "governance" ||
+        LANGUAGE_INDEPENDENT.has(r.meta.slug);
       if (agnostic) {
         expect(r.meta.languages, r.meta.slug).toEqual([]);
         continue;
@@ -80,7 +87,9 @@ describe("RULES registry", () => {
   it("declares a checkEntry (string, or null for a server-only policy rule)", () => {
     for (const r of RULES) {
       const entry = r.checkEntry;
-      expect(entry === null || typeof entry === "string", r.meta.slug).toBe(true);
+      expect(entry === null || typeof entry === "string", r.meta.slug).toBe(
+        true,
+      );
     }
   });
 

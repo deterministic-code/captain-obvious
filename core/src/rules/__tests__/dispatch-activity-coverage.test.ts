@@ -40,7 +40,11 @@ function fakeChild(emit: (c: EventEmitter) => void): EventEmitter {
 function recordedRuns(): { slug: string; stage: string; status: string }[] {
   const db = openAuditDb(process.env.CAPTAIN_OBVIOUS_AUDIT_DB as string);
   try {
-    return listHookRuns(db).map(({ slug, stage, status }) => ({ slug, stage, status }));
+    return listHookRuns(db).map(({ slug, stage, status }) => ({
+      slug,
+      stage,
+      status,
+    }));
   } finally {
     db.close();
   }
@@ -121,7 +125,9 @@ describe("dispatch activity coverage — every git-stage rule logs a hook_run", 
 
   it("stops at the first blocking failure — later rules never run or log (the sparse-feed root cause)", async () => {
     const pair = ["lint-comments", "lint-naming"];
-    const first = RULES.map((r) => r.meta.slug).find((s) => pair.includes(s)) as string;
+    const first = RULES.map((r) => r.meta.slug).find((s) =>
+      pair.includes(s),
+    ) as string;
     enableOnly(...pair);
     spawnMock.mockImplementationOnce(
       () => fakeChild((c) => c.emit("exit", 1, null)) as never,

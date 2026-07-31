@@ -55,7 +55,11 @@ function buildProfile(events: EventInput[]): void {
 function addLog(logType: string, message: string, atMs: number): void {
   audit
     .prepare("INSERT INTO logs (log_type, message, created) VALUES (?, ?, ?)")
-    .run(logType, message, new Date(atMs).toISOString().slice(0, 19).replace("T", " "));
+    .run(
+      logType,
+      message,
+      new Date(atMs).toISOString().slice(0, 19).replace("T", " "),
+    );
 }
 
 function addDispatchRun(
@@ -114,7 +118,10 @@ describe("activitySummary", () => {
       { subcommand: "lint:naming", startMs: now - HOUR },
       { subcommand: "lint:dup", startMs: now - HOUR },
     ]);
-    const s = activitySummary(profilePath, audit, { last: "24h", rules: "lint:naming" });
+    const s = activitySummary(profilePath, audit, {
+      last: "24h",
+      rules: "lint:naming",
+    });
     expect(s.keys).toEqual(["lint:dup", "lint:naming"]);
     expect(s.top).toEqual([{ key: "lint:naming", runs: 1, failures: 0 }]);
     expect(s.series.buckets.reduce((n, b) => n + b.runs, 0)).toBe(1);
@@ -128,7 +135,9 @@ describe("activitySummary", () => {
         startMs: now - HOUR,
       })),
     );
-    expect(activitySummary(profilePath, audit, { last: "24h" }).top).toHaveLength(10);
+    expect(
+      activitySummary(profilePath, audit, { last: "24h" }).top,
+    ).toHaveLength(10);
   });
 
   it("clamps an event at 'now' into the last bucket and defaults an unknown window to 7d", () => {
@@ -140,11 +149,15 @@ describe("activitySummary", () => {
     expect(s.series.bucketMs).toBe(sevenDayBucket);
     expect(s.series.buckets[23].runs).toBe(1);
     // Omitting `last` entirely also resolves to the 7d default.
-    expect(activitySummary(profilePath, audit, {}).series.bucketMs).toBe(sevenDayBucket);
+    expect(activitySummary(profilePath, audit, {}).series.bucketMs).toBe(
+      sevenDayBucket,
+    );
   });
 
   it("returns empty structures when there is no activity in the window", () => {
-    buildProfile([{ subcommand: "lint:naming", startMs: Date.now() - 10 * 86400_000 }]);
+    buildProfile([
+      { subcommand: "lint:naming", startMs: Date.now() - 10 * 86400_000 },
+    ]);
     const s = activitySummary(profilePath, audit, { last: "1h" });
     expect(s.keys).toEqual([]);
     expect(s.top).toEqual([]);
@@ -195,7 +208,10 @@ describe("activityFeed", () => {
       ["log", "rule.enabled"],
       ["hook", "lint:dup"],
     ]);
-    expect(feed[0]).toMatchObject({ status: "failure", detail: "npm lint:naming" });
+    expect(feed[0]).toMatchObject({
+      status: "failure",
+      detail: "npm lint:naming",
+    });
     expect(feed[2]).toMatchObject({ status: "success" });
   });
 
@@ -207,7 +223,10 @@ describe("activityFeed", () => {
     ]);
     addLog("rule.enabled", "enabled lint-naming", now - HOUR);
     addLog("rule.enabled", "enabled lint-dup", now - HOUR);
-    const feed = activityFeed(profilePath, audit, { last: "24h", rules: "lint:naming" });
+    const feed = activityFeed(profilePath, audit, {
+      last: "24h",
+      rules: "lint:naming",
+    });
     expect(feed.map((e) => e.key + ":" + e.source)).toEqual([
       "lint:naming:hook",
       "rule.enabled:log",
@@ -229,21 +248,30 @@ describe("activityFeed", () => {
 
   it("includes the dispatcher's runs as hook rows, stage-detailed, without the profile DB", () => {
     const now = Date.now();
-    addDispatchRun("lint-naming", now - HOUR, { stage: "pre-push", status: "failure" });
+    addDispatchRun("lint-naming", now - HOUR, {
+      stage: "pre-push",
+      status: "failure",
+    });
     addLog("rule.enabled", "enabled lint-dup", now - 2 * HOUR);
     const feed = activityFeed(undefined, audit, { last: "24h" });
     expect(feed.map((e) => [e.source, e.key])).toEqual([
       ["hook", "lint:naming"],
       ["log", "rule.enabled"],
     ]);
-    expect(feed[0]).toMatchObject({ status: "failure", detail: "pre-push lint-naming" });
+    expect(feed[0]).toMatchObject({
+      status: "failure",
+      detail: "pre-push lint-naming",
+    });
   });
 
   it("filters dispatch runs by the selected key like profiler runs", () => {
     const now = Date.now();
     addDispatchRun("lint-naming", now - HOUR);
     addDispatchRun("lint-dup", now - HOUR);
-    const feed = activityFeed(undefined, audit, { last: "24h", rules: "lint:naming" });
+    const feed = activityFeed(undefined, audit, {
+      last: "24h",
+      rules: "lint:naming",
+    });
     expect(feed.map((e) => e.key)).toEqual(["lint:naming"]);
   });
 });
@@ -254,11 +282,16 @@ describe("listLogs", () => {
     addLog("a", "old", now - 5 * HOUR);
     addLog("b", "mid", now - 2 * HOUR);
     addLog("c", "new", now - HOUR);
-    expect(listLogs(audit).map((l) => l.message)).toEqual(["new", "mid", "old"]);
-    expect(listLogs(audit, { sinceMs: now - 3 * HOUR }).map((l) => l.message)).toEqual([
+    expect(listLogs(audit).map((l) => l.message)).toEqual([
       "new",
       "mid",
+      "old",
     ]);
-    expect(listLogs(audit, { limit: 1 }).map((l) => l.message)).toEqual(["new"]);
+    expect(
+      listLogs(audit, { sinceMs: now - 3 * HOUR }).map((l) => l.message),
+    ).toEqual(["new", "mid"]);
+    expect(listLogs(audit, { limit: 1 }).map((l) => l.message)).toEqual([
+      "new",
+    ]);
   });
 });

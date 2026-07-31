@@ -15,7 +15,13 @@ const SUMMARY_FILE = join("coverage", "coverage-summary.json");
 const METRICS = ["lines", "statements", "functions", "branches"];
 // v8 pct values carry two decimals; tolerate float noise below this.
 const EPSILON = 0.01;
-const CHECK_MODES = new Set(["--staged", "--push", "--all", "--files", "--warn"]);
+const CHECK_MODES = new Set([
+  "--staged",
+  "--push",
+  "--all",
+  "--files",
+  "--warn",
+]);
 
 function usage() {
   process.stderr.write(

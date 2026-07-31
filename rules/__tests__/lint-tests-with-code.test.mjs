@@ -83,29 +83,41 @@ describe("lint-tests-with-code / main", () => {
   });
 
   test("unknown mode prints usage and exits 2", async () => {
-    await expect(main(["node", "s", "--all"], { cwd: repo })).rejects.toThrow(/__exit__:2/);
+    await expect(main(["node", "s", "--all"], { cwd: repo })).rejects.toThrow(
+      /__exit__:2/,
+    );
     expect(io.text(io.stderrSpy)).toMatch(/Usage:/);
   });
 
   test("new source file with no test is blocked (exit 1)", async () => {
     await stage(repo, "src/foo.ts");
-    await expect(main(["node", "s", "--staged"], { cwd: repo })).rejects.toThrow(/__exit__:1/);
+    await expect(
+      main(["node", "s", "--staged"], { cwd: repo }),
+    ).rejects.toThrow(/__exit__:1/);
     expect(io.text(io.stderrSpy)).toMatch(/src\/foo\.ts: new file has no test/);
   });
 
   test("source change with a matching staged test passes", async () => {
     await stage(repo, "src/foo.ts");
-    await stage(repo, "src/foo.test.ts", "import { expect, test } from 'vitest';\n");
+    await stage(
+      repo,
+      "src/foo.test.ts",
+      "import { expect, test } from 'vitest';\n",
+    );
     await main(["node", "s", "--staged"], { cwd: repo });
     expect(io.exitSpy).not.toHaveBeenCalled();
-    expect(io.text(io.stdoutSpy)).toMatch(/every changed source file moves with a test/);
+    expect(io.text(io.stdoutSpy)).toMatch(
+      /every changed source file moves with a test/,
+    );
   });
 
   test("modifying committed code without touching its test is blocked", async () => {
     await stage(repo, "src/foo.ts");
     await commitAllIn(repo, "seed foo (no test)");
     await stage(repo, "src/foo.ts", "export const x = 2;\n");
-    await expect(main(["node", "s", "--staged"], { cwd: repo })).rejects.toThrow(/__exit__:1/);
+    await expect(
+      main(["node", "s", "--staged"], { cwd: repo }),
+    ).rejects.toThrow(/__exit__:1/);
     expect(io.text(io.stderrSpy)).toMatch(/changed without touching its test/);
   });
 

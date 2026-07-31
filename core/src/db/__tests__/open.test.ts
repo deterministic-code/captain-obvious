@@ -35,7 +35,9 @@ describe("resolveDbPath", () => {
   it("resolves to the repo's local mode dir when nothing is set", () => {
     delete process.env.CAPTAIN_OBVIOUS_DB;
     // vitest's cwd is the repo root, which owns a captain-obvious.config.json.
-    expect(resolveDbPath()).toMatch(/\.captain-obvious[/\\]captain-obvious\.db$/);
+    expect(resolveDbPath()).toMatch(
+      /\.captain-obvious[/\\]captain-obvious\.db$/,
+    );
   });
 
   it("falls back to the package-local default outside any repo", () => {

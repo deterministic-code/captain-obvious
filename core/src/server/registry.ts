@@ -522,7 +522,11 @@ export function createProject(db: Db, body: ProjectPatch): ProjectView {
 }
 
 /** PATCH /api/projects/:id — edit name/description/paths. */
-export function updateProject(db: Db, id: number, body: ProjectPatch): ProjectView {
+export function updateProject(
+  db: Db,
+  id: number,
+  body: ProjectPatch,
+): ProjectView {
   return toProjectView(configureProject(db, id, body));
 }
 
@@ -540,7 +544,11 @@ export function listProjectRules(db: Db, projectId: number): RuleView[] {
          JOIN rules r ON r.id = pr.rule_id
         WHERE pr.project_id = ?`,
     )
-    .all(projectId) as { slug: string; enabled: number; configJson: string | null }[]) {
+    .all(projectId) as {
+    slug: string;
+    enabled: number;
+    configJson: string | null;
+  }[]) {
     enabledBySlug.set(row.slug, row.enabled);
     configBySlug.set(row.slug, row.configJson);
   }
@@ -567,7 +575,11 @@ export function listProjectRules(db: Db, projectId: number): RuleView[] {
     delayMs: number | null;
   }[]) {
     const list = actionsBySlug.get(row.slug) ?? [];
-    list.push({ environment: row.environment, type: row.type, delayMs: row.delayMs });
+    list.push({
+      environment: row.environment,
+      type: row.type,
+      delayMs: row.delayMs,
+    });
     actionsBySlug.set(row.slug, list);
   }
 
@@ -608,7 +620,10 @@ export function listProjectRules(db: Db, projectId: number): RuleView[] {
       envActions: projectActions
         ? projectActions
             .filter((a) => a.environment !== null)
-            .map((a) => ({ environment: a.environment as string, type: a.type }))
+            .map((a) => ({
+              environment: a.environment as string,
+              type: a.type,
+            }))
         : rule.envActions,
     };
   });
@@ -659,5 +674,8 @@ export function addActionType(
 ): { slug: string; name: string } {
   const slug = (body.slug ?? "").trim();
   if (!slug) throw new Error("slug is required");
-  return configureActionType(db, slug, { add: body.add ?? true, name: body.name });
+  return configureActionType(db, slug, {
+    add: body.add ?? true,
+    name: body.name,
+  });
 }

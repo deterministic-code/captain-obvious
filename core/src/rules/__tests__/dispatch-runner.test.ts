@@ -16,13 +16,23 @@ import { RULES } from "../index.js";
 
 const spawnMock = vi.mocked(spawn);
 
-const pkgRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..");
+const pkgRoot = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "..",
+  "..",
+);
 
 /** The hook runs the dispatcher recorded into the temp audit DB, newest-first. */
 function recordedRuns(): { slug: string; stage: string; status: string }[] {
   const db = openAuditDb(process.env.CAPTAIN_OBVIOUS_AUDIT_DB as string);
   try {
-    return listHookRuns(db).map(({ slug, stage, status }) => ({ slug, stage, status }));
+    return listHookRuns(db).map(({ slug, stage, status }) => ({
+      slug,
+      stage,
+      status,
+    }));
   } finally {
     db.close();
   }
@@ -196,9 +206,15 @@ function childWithStdout(data: string, code: number): EventEmitter {
 /** Bind `slug`'s default (env-null) action to `actionSlug` in the registry DB. */
 function bindDefault(slug: string, actionSlug: string): void {
   const db = openDb(dbPath);
-  const rid = (db.prepare("SELECT id FROM rules WHERE slug = ?").get(slug) as { id: number }).id;
+  const rid = (
+    db.prepare("SELECT id FROM rules WHERE slug = ?").get(slug) as {
+      id: number;
+    }
+  ).id;
   const aid = (
-    db.prepare("SELECT id FROM action_types WHERE slug = ?").get(actionSlug) as { id: number }
+    db
+      .prepare("SELECT id FROM action_types WHERE slug = ?")
+      .get(actionSlug) as { id: number }
   ).id;
   db.prepare(
     "INSERT INTO rule_actions (rule_id, environment_id, action_type_id) VALUES (?, NULL, ?)",
@@ -209,7 +225,11 @@ function bindDefault(slug: string, actionSlug: string): void {
 /** Swap a rule's `script` fix from a scriptPath to a shell scriptBody. */
 function useShellFix(slug: string, body: string): void {
   const db = openDb(dbPath);
-  const rid = (db.prepare("SELECT id FROM rules WHERE slug = ?").get(slug) as { id: number }).id;
+  const rid = (
+    db.prepare("SELECT id FROM rules WHERE slug = ?").get(slug) as {
+      id: number;
+    }
+  ).id;
   db.prepare(
     "UPDATE fixes SET script_path = NULL, script_body = ? WHERE rule_id = ? AND kind = 'script'",
   ).run(body, rid);
@@ -219,8 +239,15 @@ function useShellFix(slug: string, body: string): void {
 /** Also run `slug` at `stage` (lint-prettier ships pre-commit only). */
 function addStage(slug: string, stage: string): void {
   const db = openDb(dbPath);
-  const rid = (db.prepare("SELECT id FROM rules WHERE slug = ?").get(slug) as { id: number }).id;
-  db.prepare("INSERT INTO rule_stages (rule_id, stage) VALUES (?, ?)").run(rid, stage);
+  const rid = (
+    db.prepare("SELECT id FROM rules WHERE slug = ?").get(slug) as {
+      id: number;
+    }
+  ).id;
+  db.prepare("INSERT INTO rule_stages (rule_id, stage) VALUES (?, ?)").run(
+    rid,
+    stage,
+  );
   db.close();
 }
 
@@ -249,20 +276,29 @@ function mockFixRun({
     if (cmd === "git" && args[0] === "add") {
       return fakeChild((c) => c.emit("exit", addCode, null));
     }
-    if (args.includes("--fix")) return fakeChild((c) => c.emit("exit", fixCode, null));
+    if (args.includes("--fix"))
+      return fakeChild((c) => c.emit("exit", fixCode, null));
     return fakeChild((c) => c.emit("exit", checkCode, null));
   }) as never);
 }
 
 /** [command, args] for every spawn, so tests match without pinning absolute paths. */
 function spawnCalls(): [string, string[]][] {
-  return spawnMock.mock.calls.map(([cmd, args]) => [cmd as string, args as string[]]);
+  return spawnMock.mock.calls.map(([cmd, args]) => [
+    cmd as string,
+    args as string[],
+  ]);
 }
 const fixRun = (calls: [string, string[]][]) =>
-  calls.find(([cmd, args]) => cmd === process.execPath && args.includes("--fix"));
+  calls.find(
+    ([cmd, args]) => cmd === process.execPath && args.includes("--fix"),
+  );
 const checkRun = (calls: [string, string[]][]) =>
   calls.find(
-    ([cmd, args]) => cmd === process.execPath && !args.includes("--fix") && args.includes("--staged"),
+    ([cmd, args]) =>
+      cmd === process.execPath &&
+      !args.includes("--fix") &&
+      args.includes("--staged"),
   );
 const gitAdd = (calls: [string, string[]][]) =>
   calls.find(([cmd, args]) => cmd === "git" && args[0] === "add");
@@ -310,7 +346,9 @@ describe("runDispatch fix actions", () => {
 
   it("skips the fix at pre-push and applies the gate to the check", async () => {
     const db = openDb(dbPath);
-    db.prepare("UPDATE rules SET enabled = 0 WHERE slug != ?").run("lint-prettier");
+    db.prepare("UPDATE rules SET enabled = 0 WHERE slug != ?").run(
+      "lint-prettier",
+    );
     db.close();
     addStage("lint-prettier", "pre-push");
     bindDefault("lint-prettier", "fix_and_halt");
@@ -320,7 +358,9 @@ describe("runDispatch fix actions", () => {
     const calls = spawnCalls();
     expect(fixRun(calls)).toBeUndefined();
     expect(gitAdd(calls)).toBeUndefined();
-    expect(calls.find(([cmd, args]) => cmd === "git" && args[0] === "diff")).toBeUndefined();
+    expect(
+      calls.find(([cmd, args]) => cmd === "git" && args[0] === "diff"),
+    ).toBeUndefined();
   });
 
   it("runs a shell scriptBody fix over the staged files", async () => {
@@ -351,6 +391,8 @@ describe("runDispatch fix actions", () => {
     bindDefault("lint-prettier", "fix_and_halt");
     mockFixRun({ diffFails: true });
 
-    await expect(runDispatch(["pre-commit"])).rejects.toThrow(/git diff exited 1/);
+    await expect(runDispatch(["pre-commit"])).rejects.toThrow(
+      /git diff exited 1/,
+    );
   });
 });

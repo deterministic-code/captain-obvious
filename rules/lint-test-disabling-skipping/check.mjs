@@ -319,7 +319,6 @@ export async function lintFile(path, cwd) {
   return findViolations(src, tier).map((v) => ({ ...v, path }));
 }
 
-
 function isInScope(path) {
   const normalized = path.replace(/\\/g, "/");
   return TEST_SUFFIX_RE.test(normalized) || E2E_HELPER_RE.test(normalized);

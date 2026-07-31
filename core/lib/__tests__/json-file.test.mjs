@@ -1,10 +1,18 @@
-import { mkdtemp, rm, writeFile, chmod, stat, readFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  rm,
+  writeFile,
+  chmod,
+  stat,
+  readFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { readJson, writeJson } from "../json-file.mjs";
 
-const SCRATCH = "/private/tmp/claude-501/-Users-ryan-Projects-captain-obvious/21d816db-ca11-437f-a0f2-ca45be7dd636/scratchpad";
+const SCRATCH =
+  "/private/tmp/claude-501/-Users-ryan-Projects-captain-obvious/21d816db-ca11-437f-a0f2-ca45be7dd636/scratchpad";
 
 describe("json-file", () => {
   let dir;

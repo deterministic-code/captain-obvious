@@ -63,7 +63,9 @@ describe("main / runner", () => {
   const oversized = () => "x\n".repeat(MAX_FILE_LINES + 1);
 
   test("unknown mode prints usage and exits 2", async () => {
-    await expect(main(["node", "s.mjs", "--bogus"])).rejects.toThrow(/__exit__:2/);
+    await expect(main(["node", "s.mjs", "--bogus"])).rejects.toThrow(
+      /__exit__:2/,
+    );
     expect(io.text(io.stderrSpy)).toMatch(/Usage:/);
   });
 
@@ -82,7 +84,9 @@ describe("main / runner", () => {
     const p = join(repo, "big.ts");
     await writeFile(p, oversized(), "utf8");
     process.chdir(repo);
-    await expect(main(["node", "s.mjs", "--files", p])).rejects.toThrow(/__exit__:1/);
+    await expect(main(["node", "s.mjs", "--files", p])).rejects.toThrow(
+      /__exit__:1/,
+    );
     expect(io.text(io.stderrSpy)).toMatch(/max-file-lines/);
     await cleanupTmp(repo);
   });
@@ -113,7 +117,9 @@ describe("main / runner", () => {
     await writeFile(join(repo, "big.ts"), oversized(), "utf8");
     await commitAllIn(repo, "seed");
     process.chdir(repo);
-    await expect(main(["node", "s.mjs", "--all"])).rejects.toThrow(/__exit__:1/);
+    await expect(main(["node", "s.mjs", "--all"])).rejects.toThrow(
+      /__exit__:1/,
+    );
     expect(io.text(io.stderrSpy)).toMatch(/max-file-lines/);
     await cleanupTmp(repo);
   });

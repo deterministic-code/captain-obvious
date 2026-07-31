@@ -25,7 +25,8 @@ vi.mock("node:child_process", () => ({
   },
 }));
 
-const { knipIssuesToViolations, main } = await import("../lint-dead-code/check.mjs");
+const { knipIssuesToViolations, main } =
+  await import("../lint-dead-code/check.mjs");
 
 function knipJson(report) {
   knipResponder = () => ({ stdout: JSON.stringify(report) });
@@ -85,9 +86,7 @@ describe("lint-dead-code / knipIssuesToViolations", () => {
   });
 
   test("an export missing line/col defaults both to 1", () => {
-    const issues = [
-      { file: "scripts/bar.mjs", exports: [{ name: "noPos" }] },
-    ];
+    const issues = [{ file: "scripts/bar.mjs", exports: [{ name: "noPos" }] }];
     expect(knipIssuesToViolations(issues)[0]).toMatchObject({
       path: "scripts/bar.mjs",
       line: 1,
@@ -168,7 +167,9 @@ describe("lint-dead-code / main", () => {
 
   test("--all with dead code prints findings (blocking, no suffix) and sets exitCode 1", async () => {
     knipJson({
-      issues: [{ file: "src/a.ts", exports: [{ name: "unusedFn", line: 3, col: 2 }] }],
+      issues: [
+        { file: "src/a.ts", exports: [{ name: "unusedFn", line: 3, col: 2 }] },
+      ],
     });
     await main(["node", "s.mjs", "--all"]);
     const out = stdoutText();
@@ -180,7 +181,9 @@ describe("lint-dead-code / main", () => {
 
   test("--all with CO_JSON emits JSON and leaves exitCode unset", async () => {
     knipJson({
-      issues: [{ file: "src/a.ts", exports: [{ name: "unusedFn", line: 3, col: 2 }] }],
+      issues: [
+        { file: "src/a.ts", exports: [{ name: "unusedFn", line: 3, col: 2 }] },
+      ],
     });
     process.env.CO_JSON = "1";
     try {
@@ -203,7 +206,9 @@ describe("lint-dead-code / main", () => {
 
   test("--push with dead code blocks like --all (no report-only suffix) and sets exitCode 1", async () => {
     knipJson({
-      issues: [{ file: "src/a.ts", exports: [{ name: "unusedFn", line: 3, col: 2 }] }],
+      issues: [
+        { file: "src/a.ts", exports: [{ name: "unusedFn", line: 3, col: 2 }] },
+      ],
     });
     await main(["node", "s.mjs", "--push"]);
     const out = stdoutText();
@@ -229,12 +234,19 @@ describe("lint-dead-code / main", () => {
   test("--files with a matching violation prints report-only findings", async () => {
     const abs = `${process.cwd()}/src/b.ts`;
     knipJson({
-      issues: [{ file: "src/b.ts", exports: [{ name: "deadExport", line: 9, col: 1 }] }],
+      issues: [
+        {
+          file: "src/b.ts",
+          exports: [{ name: "deadExport", line: 9, col: 1 }],
+        },
+      ],
     });
     await main(["node", "s.mjs", "--files", abs]);
     const out = stdoutText();
     expect(out).toMatch(/unused export `deadExport`/);
-    expect(out).toMatch(/dead-code finding\(s\) in the given files \(report-only\)/);
+    expect(out).toMatch(
+      /dead-code finding\(s\) in the given files \(report-only\)/,
+    );
     expect(exitSpy).not.toHaveBeenCalled();
   });
 
@@ -246,7 +258,9 @@ describe("lint-dead-code / main", () => {
   test("--files whose targets match no violations prints the clean given-files line", async () => {
     const abs = `${process.cwd()}/src/c.ts`;
     knipJson({
-      issues: [{ file: "src/other.ts", exports: [{ name: "x", line: 1, col: 1 }] }],
+      issues: [
+        { file: "src/other.ts", exports: [{ name: "x", line: 1, col: 1 }] },
+      ],
     });
     await main(["node", "s.mjs", "--files", abs]);
     expect(stdoutText()).toMatch(/no dead code found in the given files/);
@@ -256,7 +270,12 @@ describe("lint-dead-code / main", () => {
   test("--files with CO_JSON emits one JSON line of matching violations", async () => {
     const abs = `${process.cwd()}/src/b.ts`;
     knipJson({
-      issues: [{ file: "src/b.ts", exports: [{ name: "deadExport", line: 9, col: 1 }] }],
+      issues: [
+        {
+          file: "src/b.ts",
+          exports: [{ name: "deadExport", line: 9, col: 1 }],
+        },
+      ],
     });
     process.env.CO_JSON = "1";
     try {

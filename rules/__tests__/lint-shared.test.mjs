@@ -173,7 +173,13 @@ describe("stripStringsAndComments", () => {
 describe("formatViolation", () => {
   test("renders path:line:col, kind, and an indented detail line", () => {
     expect(
-      formatViolation({ path: "a.ts", line: 3, col: 7, kind: "dup", detail: "x" }),
+      formatViolation({
+        path: "a.ts",
+        line: 3,
+        col: 7,
+        kind: "dup",
+        detail: "x",
+      }),
     ).toBe("a.ts:3:7  dup\n    x");
   });
 });
@@ -225,7 +231,9 @@ describe("jsonMode / emitJson", () => {
       return true;
     });
     emitJson([VIOLATION]);
-    expect(out.join("")).toBe(JSON.stringify({ violations: [VIOLATION] }) + "\n");
+    expect(out.join("")).toBe(
+      JSON.stringify({ violations: [VIOLATION] }) + "\n",
+    );
   });
 
   test("emitHookReport in JSON mode emits JSON and never exits", () => {
@@ -238,7 +246,11 @@ describe("jsonMode / emitJson", () => {
     const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
       throw new Error("exit");
     });
-    emitHookReport([VIOLATION], { mode: "--all", okLine: "OK", summaryLine: "S" });
+    emitHookReport([VIOLATION], {
+      mode: "--all",
+      okLine: "OK",
+      summaryLine: "S",
+    });
     expect(exitSpy).not.toHaveBeenCalled();
     expect(JSON.parse(out.join(""))).toEqual({ violations: [VIOLATION] });
   });
@@ -248,16 +260,17 @@ describe("selectHookFiles", () => {
   afterEach(() => vi.restoreAllMocks());
 
   test("--files returns the trailing path args", async () => {
-    expect(await selectHookFiles("--files", ["--files", "a.ts", "b.ts"], () => {})).toEqual([
-      "a.ts",
-      "b.ts",
-    ]);
+    expect(
+      await selectHookFiles("--files", ["--files", "a.ts", "b.ts"], () => {}),
+    ).toEqual(["a.ts", "b.ts"]);
   });
 
   test("--staged / --all delegate to the git listing helpers", async () => {
     const root = await mkdtemp(join(tmpdir(), "shared-sel-"));
     await execFileAsync("git", ["init", "-q"], { cwd: root });
-    await execFileAsync("git", ["config", "user.email", "t@t.t"], { cwd: root });
+    await execFileAsync("git", ["config", "user.email", "t@t.t"], {
+      cwd: root,
+    });
     await execFileAsync("git", ["config", "user.name", "t"], { cwd: root });
     await writeFile(join(root, "a.ts"), "a", "utf8");
     await execFileAsync("git", ["add", "a.ts"], { cwd: root });
@@ -318,7 +331,9 @@ describe("readSourceOrNull / lintFileWith", () => {
     const found = await lintFileWith("a.ts", root, (src) => [
       { line: 1, col: 1, kind: "k", detail: src },
     ]);
-    expect(found).toEqual([{ line: 1, col: 1, kind: "k", detail: "src", path: "a.ts" }]);
+    expect(found).toEqual([
+      { line: 1, col: 1, kind: "k", detail: "src", path: "a.ts" },
+    ]);
   });
 
   test("lintFileWith on a vanished file returns no violations", async () => {
@@ -343,7 +358,9 @@ describe("git-backed helpers against a real repo", () => {
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), "shared-git-"));
     await execFileAsync("git", ["init", "-q"], { cwd: root });
-    await execFileAsync("git", ["config", "user.email", "t@t.t"], { cwd: root });
+    await execFileAsync("git", ["config", "user.email", "t@t.t"], {
+      cwd: root,
+    });
     await execFileAsync("git", ["config", "user.name", "t"], { cwd: root });
     await mkdir(join(root, "src"), { recursive: true });
     await writeFile(join(root, "src/a.ts"), "a", "utf8");

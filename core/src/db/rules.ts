@@ -23,8 +23,16 @@ import type {
  * runs in a transaction, so a bad reference leaves no partial rows.
  */
 export function addRule(db: Db, opts: AddRuleOpts): RuleRow {
-  const { slug, name, category, categories, description, languages, config, stages } =
-    opts;
+  const {
+    slug,
+    name,
+    category,
+    categories,
+    description,
+    languages,
+    config,
+    stages,
+  } = opts;
   if (!slug || !name) throw new Error("add-rule requires --slug and --name");
   const configJson = normalizeConfig(config);
 
@@ -38,10 +46,16 @@ export function addRule(db: Db, opts: AddRuleOpts): RuleRow {
         .prepare(
           "INSERT INTO rules (slug, name, category, description, config_json) VALUES (?, ?, ?, ?, ?)",
         )
-        .run(slug, name, category ?? null, description ?? null, configJson)
-        .lastInsertRowid;
+        .run(
+          slug,
+          name,
+          category ?? null,
+          description ?? null,
+          configJson,
+        ).lastInsertRowid;
     } catch (err) {
-      if (isUniqueViolation(err)) throw new Error(`rule already exists: ${slug}`);
+      if (isUniqueViolation(err))
+        throw new Error(`rule already exists: ${slug}`);
       throw err;
     }
     const linkLang = db.prepare(
@@ -50,7 +64,9 @@ export function addRule(db: Db, opts: AddRuleOpts): RuleRow {
     for (const id of languageIds) linkLang.run(ruleId, id);
     linkCategories(db, ruleId, categorySet(category, categories));
     linkStages(db, ruleId, stageSlugs);
-    return db.prepare("SELECT * FROM rules WHERE id = ?").get(ruleId) as RuleRow;
+    return db
+      .prepare("SELECT * FROM rules WHERE id = ?")
+      .get(ruleId) as RuleRow;
   });
 
   const row = insert();
@@ -128,7 +144,9 @@ export function configureRule(
   const rule = requireRule(db, slug);
   const configJson =
     opts.setConfig !== undefined ? normalizeConfig(opts.setConfig) : undefined;
-  const addLangIds = (opts.addLanguages ?? []).map((s) => requireLanguageId(db, s));
+  const addLangIds = (opts.addLanguages ?? []).map((s) =>
+    requireLanguageId(db, s),
+  );
   const removeLangIds = (opts.removeLanguages ?? []).map((s) =>
     requireLanguageId(db, s),
   );
@@ -185,7 +203,9 @@ export function configureRule(
     if (binding) setRuleAction(db, rule.id, binding);
     if (opts.removeAction) removeRuleAction(db, rule.id, opts.removeAction);
 
-    return db.prepare("SELECT * FROM rules WHERE id = ?").get(rule.id) as RuleRow;
+    return db
+      .prepare("SELECT * FROM rules WHERE id = ?")
+      .get(rule.id) as RuleRow;
   });
 
   const row = apply();
@@ -199,7 +219,11 @@ export function configureRule(
  * always changes the order even when rules currently share a sort_index (e.g. the
  * seeded default). A move off either end is a no-op.
  */
-export function reorderRule(db: Db, slug: string, direction: "up" | "down"): RuleRow {
+export function reorderRule(
+  db: Db,
+  slug: string,
+  direction: "up" | "down",
+): RuleRow {
   const rule = requireRule(db, slug);
   const move = db.transaction((): RuleRow => {
     const ordered = db
@@ -209,10 +233,14 @@ export function reorderRule(db: Db, slug: string, direction: "up" | "down"): Rul
     const j = direction === "up" ? i - 1 : i + 1;
     if (j >= 0 && j < ordered.length) {
       [ordered[i], ordered[j]] = [ordered[j], ordered[i]];
-      const renumber = db.prepare("UPDATE rules SET sort_index = ? WHERE id = ?");
+      const renumber = db.prepare(
+        "UPDATE rules SET sort_index = ? WHERE id = ?",
+      );
       ordered.forEach((r, idx) => renumber.run(idx, r.id));
     }
-    return db.prepare("SELECT * FROM rules WHERE id = ?").get(rule.id) as RuleRow;
+    return db
+      .prepare("SELECT * FROM rules WHERE id = ?")
+      .get(rule.id) as RuleRow;
   });
   const row = move();
   logEvent("rule.configured", `moved rule ${slug} ${direction}`);
@@ -226,12 +254,20 @@ function auditConfigureRule(
   configChanged: boolean,
 ): void {
   if (opts.enabled === true) logEvent("rule.enabled", `enabled rule ${slug}`);
-  if (opts.enabled === false) logEvent("rule.disabled", `disabled rule ${slug}`);
-  if (configChanged) logEvent("rule.configured", `updated config for rule ${slug}`);
-  if ((opts.addLanguages?.length ?? 0) + (opts.removeLanguages?.length ?? 0) > 0) {
+  if (opts.enabled === false)
+    logEvent("rule.disabled", `disabled rule ${slug}`);
+  if (configChanged)
+    logEvent("rule.configured", `updated config for rule ${slug}`);
+  if (
+    (opts.addLanguages?.length ?? 0) + (opts.removeLanguages?.length ?? 0) >
+    0
+  ) {
     logEvent("rule.configured", `updated languages for rule ${slug}`);
   }
-  if ((opts.addCategories?.length ?? 0) + (opts.removeCategories?.length ?? 0) > 0) {
+  if (
+    (opts.addCategories?.length ?? 0) + (opts.removeCategories?.length ?? 0) >
+    0
+  ) {
     logEvent("rule.configured", `updated categories for rule ${slug}`);
   }
   if (opts.setStages !== undefined) {
@@ -242,7 +278,10 @@ function auditConfigureRule(
   }
   if (opts.setAction) {
     const env = opts.setAction.environment ?? "all environments";
-    logEvent("action.set", `set ${opts.setAction.type} on rule ${slug} for ${env}`);
+    logEvent(
+      "action.set",
+      `set ${opts.setAction.type} on rule ${slug} for ${env}`,
+    );
   }
   if (opts.removeAction) {
     logEvent(
@@ -260,7 +299,9 @@ export interface ResolvedBinding {
 
 export function resolveBinding(db: Db, b: ActionBinding): ResolvedBinding {
   return {
-    environmentId: b.environment ? requireEnvironmentId(db, b.environment) : null,
+    environmentId: b.environment
+      ? requireEnvironmentId(db, b.environment)
+      : null,
     actionTypeId: requireActionTypeId(db, b.type),
     delayMs: b.delayMs,
   };

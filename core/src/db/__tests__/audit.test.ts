@@ -94,9 +94,7 @@ describe("audit logging", () => {
       .prepare("DELETE FROM logs WHERE created < datetime('now', ?)")
       .run("-30 days");
     expect(info.changes).toBe(1);
-    expect(logs()).toEqual([
-      { log_type: "rule.disabled", message: "fresh" },
-    ]);
+    expect(logs()).toEqual([{ log_type: "rule.disabled", message: "fresh" }]);
   });
 });
 
@@ -119,16 +117,41 @@ describe("hook runs", () => {
     });
     expect(listHookRuns(audit)).toEqual([
       { slug: "lint-dup", stage: "pre-push", status: "failure", started: base },
-      { slug: "lint-naming", stage: "pre-commit", status: "success", started: base - 1000 },
+      {
+        slug: "lint-naming",
+        stage: "pre-commit",
+        status: "success",
+        started: base - 1000,
+      },
     ]);
   });
 
   it("filters by sinceMs and caps by limit", () => {
     const base = Date.now();
-    recordHookRun(audit, { slug: "a", stage: "pre-commit", status: "success", startedMs: base - 5000, durationMs: 1 });
-    recordHookRun(audit, { slug: "b", stage: "pre-commit", status: "success", startedMs: base - 2000, durationMs: 1 });
-    recordHookRun(audit, { slug: "c", stage: "pre-commit", status: "success", startedMs: base, durationMs: 1 });
-    expect(listHookRuns(audit, { sinceMs: base - 3000 }).map((r) => r.slug)).toEqual(["c", "b"]);
+    recordHookRun(audit, {
+      slug: "a",
+      stage: "pre-commit",
+      status: "success",
+      startedMs: base - 5000,
+      durationMs: 1,
+    });
+    recordHookRun(audit, {
+      slug: "b",
+      stage: "pre-commit",
+      status: "success",
+      startedMs: base - 2000,
+      durationMs: 1,
+    });
+    recordHookRun(audit, {
+      slug: "c",
+      stage: "pre-commit",
+      status: "success",
+      startedMs: base,
+      durationMs: 1,
+    });
+    expect(
+      listHookRuns(audit, { sinceMs: base - 3000 }).map((r) => r.slug),
+    ).toEqual(["c", "b"]);
     expect(listHookRuns(audit, { limit: 1 }).map((r) => r.slug)).toEqual(["c"]);
   });
 });
@@ -164,7 +187,9 @@ describe("resolveAuditDbPath", () => {
 
   it("resolves to the repo's local mode dir when neither opts nor env is set", () => {
     delete process.env.CAPTAIN_OBVIOUS_AUDIT_DB;
-    expect(resolveAuditDbPath()).toContain(join(".captain-obvious", "audit-log.db"));
+    expect(resolveAuditDbPath()).toContain(
+      join(".captain-obvious", "audit-log.db"),
+    );
   });
 
   it("falls back to the package-local default outside any repo", () => {

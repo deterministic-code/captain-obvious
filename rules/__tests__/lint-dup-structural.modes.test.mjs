@@ -49,9 +49,7 @@ describe("lint-dup-structural / main dispatch (in-process)", () => {
     await writeFile(join(repo, "conv.mjs"), REGEX_TABLE);
     await gitIn(repo, ["add", "-A"]);
 
-    await expect(main(["node", "s", "--staged"])).rejects.toThrow(
-      /__exit__:1/,
-    );
+    await expect(main(["node", "s", "--staged"])).rejects.toThrow(/__exit__:1/);
     expect(io.text(io.stderrSpy)).toContain(
       "newly-introduced sibling-duplication",
     );
@@ -111,16 +109,18 @@ describe("lint-dup-structural / main dispatch (in-process)", () => {
     const lines = io.text(io.stdoutSpy).split("\n").filter(Boolean);
     expect(lines).toHaveLength(1);
     const violations = JSON.parse(lines[0]).violations;
-    expect(violations.some((v) => v.kind.startsWith("clone cluster"))).toBe(true);
+    expect(violations.some((v) => v.kind.startsWith("clone cluster"))).toBe(
+      true,
+    );
   });
 
   test("--files with a table in a listed file writes to stderr and exits 1", async () => {
     await writeFile(join(repo, "conv.mjs"), REGEX_TABLE);
     await commitAllIn(repo, "table");
 
-    await expect(
-      main(["node", "s", "--files", "conv.mjs"]),
-    ).rejects.toThrow(/__exit__:1/);
+    await expect(main(["node", "s", "--files", "conv.mjs"])).rejects.toThrow(
+      /__exit__:1/,
+    );
     expect(io.text(io.stderrSpy)).toContain("conv.mjs");
     expect(io.text(io.stderrSpy)).toContain("structural sibling duplication");
   });

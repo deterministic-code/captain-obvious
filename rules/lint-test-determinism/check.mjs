@@ -44,7 +44,8 @@ const MARKERS = [
   {
     id: "network-xhr",
     re: /\bnew\s+XMLHttpRequest\s*\(/g,
-    detail: "XMLHttpRequest performs real network I/O in a test. Stub the boundary.",
+    detail:
+      "XMLHttpRequest performs real network I/O in a test. Stub the boundary.",
   },
 ];
 
@@ -68,7 +69,9 @@ export function findViolations(src) {
       });
     }
   }
-  return out.sort((a, b) => (a.line === b.line ? a.col - b.col : a.line - b.line));
+  return out.sort((a, b) =>
+    a.line === b.line ? a.col - b.col : a.line - b.line,
+  );
 }
 
 function usage() {

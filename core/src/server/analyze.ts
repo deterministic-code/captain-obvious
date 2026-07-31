@@ -27,7 +27,10 @@ export interface AnalyzeResult {
   languages: LanguageTally[];
 }
 
-async function walk(dir: string, onFile: (path: string) => void): Promise<void> {
+async function walk(
+  dir: string,
+  onFile: (path: string) => void,
+): Promise<void> {
   const dirents = await readdir(dir, { withFileTypes: true });
   for (const d of dirents) {
     if (d.isDirectory()) {
@@ -84,5 +87,8 @@ export interface AnalyzeStatus {
 /** GET /api/analyze/status — whether this project has ever been analyzed (drives the panel banner). */
 export function analyzeStatus(): AnalyzeStatus {
   const event = latestEvent("project.analyzed");
-  return { analyzed: event !== undefined, lastAnalyzed: event?.created ?? null };
+  return {
+    analyzed: event !== undefined,
+    lastAnalyzed: event?.created ?? null,
+  };
 }

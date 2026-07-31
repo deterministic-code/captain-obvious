@@ -296,7 +296,11 @@ function report(meta, limit, mode, violations) {
 // the default project) so a panel edit to the threshold reaches the check. It
 // defaults to an empty resolver — direct callers (and tests) get the built-in
 // FN_LIMITS default; the check's `main` passes the DB-backed config bridge.
-export async function runMetricHook(metric, argv, resolveConfig = async () => ({})) {
+export async function runMetricHook(
+  metric,
+  argv,
+  resolveConfig = async () => ({}),
+) {
   const meta = METRIC_META[metric];
   const config = await resolveConfig(meta.script);
   const limit = config[meta.configKey] ?? FN_LIMITS[metric];

@@ -38,10 +38,14 @@ export function renderHook(stage, relGitHooks, passthrough) {
 }
 
 async function gitHooksDir(target) {
-  const { stdout } = await execFileAsync("git", ["rev-parse", "--git-path", "hooks"], {
-    cwd: target,
-    encoding: "utf8",
-  });
+  const { stdout } = await execFileAsync(
+    "git",
+    ["rev-parse", "--git-path", "hooks"],
+    {
+      cwd: target,
+      encoding: "utf8",
+    },
+  );
   // In a linked worktree `--git-path hooks` is absolute (the shared git dir), so
   // resolve (not join) — an absolute path must win instead of nesting under target.
   return resolve(target, stdout.trim());

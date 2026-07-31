@@ -5,12 +5,10 @@
 // coverage — the merge logic it forwards to lives in the core's src/rules/config.ts.
 
 export async function ruleConfig(slug) {
-  const { openDb, resolveDbPath } = await import(
-    "@deterministic-code/captain-obvious/runtime/db"
-  );
-  const { ruleConfigFromDb } = await import(
-    "@deterministic-code/captain-obvious/runtime/config"
-  );
+  const { openDb, resolveDbPath } =
+    await import("@deterministic-code/captain-obvious/runtime/db");
+  const { ruleConfigFromDb } =
+    await import("@deterministic-code/captain-obvious/runtime/config");
   const db = openDb(resolveDbPath());
   try {
     return ruleConfigFromDb(db, slug);

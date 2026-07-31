@@ -68,7 +68,12 @@ export const LANGUAGES = [
     extensions: ["ex", "exs"],
     isSupported: false,
   },
-  { slug: "shell", name: "Shell", extensions: ["sh", "bash"], isSupported: false },
+  {
+    slug: "shell",
+    name: "Shell",
+    extensions: ["sh", "bash"],
+    isSupported: false,
+  },
   { slug: "sql", name: "SQL", extensions: ["sql"], isSupported: false },
 ];
 

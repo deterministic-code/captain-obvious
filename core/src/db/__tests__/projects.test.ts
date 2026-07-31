@@ -82,7 +82,10 @@ function projectActions(
     delayMs: number | null;
   }[];
   return Object.fromEntries(
-    rows.map((r) => [r.environment ?? "default", { type: r.type, delayMs: r.delayMs }]),
+    rows.map((r) => [
+      r.environment ?? "default",
+      { type: r.type, delayMs: r.delayMs },
+    ]),
   );
 }
 
@@ -95,10 +98,17 @@ describe("addProject", () => {
       directories: ["/a/src"],
       protected: ["db/schema.sql", ".github/**"],
     });
-    expect(row).toMatchObject({ slug: "my-app", name: "My App", description: "the app" });
+    expect(row).toMatchObject({
+      slug: "my-app",
+      name: "My App",
+      description: "the app",
+    });
     expect(JSON.parse(row.files as string)).toEqual(["/a/x.ts"]);
     expect(JSON.parse(row.directories as string)).toEqual(["/a/src"]);
-    expect(JSON.parse(row.protected as string)).toEqual(["db/schema.sql", ".github/**"]);
+    expect(JSON.parse(row.protected as string)).toEqual([
+      "db/schema.sql",
+      ".github/**",
+    ]);
     expect(row.is_default).toBe(0);
   });
 
@@ -133,7 +143,9 @@ describe("addProject", () => {
 
   it("rethrows a non-unique DB error unchanged", () => {
     db.exec("DROP TABLE projects");
-    expect(() => addProject(db, { name: "X" })).toThrow(/no such table: projects/);
+    expect(() => addProject(db, { name: "X" })).toThrow(
+      /no such table: projects/,
+    );
   });
 });
 
@@ -165,7 +177,11 @@ describe("configureProject", () => {
       directories: ["/d"],
       protected: ["src/**"],
     });
-    expect(row).toMatchObject({ name: "New Name", slug: "new-name", description: "new" });
+    expect(row).toMatchObject({
+      name: "New Name",
+      slug: "new-name",
+      description: "new",
+    });
     expect(JSON.parse(row.files as string)).toEqual(["/f.ts"]);
     expect(JSON.parse(row.directories as string)).toEqual(["/d"]);
     expect(JSON.parse(row.protected as string)).toEqual(["src/**"]);
@@ -173,7 +189,11 @@ describe("configureProject", () => {
 
   it("clears paths when given empty arrays", () => {
     configureProject(db, id, { files: ["/f.ts"], protected: ["src/**"] });
-    const row = configureProject(db, id, { files: [], directories: [], protected: [] });
+    const row = configureProject(db, id, {
+      files: [],
+      directories: [],
+      protected: [],
+    });
     expect(row.files).toBeNull();
     expect(row.directories).toBeNull();
     expect(row.protected).toBeNull();
@@ -234,14 +254,18 @@ describe("setProjectRule", () => {
   });
 
   it("throws for an unknown language", () => {
-    expect(() => setProjectRule(db, id, "lint-r", { languages: ["klingon"] })).toThrow(
-      /unknown language/,
-    );
+    expect(() =>
+      setProjectRule(db, id, "lint-r", { languages: ["klingon"] }),
+    ).toThrow(/unknown language/);
   });
 
   it("sets and clears the project config override", () => {
-    setProjectRule(db, id, "lint-r", { config: JSON.stringify({ maxLines: 50 }) });
-    expect(JSON.parse(projectConfig(id, "lint-r") as string)).toEqual({ maxLines: 50 });
+    setProjectRule(db, id, "lint-r", {
+      config: JSON.stringify({ maxLines: 50 }),
+    });
+    expect(JSON.parse(projectConfig(id, "lint-r") as string)).toEqual({
+      maxLines: 50,
+    });
     setProjectRule(db, id, "lint-r", { config: null });
     expect(projectConfig(id, "lint-r")).toBeNull();
   });
@@ -261,7 +285,10 @@ describe("setProjectRule", () => {
     setProjectRule(db, id, "lint-r", {
       setAction: { type: "halt", environment: null, delayMs: null },
     });
-    expect(projectActions(id, "lint-r").default).toEqual({ type: "halt", delayMs: null });
+    expect(projectActions(id, "lint-r").default).toEqual({
+      type: "halt",
+      delayMs: null,
+    });
   });
 
   it("removes a single env binding, the default, or all bindings", () => {
@@ -293,9 +320,9 @@ describe("setProjectRule", () => {
         setAction: { type: "warn", environment: "ghost", delayMs: null },
       }),
     ).toThrow(/unknown environment/);
-    expect(() => setProjectRule(db, id, "lint-r", { removeAction: "ghost" })).toThrow(
-      /unknown environment/,
-    );
+    expect(() =>
+      setProjectRule(db, id, "lint-r", { removeAction: "ghost" }),
+    ).toThrow(/unknown environment/);
   });
 });
 
@@ -335,6 +362,9 @@ describe("getDefaultProjectProtected", () => {
   it("returns the default project's protected globs once configured", () => {
     const p = ensureDefaultProject(db, "/repo", "Repo");
     configureProject(db, p.id, { protected: ["db/schema.sql", ".github/**"] });
-    expect(getDefaultProjectProtected(db)).toEqual(["db/schema.sql", ".github/**"]);
+    expect(getDefaultProjectProtected(db)).toEqual([
+      "db/schema.sql",
+      ".github/**",
+    ]);
   });
 });

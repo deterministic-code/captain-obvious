@@ -13,11 +13,7 @@ import {
   SUPPORTED_EXTS,
   EXCLUDED_PATH_PARTS,
 } from "../lint-empty-catch/check.mjs";
-import {
-  cleanupTmp,
-  commitAllIn,
-  makeTempGitRepo,
-} from "./test-helpers.mjs";
+import { cleanupTmp, commitAllIn, makeTempGitRepo } from "./test-helpers.mjs";
 
 describe("findViolations", () => {
   test("empty src returns no violations", () => {

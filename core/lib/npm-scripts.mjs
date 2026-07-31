@@ -58,7 +58,10 @@ export async function installNpmScripts({ target, gitHooks, npmScripts }) {
   for (const key of pkg.captainObvious.managedScripts ?? []) {
     delete pkg.scripts[key];
   }
-  const generated = deriveScripts(gitHooks ?? {}, npmScripts?.extraScripts ?? {});
+  const generated = deriveScripts(
+    gitHooks ?? {},
+    npmScripts?.extraScripts ?? {},
+  );
   const managed = Object.keys(generated).sort();
   const next = { ...pkg.scripts };
   for (const key of managed) {
