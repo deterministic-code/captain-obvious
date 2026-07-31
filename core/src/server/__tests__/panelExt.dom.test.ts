@@ -111,7 +111,9 @@ function row(slug: string, name: string, category: string): string {
     '<tr class="row"><td><div class="font-medium">' + name + "</div>" +
     '<div class="font-mono">' + slug + "</div></td>" +
     "<td><span>" + category + "</span></td>" +
-    '<td>pre-commit</td><td class="text-center">on</td><td>action</td></tr>'
+    '<td>pre-commit</td><td class="text-center">on</td>' +
+    '<td class="native-action"><select class="rounded-md border border-slate-300 px-2 py-1 text-sm">' +
+    "<option>— none —</option></select></td></tr>"
   );
 }
 
@@ -296,7 +298,7 @@ describe("panelExt injected script", () => {
       t.textContent,
     );
     // Native: Rule, Category, Stage, Enabled, Action. The injected Action column
-    // (co-sev-th) is the per-row default-binding selector, distinct from the
+    // (co-binding-th) is the per-row default-binding selector, distinct from the
     // native Action column.
     expect(heads).toEqual([
       "Rule",
@@ -1322,7 +1324,7 @@ describe("panelExt injected script", () => {
     expect(modal.querySelector(".co-set-sub")!.textContent).toBe("Project: Repo");
     // Enabled prefilled.
     expect(modal.querySelector<HTMLInputElement>(".co-set-enabled .co-set-check")!.checked).toBe(true);
-    // Severity: default = halt, claude override = warn.
+    // Action: default = halt, claude override = warn.
     const selects = [...modal.querySelectorAll<HTMLSelectElement>(".co-set-select")];
     expect(selects[0].value).toBe("halt");
     const claudeRow = [...modal.querySelectorAll(".co-set-row")].find(
@@ -1358,13 +1360,13 @@ describe("panelExt injected script", () => {
     const tr = [...document.querySelectorAll("tbody tr")].find(
       (r) => r.querySelector(".font-mono")?.textContent === slug,
     )!;
-    return tr.querySelector<HTMLSelectElement>(".co-sev-td .co-sev-select")!;
+    return tr.querySelector<HTMLSelectElement>(".co-binding-td .co-binding-select")!;
   };
 
   it("shows an inline Action selector per row, prefilled from the default binding", async () => {
     await runInjected();
     // Every row gets the column; lint-a's default binding is halt.
-    expect([...document.querySelectorAll("tbody tr .co-sev-td .co-sev-select")]).toHaveLength(3);
+    expect([...document.querySelectorAll("tbody tr .co-binding-td .co-binding-select")]).toHaveLength(3);
     expect(sevSelectFor("lint-a").value).toBe("halt");
     // lint-a has no fix -> the fix actions are omitted; lint-b has one -> present.
     expect([...sevSelectFor("lint-a").options].map((o) => o.value)).not.toContain("fix");
@@ -1391,7 +1393,19 @@ describe("panelExt injected script", () => {
     });
   });
 
-  it("Settings Save PATCHes enabled, config, and materialised severity bindings", async () => {
+  it("hides the prebuilt Action column (header + per-row select) in favour of ours", async () => {
+    await runInjected();
+    const nativeHeads = [...document.querySelectorAll("thead th")].filter(
+      (t) => t.textContent!.trim() === "Action" && !t.classList.contains("co-binding-th"),
+    );
+    expect(nativeHeads).toHaveLength(1);
+    expect((nativeHeads[0] as HTMLElement).style.display).toBe("none");
+    for (const td of document.querySelectorAll("tbody tr td.native-action")) {
+      expect((td as HTMLElement).style.display).toBe("none");
+    }
+  });
+
+  it("Settings Save PATCHes enabled, config, and materialised action bindings", async () => {
     await runInjected();
     actBtn("lint-a", "settings").click();
     await flush();
@@ -1415,7 +1429,7 @@ describe("panelExt injected script", () => {
       removeAction: "all",
       config: { maxLines: 120, exclude: ["dist/**", "build/**"] },
     });
-    // Shown severity is re-materialised as project bindings (default halt + claude warn).
+    // Shown action is re-materialised as project bindings (default halt + claude warn).
     const setActions = patchCalls
       .map((c) => c.body.setAction as { type: string; environment?: string } | undefined)
       .filter(Boolean);

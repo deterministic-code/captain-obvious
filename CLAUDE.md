@@ -55,7 +55,7 @@ are workspace packages. Dependency DAG: **rule package → `rules/_kit` → `cor
 A **rule performs the CHECK** (detection); its **actions handle remediation/output**. A rule may have
 zero actions. Actions live in the `fixes` table (one rule → 0..N), `kind`: `script` (deterministic fix
 command), `inferred` (fix delegated to the model), `output` (report-only). This is **separate from
-`rule_actions`** — the per-environment severity bindings (`warn` / `halt` / `delay_halt`) the web panel
+`rule_actions`** — the per-environment action bindings (`warn` / `halt` / `delay_halt`) the web panel
 reads. Do not conflate the two. Seed actions via `RulePluginMeta.actions` (`undefined` = leave untouched
 on re-seed, `[]` = clear); CRUD in `src/db/fixes.ts`.
 

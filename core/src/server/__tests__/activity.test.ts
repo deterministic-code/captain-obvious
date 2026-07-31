@@ -219,7 +219,7 @@ describe("activityFeed", () => {
     const now = Date.now();
     // Inserted oldest-first, as real logging appends them (id order == time order).
     addLog("rule.disabled", "c", now - 3 * HOUR);
-    addLog("severity.set", "b", now - 2 * HOUR);
+    addLog("action.set", "b", now - 2 * HOUR);
     addLog("rule.enabled", "a", now - HOUR);
     const feed = activityFeed(undefined, audit, { last: "24h", limit: 2 });
     expect(feed).toHaveLength(2);

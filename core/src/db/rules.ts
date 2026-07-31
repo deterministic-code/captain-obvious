@@ -206,11 +206,11 @@ function auditConfigureRule(
   }
   if (opts.setAction) {
     const env = opts.setAction.environment ?? "all environments";
-    logEvent("severity.set", `set ${opts.setAction.type} on rule ${slug} for ${env}`);
+    logEvent("action.set", `set ${opts.setAction.type} on rule ${slug} for ${env}`);
   }
   if (opts.removeAction) {
     logEvent(
-      "severity.removed",
+      "action.removed",
       `removed action binding (${opts.removeAction}) on rule ${slug}`,
     );
   }

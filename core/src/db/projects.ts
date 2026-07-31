@@ -227,7 +227,7 @@ function removeProjectRuleAction(
 
 /**
  * Project-scoped equivalent of patchRule: set a rule's enabled flag, language
- * set, config override, and/or severity bindings for one project. Backfills
+ * set, config override, and/or action bindings for one project. Backfills
  * first so the project_rules row exists.
  */
 export function setProjectRule(

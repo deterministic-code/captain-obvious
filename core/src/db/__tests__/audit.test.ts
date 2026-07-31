@@ -58,7 +58,7 @@ describe("audit logging", () => {
     expect(logs().map((r) => r.log_type)).toEqual([
       "rule.enabled",
       "rule.configured",
-      "severity.set",
+      "action.set",
     ]);
   });
 
