@@ -57,29 +57,40 @@ describe("selectDispatch", () => {
     expect(slugsFor("pre-commit")).not.toContain("lint-naming");
   });
 
-  it("marks a rule advisory when it has a default warn binding", () => {
-    const before = selectDispatch(db, "pre-commit").find(
-      (d) => d.slug === "lint-naming",
-    );
-    expect(before?.advisory).toBe(false);
-
-    db.prepare(
-      "INSERT INTO rule_actions (rule_id, environment_id, action_type_id) VALUES (?, NULL, ?)",
-    ).run(ruleId("lint-naming"), actionTypeId("warn"));
-
-    const after = selectDispatch(db, "pre-commit").find(
-      (d) => d.slug === "lint-naming",
-    );
-    expect(after?.advisory).toBe(true);
-  });
-
-  it("treats a halt binding as blocking, not advisory", () => {
-    db.prepare(
-      "INSERT INTO rule_actions (rule_id, environment_id, action_type_id) VALUES (?, NULL, ?)",
-    ).run(ruleId("lint-naming"), actionTypeId("halt"));
+  it("defaults an unbound rule's action to halt, with no fix", () => {
     const entry = selectDispatch(db, "pre-commit").find(
       (d) => d.slug === "lint-naming",
     );
-    expect(entry?.advisory).toBe(false);
+    expect(entry?.action).toBe("halt");
+    expect(entry?.fix).toBeNull();
+  });
+
+  it("reports the rule's default binding as its action", () => {
+    db.prepare(
+      "INSERT INTO rule_actions (rule_id, environment_id, action_type_id) VALUES (?, NULL, ?)",
+    ).run(ruleId("lint-naming"), actionTypeId("warn"));
+    const entry = selectDispatch(db, "pre-commit").find(
+      (d) => d.slug === "lint-naming",
+    );
+    expect(entry?.action).toBe("warn");
+    expect(entry?.fix).toBeNull();
+  });
+
+  it("attaches the script fix for a rule bound to a fix action", () => {
+    db.prepare(
+      "INSERT INTO rule_actions (rule_id, environment_id, action_type_id) VALUES (?, NULL, ?)",
+    ).run(ruleId("lint-prettier"), actionTypeId("fix_and_halt"));
+    const entry = selectDispatch(db, "pre-commit").find(
+      (d) => d.slug === "lint-prettier",
+    );
+    expect(entry?.action).toBe("fix_and_halt");
+    expect(entry?.fix).toMatchObject({ kind: "script" });
+  });
+
+  it("throws when a fix-bound rule declares no script fix", () => {
+    db.prepare(
+      "INSERT INTO rule_actions (rule_id, environment_id, action_type_id) VALUES (?, NULL, ?)",
+    ).run(ruleId("lint-naming"), actionTypeId("fix"));
+    expect(() => selectDispatch(db, "pre-commit")).toThrow(/no script fix/);
   });
 });

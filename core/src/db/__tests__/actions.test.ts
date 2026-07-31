@@ -17,7 +17,14 @@ describe("configureActionType", () => {
     const rows = db
       .prepare("SELECT slug FROM action_types ORDER BY slug")
       .all() as { slug: string }[];
-    expect(rows.map((r) => r.slug)).toEqual(["delay_halt", "halt", "warn"]);
+    expect(rows.map((r) => r.slug)).toEqual([
+      "delay_halt",
+      "fix",
+      "fix_and_halt",
+      "fix_and_warn",
+      "halt",
+      "warn",
+    ]);
   });
 
   it("renames an existing type", () => {
