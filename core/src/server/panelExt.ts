@@ -37,7 +37,7 @@ export const PANEL_EXT = `(() => {
   // The single rule the reorder bar acts on (click a row to select). Separate
   // from selectedSlugs, which is the Run overlay's multi-select.
   let orderSelectedSlug = null;
-  // Drag-to-reorder: dragSlug is the rule whose grip is being dragged;
+  // Drag-to-reorder: dragSlug is the rule whose row is being dragged;
   // dropBeforeSlug is the slug the drop would land in front of (null = to the
   // end). Both reset on dragend.
   let dragSlug = null;
@@ -768,6 +768,9 @@ export const PANEL_EXT = `(() => {
     }
     for (const tr of table.querySelectorAll("tbody tr")) {
       const slug = rowSlug(tr);
+      // The whole row is a drag source for reordering; onDragStart gates which
+      // grabs actually start a drag.
+      if (slug && !tr.draggable) tr.draggable = true;
       let cell = tr.querySelector(".co-fix-td");
       if (!cell) {
         cell = document.createElement("td");
@@ -1066,13 +1069,22 @@ export const PANEL_EXT = `(() => {
     dropBeforeSlug = null;
   }
 
-  // The grip is the only draggable element, so a dragstart that isn't from one is
-  // some other drag (text, a link) — ignore it.
+  // The whole row is draggable (the grip is just the affordance), so a drag can
+  // start anywhere on it — except on its own interactive controls, where the
+  // grab belongs to that control, not a reorder.
   function onDragStart(e) {
-    const handle = e.target.closest && e.target.closest(".co-drag-handle");
-    if (!handle) return;
-    const tr = handle.closest("tbody tr");
-    const slug = tr ? rowSlug(tr) : null;
+    if (!e.target.closest) return;
+    const table = document.querySelector("table");
+    const tr = e.target.closest("tbody tr");
+    if (!tr || !table || !table.contains(tr)) return;
+    if (
+      !e.target.closest(".co-drag-handle") &&
+      e.target.closest("input,select,button,a,label,summary,details,.co-dd")
+    ) {
+      e.preventDefault();
+      return;
+    }
+    const slug = rowSlug(tr);
     if (!slug) return;
     dragSlug = slug;
     if (e.dataTransfer) {
@@ -1344,7 +1356,8 @@ export const PANEL_EXT = `(() => {
       ".co-act-btn:hover{background:#f1f5f9;color:#0f172a}" +
       // Row selection for the reorder bar: rows are clickable, the selected one
       // is tinted and marked with a left accent bar.
-      ".co-table-wrap table tbody tr{cursor:pointer}" +
+      ".co-table-wrap table tbody tr{cursor:grab}" +
+      ".co-table-wrap table tbody tr.co-dragging{cursor:grabbing}" +
       ".co-row-selected>td{background:#eff6ff!important;box-shadow:inset 3px 0 0 #3b82f6}" +
       // Reorder bar under the table.
       ".co-order-bar{display:flex;align-items:center;gap:10px;margin:10px 0 4px;padding:8px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px}" +

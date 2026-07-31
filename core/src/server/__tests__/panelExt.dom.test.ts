@@ -1520,11 +1520,42 @@ describe("panelExt injected script", () => {
   const fireDrag = (el: Element, type: string) =>
     el.dispatchEvent(new Event(type, { bubbles: true }));
 
-  it("gives each row a draggable grip in its actions cell", async () => {
+  const rowBody = (slug: string) =>
+    rowFor(slug).querySelector<HTMLElement>(".font-mono")!;
+
+  it("makes each row draggable with a grip affordance in its actions cell", async () => {
     await runInjected();
     const grips = document.querySelectorAll(".co-act-td .co-drag-handle");
     expect(grips).toHaveLength(3);
     expect(grips[0].getAttribute("draggable")).toBe("true");
+    // The whole row is the drag source, not just the grip.
+    expect(rowFor("lint-a").draggable).toBe(true);
+  });
+
+  it("dragging from the row body (not the grip) reorders", async () => {
+    await runInjected();
+    fireDrag(rowBody("lint-a"), "dragstart");
+    expect(rowFor("lint-a").classList.contains("co-dragging")).toBe(true);
+    fireDrag(rowFor("lint-c"), "dragover");
+    fireDrag(rowFor("lint-c"), "drop");
+    for (let i = 0; i < 3; i++) await flush();
+    expect(
+      patchCalls.some(
+        (c) => c.url === "/api/rules/lint-a" && c.body.moveBefore === "lint-c",
+      ),
+    ).toBe(true);
+    fireDrag(rowBody("lint-a"), "dragend");
+  });
+
+  it("a grab on a row's own control does not start a reorder drag", async () => {
+    await runInjected();
+    // Grabbing the enabled toggle is a control interaction, not a row drag.
+    fireDrag(enabledBox("lint-a"), "dragstart");
+    expect(rowFor("lint-a").classList.contains("co-dragging")).toBe(false);
+    fireDrag(rowFor("lint-c"), "dragover");
+    fireDrag(rowFor("lint-c"), "drop");
+    for (let i = 0; i < 3; i++) await flush();
+    expect(patchCalls.some((c) => "moveBefore" in c.body)).toBe(false);
   });
 
   it("dragging a grip onto another row PATCHes moveBefore and toasts", async () => {
