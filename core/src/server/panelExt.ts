@@ -18,6 +18,7 @@ export const PANEL_EXT = `(() => {
   let fixesBySlug = {};
   let langsBySlug = {};
   let langIndependentBySlug = {};
+  let langFixedBySlug = {};
   let catsBySlug = {};
   let stagesBySlug = {};
   let supportedLangs = [];
@@ -357,6 +358,12 @@ export const PANEL_EXT = `(() => {
       return;
     }
     const current = langsBySlug[slug] || [];
+    if (langFixedBySlug[slug]) {
+      cell.innerHTML = "";
+      cell.appendChild(fixedLangDropdown(langLabel(current)));
+      cell.setAttribute("data-langs", current.slice().sort().join(","));
+      return;
+    }
     const dd = checkboxDropdown({
       items: supportedLangs.map((l) => ({ value: l.slug, label: l.name })),
       selected: current,
@@ -3238,7 +3245,19 @@ export const PANEL_EXT = `(() => {
     card.appendChild(enRow);
 
     let readLanguages = null;
-    if (!langIndependentBySlug[slug]) {
+    if (langFixedBySlug[slug] && !langIndependentBySlug[slug]) {
+      const section = document.createElement("div");
+      section.className = "co-set-section";
+      const heading = document.createElement("div");
+      heading.className = "co-set-heading";
+      heading.textContent = "Languages";
+      section.appendChild(heading);
+      const fixed = document.createElement("div");
+      fixed.className = "co-set-lang-fixed";
+      fixed.textContent = langLabel(langsBySlug[slug] || []);
+      section.appendChild(fixed);
+      card.appendChild(section);
+    } else if (!langIndependentBySlug[slug]) {
       const section = document.createElement("div");
       section.className = "co-set-section";
       const heading = document.createElement("div");
@@ -3531,6 +3550,7 @@ export const PANEL_EXT = `(() => {
     const meta = await metaRes.json();
     fixesBySlug = {};
     langsBySlug = {};
+    langFixedBySlug = {};
     catsBySlug = {};
     stagesBySlug = {};
     enabledBySlug = {};
@@ -3540,6 +3560,7 @@ export const PANEL_EXT = `(() => {
       fixesBySlug[r.slug] = r.actions || [];
       langsBySlug[r.slug] = r.languages || [];
       langIndependentBySlug[r.slug] = !!r.languageIndependent;
+      langFixedBySlug[r.slug] = !!r.languagesFixed;
       catsBySlug[r.slug] = r.categories || [];
       stagesBySlug[r.slug] = r.stages || [];
       enabledBySlug[r.slug] = !!r.enabled;

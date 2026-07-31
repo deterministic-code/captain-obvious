@@ -7,6 +7,7 @@ export default {
     description:
       "Flags it()/test() with no callback or no assertion (expect/assert) — tests that pass vacuously.",
     languages: ["typescript", "javascript"],
+    languagesFixed: true,
     config: null,
     ratchetable: false,
     modes: ["staged", "all", "files", "warn"],

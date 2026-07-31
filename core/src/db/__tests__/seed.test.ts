@@ -65,6 +65,20 @@ describe("seedRules", () => {
     expect(row.enabled).toBe(0);
   });
 
+  it("seeds languages_fixed from meta and syncs it on re-seed", () => {
+    seedRules(db, RULES);
+    const fixedRow = () =>
+      db.prepare("SELECT languages_fixed AS f FROM rules WHERE slug = ?");
+    // A TS/JS lint rule declares languagesFixed; a governance rule does not.
+    expect((fixedRow().get("lint-naming") as { f: number }).f).toBe(1);
+    expect((fixedRow().get("gov-require-pr") as { f: number }).f).toBe(0);
+    db.prepare("UPDATE rules SET languages_fixed = 0 WHERE slug = ?").run(
+      "lint-naming",
+    );
+    seedRules(db, RULES);
+    expect((fixedRow().get("lint-naming") as { f: number }).f).toBe(1);
+  });
+
   it("updates metadata on re-seed", () => {
     seedRules(db, RULES);
     db.prepare("UPDATE rules SET description = 'stale' WHERE slug = ?").run(

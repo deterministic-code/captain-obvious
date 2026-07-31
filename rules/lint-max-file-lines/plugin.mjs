@@ -6,6 +6,7 @@ export default {
     category: "size",
     description: "Flags source files longer than the line limit.",
     languages: ["typescript", "javascript"],
+    languagesFixed: true,
     config: {
       maxFileLines: 300,
     },

@@ -7,6 +7,7 @@ export default {
     description:
       "Flags classes with weak cohesion or too many dependencies (LCOM4, deps).",
     languages: ["typescript", "javascript"],
+    languagesFixed: true,
     config: {
       lcom4: 1,
       deps: 8,

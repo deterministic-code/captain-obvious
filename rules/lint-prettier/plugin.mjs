@@ -7,6 +7,7 @@ export default {
     description:
       "Flags files that are not Prettier-formatted (prettier --check); the fix action runs prettier --write.",
     languages: ["typescript", "javascript"],
+    languagesFixed: true,
     config: null,
     ratchetable: false,
     modes: ["staged", "all", "files", "warn"],

@@ -6,6 +6,7 @@ export default {
     category: "size",
     description: "Flags lines wider than the column limit.",
     languages: ["typescript", "javascript"],
+    languagesFixed: true,
     config: {
       maxLineLength: 100,
     },

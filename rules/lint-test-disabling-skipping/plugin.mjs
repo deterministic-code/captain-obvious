@@ -7,6 +7,7 @@ export default {
     description:
       "Blocks .skip/.only/.fixme/.skipIf/.todo, xit/xdescribe, fdescribe/fit, and this.skip() across test tiers.",
     languages: ["typescript", "javascript"],
+    languagesFixed: true,
     config: null,
     ratchetable: true,
     modes: ["push", "staged", "all", "files", "warn"],

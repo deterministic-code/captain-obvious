@@ -7,6 +7,7 @@ export default {
     description:
       "Flags functions with more than the allowed number of statements.",
     languages: ["typescript", "javascript"],
+    languagesFixed: true,
     config: {
       maxStatements: 20,
     },

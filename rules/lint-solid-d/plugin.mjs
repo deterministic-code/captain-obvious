@@ -6,6 +6,7 @@ export default {
     category: "solid",
     description: "Flags violations of the Dependency Inversion principle.",
     languages: ["typescript", "javascript"],
+    languagesFixed: true,
     config: null,
     ratchetable: false,
     modes: ["staged", "all", "files", "warn"],

@@ -55,6 +55,12 @@ export interface RuleView {
    * render the fixed "Language independent" cell instead of the language picker.
    */
   languageIndependent: boolean;
+  /**
+   * True when the language set is intrinsic to the check (rules.languages_fixed).
+   * Additive field — the prebuilt panel ignores it; panelExt reads it to render
+   * the Languages cell read-only instead of an editable picker.
+   */
+  languagesFixed: boolean;
   /** The rule's earliest stage (canonical order) — the scalar the prebuilt panel reads. */
   stage: string | null;
   /**
@@ -237,6 +243,7 @@ export function listRules(db: Db): RuleView[] {
       categories: orderCategories(r.category, categoriesByRule.get(r.id) ?? []),
       languages,
       languageIndependent: languages.length === 0,
+      languagesFixed: r.languages_fixed === 1,
       stage: stages[0] ?? null,
       stages,
       order: r.sort_index,

@@ -7,6 +7,7 @@ export default {
     description:
       "Blocks a drop in test coverage below the committed baseline (coverage-baseline.json); reads coverage/coverage-summary.json. Accept a new floor with --update.",
     languages: ["typescript", "javascript"],
+    languagesFixed: true,
     config: null,
     ratchetable: true,
     modes: ["push", "staged", "all", "files", "warn"],

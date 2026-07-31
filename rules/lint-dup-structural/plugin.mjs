@@ -7,6 +7,7 @@ export default {
     description:
       "Detects repeated structural patterns (e.g. sibling tables), ratcheted against baseline.",
     languages: ["typescript", "javascript"],
+    languagesFixed: true,
     config: null,
     ratchetable: true,
     modes: ["push", "staged", "all", "files", "warn"],

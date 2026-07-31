@@ -7,6 +7,7 @@ export default {
     description:
       "Blocks empty catch blocks; requires a narrow rethrow, predicate, or logged warning.",
     languages: ["typescript", "javascript"],
+    languagesFixed: true,
     config: null,
     ratchetable: false,
     modes: ["staged", "all", "files", "warn"],

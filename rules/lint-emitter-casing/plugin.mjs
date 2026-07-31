@@ -7,6 +7,7 @@ export default {
     description:
       "Enforces case conventions for EventEmitter event names in template literals.",
     languages: ["typescript", "javascript"],
+    languagesFixed: true,
     config: null,
     ratchetable: false,
     modes: ["staged", "all", "files", "warn"],

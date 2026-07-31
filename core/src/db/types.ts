@@ -25,6 +25,8 @@ export interface RuleRow {
   enabled: number;
   /** Execution/display order, ascending; ties break by slug. */
   sort_index: number;
+  /** 1 when the language set is intrinsic to the check (panel renders it read-only), else 0. */
+  languages_fixed: number;
 }
 
 export interface ActionTypeRow {
@@ -83,6 +85,8 @@ export interface AddRuleOpts {
   description?: string;
   /** Language slugs to link. Each must already exist. */
   languages?: string[];
+  /** Mark the language set as intrinsic to the check, so the panel renders it read-only. */
+  languagesFixed?: boolean;
   /** Raw JSON string for config_json (validated as JSON before write). */
   config?: string;
   /** Stage slugs this rule runs at; linked in rule_stages. Each must be a known stage. */
