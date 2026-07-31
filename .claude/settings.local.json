@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "_profile": true,
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PROJECT_DIR}/node_modules/hooker/dist/hooks/profile-tool-pre.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "_profile": true,
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PROJECT_DIR}/node_modules/hooker/dist/hooks/profile-tool-post.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

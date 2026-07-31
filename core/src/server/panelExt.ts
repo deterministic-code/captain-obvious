@@ -2896,8 +2896,8 @@ export const PANEL_EXT = `(() => {
   }
 
   // The fix actions (requiresFix) only make sense for a rule that declares a
-  // deterministic script fix; disable them otherwise, unless one is already the
-  // saved value (so an existing binding stays selectable rather than vanishing).
+  // deterministic script fix; omit them for a rule that has none, unless one is
+  // already the saved value (so an existing binding stays selectable).
   function severitySelect(current, inheritLabel, hasScriptFix) {
     const sel = document.createElement("select");
     sel.className = "co-set-select";
@@ -2906,13 +2906,10 @@ export const PANEL_EXT = `(() => {
     none.textContent = inheritLabel;
     sel.appendChild(none);
     for (const at of actionTypes) {
+      if (at.requiresFix && !hasScriptFix && at.slug !== current) continue;
       const opt = document.createElement("option");
       opt.value = at.slug;
       opt.textContent = at.name;
-      if (at.requiresFix && !hasScriptFix && at.slug !== current) {
-        opt.disabled = true;
-        opt.textContent = at.name + " (needs a fix)";
-      }
       sel.appendChild(opt);
     }
     sel.value = current || "";
