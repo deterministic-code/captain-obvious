@@ -11,6 +11,7 @@ export default {
     ratchetable: false,
     modes: ["staged", "all", "files"],
     stages: ["pre-commit", "claude-tool"],
+    order: 0,
     actions: [],
   },
   control: {

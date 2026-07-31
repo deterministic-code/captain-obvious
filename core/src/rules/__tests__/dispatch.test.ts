@@ -37,9 +37,9 @@ function ruleId(slug: string): number {
 
 describe("selectDispatch", () => {
   it("returns only the rules whose package stage matches, in seed order", () => {
-    const expected = RULES.filter((r) =>
-      r.meta.stages.includes("pre-commit"),
-    ).map((r) => r.meta.slug);
+    const expected = RULES.filter((r) => r.meta.stages.includes("pre-commit"))
+      .sort((a, b) => (a.meta.order ?? 100) - (b.meta.order ?? 100))
+      .map((r) => r.meta.slug);
     expect(slugsFor("pre-commit")).toEqual(expected);
   });
 
@@ -47,11 +47,21 @@ describe("selectDispatch", () => {
     const before = slugsFor("pre-commit");
     expect(before.length).toBeGreaterThan(1);
     const last = before[before.length - 1];
-    db.prepare("UPDATE rules SET sort_index = 1 WHERE slug = ?").run(last);
+    db.prepare("UPDATE rules SET sort_index = -1 WHERE slug = ?").run(last);
     const after = slugsFor("pre-commit");
     expect(after[0]).toBe(last);
     // Same membership, just reordered.
     expect([...after].sort()).toEqual([...before].sort());
+  });
+
+  it("breaks a sort_index tie by slug, ascending", () => {
+    const [a, b] = [...slugsFor("pre-commit")].sort();
+    db.prepare("UPDATE rules SET sort_index = 5 WHERE slug IN (?, ?)").run(
+      a,
+      b,
+    );
+    const after = slugsFor("pre-commit");
+    expect(after.indexOf(a)).toBeLessThan(after.indexOf(b));
   });
 
   it("never includes server-stage rules in a local stage", () => {
