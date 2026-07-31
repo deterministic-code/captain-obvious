@@ -8,7 +8,7 @@ import { matchProtected } from "./protectedPaths.js";
 /** Claude Code PreToolUse tools that carry a `file_path` we can guard. */
 const EDIT_TOOLS = new Set(["Edit", "Write", "NotebookEdit"]);
 
-/** The one claude-tool-stage rule this guard implements (see the registry invariant test). */
+/** The one tool-stage rule this guard enforces; other rules may be tagged at `tool` but are not run here. */
 const PROTECTED_PATHS_SLUG = "lint-protected-paths";
 
 export interface GuardDecision {
@@ -57,8 +57,8 @@ export function evaluateGuard(
 /**
  * The guard decision for a PreToolUse event against the registry `db`, plus the
  * Activity row to log. `lint-protected-paths` runs only when enabled at the
- * `claude-tool` stage; when it runs, every evaluation yields a `run` (a `failure`
- * when it blocks, `success` when it allows) so the claude-tool path shows up in
+ * `tool` stage; when it runs, every evaluation yields a `run` (a `failure`
+ * when it blocks, `success` when it allows) so the tool path shows up in
  * Activity the same way git-stage dispatches do. `run` is null when the rule is
  * disabled — nothing ran, so nothing is logged.
  */
@@ -67,7 +67,7 @@ export function guardDecision(
   repoRoot: string,
   db: Db,
 ): GuardResult {
-  const selected = selectDispatch(db, "claude-tool");
+  const selected = selectDispatch(db, "tool");
   if (!selected.some((d) => d.slug === PROTECTED_PATHS_SLUG)) {
     return { decision: ALLOW, run: null };
   }
@@ -80,7 +80,7 @@ export function guardDecision(
     decision,
     run: {
       slug: PROTECTED_PATHS_SLUG,
-      stage: "claude-tool",
+      stage: "tool",
       status: decision.deny ? "failure" : "success",
     },
   };

@@ -158,7 +158,7 @@ describe("addRule", () => {
     const row = addRule(db, {
       slug: "lint-staged",
       name: "Staged",
-      stages: ["pre-commit", "claude-tool"],
+      stages: ["pre-commit", "tool"],
     });
     const stages = (
       db
@@ -167,7 +167,7 @@ describe("addRule", () => {
         )
         .all(row.id) as { stage: string }[]
     ).map((r) => r.stage);
-    expect(stages).toEqual(["claude-tool", "pre-commit"]);
+    expect(stages).toEqual(["pre-commit", "tool"]);
   });
 
   it("rejects an unknown stage", () => {
@@ -224,8 +224,8 @@ describe("configureRule", () => {
       setStages: ["pre-commit", "pre-push"],
     });
     expect(ruleStages("lint-max-lines")).toEqual(["pre-commit", "pre-push"]);
-    configureRule(db, "lint-max-lines", { setStages: ["claude-tool"] });
-    expect(ruleStages("lint-max-lines")).toEqual(["claude-tool"]);
+    configureRule(db, "lint-max-lines", { setStages: ["tool"] });
+    expect(ruleStages("lint-max-lines")).toEqual(["tool"]);
   });
 
   it("rejects an unknown stage in setStages", () => {

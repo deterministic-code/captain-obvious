@@ -35,6 +35,21 @@ function ruleId(slug: string): number {
   ).id;
 }
 
+/** Replace a rule's seeded default (env-null) binding with `actionSlug`. */
+function setDefault(slug: string, actionSlug: string): void {
+  clearDefault(slug);
+  db.prepare(
+    "INSERT INTO rule_actions (rule_id, environment_id, action_type_id) VALUES (?, NULL, ?)",
+  ).run(ruleId(slug), actionTypeId(actionSlug));
+}
+
+/** Drop a rule's seeded default binding so it falls back to the code default. */
+function clearDefault(slug: string): void {
+  db.prepare(
+    "DELETE FROM rule_actions WHERE rule_id = ? AND environment_id IS NULL",
+  ).run(ruleId(slug));
+}
+
 describe("selectDispatch", () => {
   it("returns only the rules whose package stage matches, in seed order", () => {
     const expected = RULES.filter((r) => r.meta.stages.includes("pre-commit"))
@@ -83,6 +98,7 @@ describe("selectDispatch", () => {
   });
 
   it("defaults an unbound rule's action to halt, with no fix", () => {
+    clearDefault("lint-naming");
     const entry = selectDispatch(db, "pre-commit").find(
       (d) => d.slug === "lint-naming",
     );
@@ -91,9 +107,7 @@ describe("selectDispatch", () => {
   });
 
   it("reports the rule's default binding as its action", () => {
-    db.prepare(
-      "INSERT INTO rule_actions (rule_id, environment_id, action_type_id) VALUES (?, NULL, ?)",
-    ).run(ruleId("lint-naming"), actionTypeId("warn"));
+    setDefault("lint-naming", "warn");
     const entry = selectDispatch(db, "pre-commit").find(
       (d) => d.slug === "lint-naming",
     );
@@ -102,9 +116,7 @@ describe("selectDispatch", () => {
   });
 
   it("attaches the script fix for a rule bound to a fix action", () => {
-    db.prepare(
-      "INSERT INTO rule_actions (rule_id, environment_id, action_type_id) VALUES (?, NULL, ?)",
-    ).run(ruleId("lint-prettier"), actionTypeId("fix_and_halt"));
+    setDefault("lint-prettier", "fix_and_halt");
     const entry = selectDispatch(db, "pre-commit").find(
       (d) => d.slug === "lint-prettier",
     );
@@ -113,9 +125,7 @@ describe("selectDispatch", () => {
   });
 
   it("throws when a fix-bound rule declares no script fix", () => {
-    db.prepare(
-      "INSERT INTO rule_actions (rule_id, environment_id, action_type_id) VALUES (?, NULL, ?)",
-    ).run(ruleId("lint-naming"), actionTypeId("fix"));
+    setDefault("lint-naming", "fix");
     expect(() => selectDispatch(db, "pre-commit")).toThrow(/no script fix/);
   });
 });

@@ -368,6 +368,25 @@ function setRuleAction(db: Db, ruleId: number, b: ResolvedBinding): void {
   ).run(ruleId, b.environmentId, b.actionTypeId, b.delayMs);
 }
 
+/**
+ * Seed a rule's default (all-environment) binding, but only when it has none —
+ * so the shipped default is an initial value a later panel/CLI edit overrides and
+ * survives re-seed, mirroring how `enabled`/`sort_index` seed on first register.
+ */
+function seedDefaultAction(db: Db, ruleId: number, type: string): void {
+  const existing = db
+    .prepare(
+      "SELECT 1 FROM rule_actions WHERE rule_id = ? AND environment_id IS NULL",
+    )
+    .get(ruleId);
+  if (existing) return;
+  setRuleAction(
+    db,
+    ruleId,
+    resolveBinding(db, { type, environment: null, delayMs: null }),
+  );
+}
+
 function removeRuleAction(db: Db, ruleId: number, target: string): void {
   if (target === "all") {
     db.prepare("DELETE FROM rule_actions WHERE rule_id = ?").run(ruleId);
@@ -389,7 +408,8 @@ function removeRuleAction(db: Db, ruleId: number, target: string): void {
  * links plus its fixes. Used by `seed-rules`. Preserves `enabled` so re-seeding
  * never re-enables a rule a user turned off. Languages must already exist (the
  * seeder ensures them first). `meta.actions` undefined leaves existing fixes
- * alone; `[]` clears them.
+ * alone; `[]` clears them. `meta.defaultAction` seeds the default binding only
+ * when the rule has none, so a panel/CLI binding change survives re-seed.
  */
 export function registerRule(db: Db, plugin: RulePlugin): void {
   const { meta } = plugin;
@@ -440,6 +460,7 @@ export function registerRule(db: Db, plugin: RulePlugin): void {
     linkStages(db, ruleId, meta.stages);
 
     if (meta.actions !== undefined) setRuleFixesTx(db, ruleId, meta.actions);
+    if (meta.defaultAction !== undefined) seedDefaultAction(db, ruleId, meta.defaultAction);
   });
 
   tx();

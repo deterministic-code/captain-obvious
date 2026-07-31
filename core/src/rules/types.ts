@@ -69,7 +69,7 @@ export interface RuleMeta {
   ratchetable: boolean;
   modes: LintMode[];
   /** Every stage this rule runs at. A rule may enforce at more than one (e.g. a
-   * path guard that fires both on `pre-commit` and from the `claude-tool` guard). */
+   * path guard that fires both on `pre-commit` and from the `tool` guard). */
   stages: Stage[];
   /**
    * Remediation/output actions (rows in the `fixes` table). A rule may have

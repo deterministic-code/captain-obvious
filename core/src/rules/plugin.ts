@@ -89,6 +89,11 @@ export interface RulePluginMeta {
   /** Execution/display order, ascending; ties break by slug. Seeds sort_index on first
    *  register only, so a later CLI/panel reorder survives re-seed (like `enabled`). */
   order?: number;
+  /** The rule's initial default (all-environment) action binding, an `action_types`
+   *  slug (e.g. "warn", "fix"). Seeded into rule_actions on first register only — like
+   *  `enabled`/`order`, a later panel/CLI change survives re-seed. Omit to leave the
+   *  rule unbound (the dispatcher then falls back to `halt`). */
+  defaultAction?: string;
   actions?: RuleActionMeta[];
 }
 

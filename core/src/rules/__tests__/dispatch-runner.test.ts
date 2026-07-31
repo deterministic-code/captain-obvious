@@ -66,6 +66,9 @@ function isolatePreCommit(slug: string, { advisory = false } = {}): void {
       }
     ).id;
     db.prepare(
+      "DELETE FROM rule_actions WHERE rule_id = ? AND environment_id IS NULL",
+    ).run(ruleId);
+    db.prepare(
       "INSERT INTO rule_actions (rule_id, environment_id, action_type_id) VALUES (?, NULL, ?)",
     ).run(ruleId, warnId);
   }
@@ -106,6 +109,7 @@ afterEach(() => {
 describe("runDispatch", () => {
   it("runs a single blocking rule, resolving cleanly and never exiting", async () => {
     isolatePreCommit("lint-naming");
+    bindDefault("lint-naming", "halt");
     await expect(runDispatch(["pre-commit"])).resolves.toBeUndefined();
     expect(exitSpy).not.toHaveBeenCalled();
     expect(spawnMock).toHaveBeenCalledTimes(1);
@@ -131,6 +135,7 @@ describe("runDispatch", () => {
 
   it("exits with the child's code on a blocking failure and stops", async () => {
     isolatePreCommit("lint-naming");
+    bindDefault("lint-naming", "halt");
     spawnMock.mockImplementationOnce(
       () => fakeChild((c) => c.emit("exit", 2, null)) as never,
     );
@@ -203,7 +208,8 @@ function childWithStdout(data: string, code: number): EventEmitter {
   return c;
 }
 
-/** Bind `slug`'s default (env-null) action to `actionSlug` in the registry DB. */
+/** Replace `slug`'s default (env-null) binding with `actionSlug`, overriding the
+ *  seeded default so tests exercise exactly the action they name. */
 function bindDefault(slug: string, actionSlug: string): void {
   const db = openDb(dbPath);
   const rid = (
@@ -216,6 +222,9 @@ function bindDefault(slug: string, actionSlug: string): void {
       .prepare("SELECT id FROM action_types WHERE slug = ?")
       .get(actionSlug) as { id: number }
   ).id;
+  db.prepare(
+    "DELETE FROM rule_actions WHERE rule_id = ? AND environment_id IS NULL",
+  ).run(rid);
   db.prepare(
     "INSERT INTO rule_actions (rule_id, environment_id, action_type_id) VALUES (?, NULL, ?)",
   ).run(rid, aid);

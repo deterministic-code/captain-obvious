@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS rule_categories (
 ) STRICT;
 
 -- Rule <-> Stage (many-to-many) -------------------------------------------
--- Which git/tool stages a rule runs at (pre-commit, pre-push, claude-tool,
+-- Which git/tool stages a rule runs at (pre-commit, pre-push, tool,
 -- server). The source of truth the dispatcher reads at runtime, so toggling a
 -- rule's stages in the control panel changes what runs with no reinstall.
 -- Seeded from RuleMeta.stages. Free text validated against the canonical stage

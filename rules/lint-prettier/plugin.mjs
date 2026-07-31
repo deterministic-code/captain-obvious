@@ -11,7 +11,8 @@ export default {
     config: null,
     ratchetable: false,
     modes: ["staged", "all", "files", "warn"],
-    stages: ["pre-commit"],
+    stages: ["pre-commit", "tool"],
+    defaultAction: "fix",
     order: 2,
     actions: [
       {

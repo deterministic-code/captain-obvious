@@ -63,7 +63,7 @@ const META = {
   stages: [
     { slug: "pre-commit", name: "Pre-commit" },
     { slug: "pre-push", name: "Pre-push" },
-    { slug: "claude-tool", name: "Claude tool" },
+    { slug: "tool", name: "Tool" },
     { slug: "server", name: "Server" },
   ],
 };
@@ -673,16 +673,16 @@ describe("panelExt injected script", () => {
       (i) => i.value,
     );
     expect(opts.sort()).toEqual([
-      "claude-tool",
       "pre-commit",
       "pre-push",
       "server",
+      "tool",
     ]);
   });
 
   it("narrows rows by the Stage filter", async () => {
     await runInjected();
-    for (const v of ["pre-commit", "claude-tool", "server"]) {
+    for (const v of ["pre-commit", "tool", "server"]) {
       const b = [
         ...document.querySelectorAll<HTMLInputElement>(
           ".co-filter-stages .co-dd-opt",

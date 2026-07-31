@@ -79,7 +79,7 @@ describe("guardDecision", () => {
     db.close();
   });
 
-  it("denies a protected edit when the rule is enabled at claude-tool", () => {
+  it("denies a protected edit when the rule is enabled at the tool stage", () => {
     expect(
       guardDecision(edit("/repo/db/schema.sql"), REPO, db).decision.deny,
     ).toBe(true);
@@ -88,7 +88,7 @@ describe("guardDecision", () => {
   it("logs a failure hook_run for a denied protected edit", () => {
     expect(guardDecision(edit("/repo/db/schema.sql"), REPO, db).run).toEqual({
       slug: "lint-protected-paths",
-      stage: "claude-tool",
+      stage: "tool",
       status: "failure",
     });
   });
@@ -98,7 +98,7 @@ describe("guardDecision", () => {
       decision: { deny: false },
       run: {
         slug: "lint-protected-paths",
-        stage: "claude-tool",
+        stage: "tool",
         status: "success",
       },
     });
@@ -127,11 +127,11 @@ describe("formatDeny", () => {
   });
 });
 
-describe("claude-tool registry invariant", () => {
-  it("lint-protected-paths is the only claude-tool rule (extend guardDecision if this fails)", () => {
-    const claudeTool = RULES.filter((r) =>
-      r.meta.stages.includes("claude-tool"),
+describe("tool-stage guard invariant", () => {
+  it("keeps lint-protected-paths tool-staged — the only rule guardDecision enforces", () => {
+    const toolStaged = RULES.filter((r) =>
+      r.meta.stages.includes("tool"),
     ).map((r) => r.meta.slug);
-    expect(claudeTool).toEqual(["lint-protected-paths"]);
+    expect(toolStaged).toContain("lint-protected-paths");
   });
 });
