@@ -50,6 +50,7 @@ describe("npm-scripts / installNpmScripts", () => {
     expect(pkg.captainObvious.managedScripts).toEqual([
       "lint:comments",
       "lint:comments:all",
+      "panel",
     ]);
   });
 
@@ -73,7 +74,7 @@ describe("npm-scripts / installNpmScripts", () => {
     });
     const pkg = await readJson(pkgPath());
     const keys = pkg.captainObvious.managedScripts;
-    expect(keys).toEqual(["lint:naming", "lint:naming:all"]);
+    expect(keys).toEqual(["lint:naming", "lint:naming:all", "panel"]);
     expect(keys.some((k) => k.includes("run"))).toBe(false);
   });
 
@@ -109,8 +110,45 @@ describe("npm-scripts / installNpmScripts", () => {
     const written = await installNpmScripts({ target });
     expect(written).toEqual([pkgPath()]);
     const pkg = await readJson(pkgPath());
-    expect(pkg.captainObvious.managedScripts).toEqual([]);
-    expect(pkg.scripts).toEqual({});
+    expect(pkg.captainObvious.managedScripts).toEqual(["panel"]);
+    expect(pkg.scripts).toEqual({ panel: "captain-obvious serve" });
+  });
+
+  test("adds a managed `panel` alias that launches the control panel", async () => {
+    await installNpmScripts({
+      target,
+      gitHooks: { preCommit: ["lint-comments"] },
+      npmScripts: {},
+    });
+    const pkg = await readJson(pkgPath());
+    expect(pkg.scripts.panel).toBe("captain-obvious serve");
+    expect(pkg.captainObvious.managedScripts).toContain("panel");
+  });
+
+  test("panelScript renames the panel alias key", async () => {
+    await installNpmScripts({
+      target,
+      gitHooks: {},
+      npmScripts: { panelScript: "co:panel" },
+    });
+    const pkg = await readJson(pkgPath());
+    expect(pkg.scripts["co:panel"]).toBe("captain-obvious serve");
+    expect(pkg.scripts.panel).toBeUndefined();
+    expect(pkg.captainObvious.managedScripts).toEqual(["co:panel"]);
+  });
+
+  test("panelScript:false drops the panel alias entirely", async () => {
+    await installNpmScripts({
+      target,
+      gitHooks: { preCommit: ["lint-comments"] },
+      npmScripts: { panelScript: false },
+    });
+    const pkg = await readJson(pkgPath());
+    expect(pkg.scripts.panel).toBeUndefined();
+    expect(pkg.captainObvious.managedScripts).toEqual([
+      "lint:comments",
+      "lint:comments:all",
+    ]);
   });
 
   test("merges both preCommit and prePush stems", async () => {
