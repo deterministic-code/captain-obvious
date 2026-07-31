@@ -12,6 +12,7 @@ vi.mock("node:child_process", () => ({
 }));
 
 import { spawn } from "node:child_process";
+import { checkScriptPath } from "../../rules/dispatch.js";
 import { listHookRuns, openAuditDb } from "../../db/audit.js";
 import { setRuleFixes } from "../../db/fixes.js";
 import { openDb, type Db } from "../../db/open.js";
@@ -189,7 +190,7 @@ describe("fixAllScripts — deterministic sweep", () => {
 });
 
 describe("fixRule — scriptPath (node runner in --fix mode)", () => {
-  it("invokes the runner with --fix and the run's selector", async () => {
+  it("invokes the loader-stamped absolute runner, not the DB's repo-relative path", async () => {
     setRuleFixes(db, "lint-prettier", [
       { kind: "script", scriptPath: "rules/lint-prettier/check.mjs" },
     ]);
@@ -197,7 +198,7 @@ describe("fixRule — scriptPath (node runner in --fix mode)", () => {
     await fixRule(db, auditDb, { slug: "lint-prettier", path: dir });
     const [cmd, args] = spawnMock.mock.calls[0] as [string, string[]];
     expect(cmd).toBe(process.execPath);
-    expect(args).toEqual(["rules/lint-prettier/check.mjs", "--fix", "--all"]);
+    expect(args).toEqual([checkScriptPath("lint-prettier"), "--fix", "--all"]);
   });
 });
 

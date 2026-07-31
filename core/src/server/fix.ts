@@ -20,6 +20,7 @@ import { recordHookRun } from "../db/audit.js";
 import { getRuleFixes, type RuleAction } from "../db/fixes.js";
 import type { Db } from "../db/open.js";
 import { RULES } from "../rules/index.js";
+import { checkScriptPath } from "../rules/dispatch.js";
 import type { RuleMeta, Violation } from "../rules/types.js";
 import { repoRoot, resolveRunTarget } from "./target.js";
 import { mapPool, runRuleOnFile, runRules, type RunRequest } from "./run.js";
@@ -68,10 +69,13 @@ function collect(child: ReturnType<typeof spawn>): Promise<SpawnOutcome> {
 /**
  * A `script` action with `scriptPath`: the rule's own check runner in fix mode.
  * Convention (see lint-prettier): `node <runner> --fix <selector>`, where the
- * selector is the run's mode args (`--all`, or `--files <path>`).
+ * selector is the run's mode args (`--all`, or `--files <path>`). The runner is
+ * the loader-stamped absolute `checkScriptPath`, never the DB's repo-relative
+ * `scriptPath` — `cwd` is the lint target, so a relative path would resolve
+ * against the wrong tree (ENOENT for any file/subfolder target).
  */
-function runNodeFix(scriptPath: string, cwd: string, modeArgs: string[]): Promise<SpawnOutcome> {
-  return collect(spawn(process.execPath, [scriptPath, "--fix", ...modeArgs], { cwd }));
+function runNodeFix(runner: string, cwd: string, modeArgs: string[]): Promise<SpawnOutcome> {
+  return collect(spawn(process.execPath, [runner, "--fix", ...modeArgs], { cwd }));
 }
 
 /**
@@ -107,7 +111,7 @@ async function runScriptFix(
   const action = requireAction(db, slug, "script");
   const started = Date.now();
   const outcome = action.scriptPath
-    ? await runNodeFix(action.scriptPath, cwd, modeArgs)
+    ? await runNodeFix(checkScriptPath(slug), cwd, modeArgs)
     : await runShellFix(action.scriptBody as string, cwd, isDir ? "." : target);
   recordHookRun(auditDb, {
     slug,

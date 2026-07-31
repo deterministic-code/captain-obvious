@@ -1,5 +1,4 @@
 import { spawn } from "node:child_process";
-import { resolve } from "node:path";
 import { openAuditDb, recordHookRun, resolveAuditDbPath } from "../db/audit.js";
 import { getRuleFixes, type RuleAction } from "../db/fixes.js";
 import { openDb, resolveDbPath, type Db } from "../db/open.js";
@@ -148,6 +147,7 @@ function stagedFiles(cwd: string): Promise<string[]> {
  * files, so both stay scoped to what's being committed.
  */
 function runRuleFix(
+  slug: string,
   fix: RuleAction,
   cwd: string,
   selectorArgs: string[],
@@ -156,7 +156,7 @@ function runRuleFix(
   if (fix.scriptPath) {
     return spawnProcess(
       process.execPath,
-      [resolve(cwd, fix.scriptPath), "--fix", ...selectorArgs],
+      [checkScriptPath(slug), "--fix", ...selectorArgs],
       "fix",
       cwd,
     );
@@ -201,7 +201,7 @@ export async function runDispatch(argv: string[]): Promise<void> {
       const behavior = actionBehavior(action);
       const startedMs = Date.now();
       if (fix && stage === "pre-commit") {
-        await runRuleFix(fix, cwd, args, staged);
+        await runRuleFix(slug, fix, cwd, args, staged);
         if (staged.length) await runGit(["add", "--", ...staged], cwd);
       }
       const code = behavior.checks ? await runRule(slug, args) : 0;
