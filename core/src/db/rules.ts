@@ -173,6 +173,13 @@ export function configureRule(
       reconcilePrimaryCategory(db, rule.id);
     }
 
+    if (opts.setOrder !== undefined) {
+      db.prepare("UPDATE rules SET sort_index = ? WHERE id = ?").run(
+        opts.setOrder,
+        rule.id,
+      );
+    }
+
     if (setStageSlugs !== undefined) linkStages(db, rule.id, setStageSlugs);
 
     if (binding) setRuleAction(db, rule.id, binding);
@@ -183,6 +190,32 @@ export function configureRule(
 
   const row = apply();
   auditConfigureRule(slug, opts, configJson !== undefined);
+  return row;
+}
+
+/**
+ * Move a rule one step earlier ("up") or later ("down") in the global execution
+ * order. Renumbers every rule to contiguous sort_index values first, so a swap
+ * always changes the order even when rules currently share a sort_index (e.g. the
+ * seeded default). A move off either end is a no-op.
+ */
+export function reorderRule(db: Db, slug: string, direction: "up" | "down"): RuleRow {
+  const rule = requireRule(db, slug);
+  const move = db.transaction((): RuleRow => {
+    const ordered = db
+      .prepare("SELECT id FROM rules ORDER BY sort_index, slug")
+      .all() as { id: number }[];
+    const i = ordered.findIndex((r) => r.id === rule.id);
+    const j = direction === "up" ? i - 1 : i + 1;
+    if (j >= 0 && j < ordered.length) {
+      [ordered[i], ordered[j]] = [ordered[j], ordered[i]];
+      const renumber = db.prepare("UPDATE rules SET sort_index = ? WHERE id = ?");
+      ordered.forEach((r, idx) => renumber.run(idx, r.id));
+    }
+    return db.prepare("SELECT * FROM rules WHERE id = ?").get(rule.id) as RuleRow;
+  });
+  const row = move();
+  logEvent("rule.configured", `moved rule ${slug} ${direction}`);
   return row;
 }
 
@@ -203,6 +236,9 @@ function auditConfigureRule(
   }
   if (opts.setStages !== undefined) {
     logEvent("rule.configured", `updated stages for rule ${slug}`);
+  }
+  if (opts.setOrder !== undefined) {
+    logEvent("rule.configured", `set order ${opts.setOrder} for rule ${slug}`);
   }
   if (opts.setAction) {
     const env = opts.setAction.environment ?? "all environments";
@@ -286,8 +322,8 @@ export function registerRule(db: Db, plugin: RulePlugin): void {
 
   const tx = db.transaction(() => {
     db.prepare(
-      `INSERT INTO rules (slug, name, category, description, config_json, control_json, deps_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO rules (slug, name, category, description, config_json, control_json, deps_json, sort_index)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(slug) DO UPDATE SET
          name = excluded.name,
          category = excluded.category,
@@ -303,6 +339,7 @@ export function registerRule(db: Db, plugin: RulePlugin): void {
       configJson,
       controlJson,
       depsJson,
+      meta.order ?? 100,
     );
 
     const ruleId = (

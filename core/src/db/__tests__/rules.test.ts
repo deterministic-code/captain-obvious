@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { openDb, type Db } from "../open.js";
-import { addRule, configureRule } from "../rules.js";
+import { addRule, configureRule, reorderRule } from "../rules.js";
 import type { RuleActionRow } from "../types.js";
 
 let db: Db;
@@ -40,6 +40,23 @@ function categories(slug: string): string[] {
       )
       .all(slug) as { category: string }[]
   ).map((r) => r.category);
+}
+
+function sortIndex(slug: string): number {
+  return (
+    db.prepare("SELECT sort_index AS i FROM rules WHERE slug = ?").get(slug) as {
+      i: number;
+    }
+  ).i;
+}
+
+/** The global rule order (sort_index, then slug), as slugs. */
+function order(): string[] {
+  return (
+    db.prepare("SELECT slug FROM rules ORDER BY sort_index, slug").all() as {
+      slug: string;
+    }[]
+  ).map((r) => r.slug);
 }
 
 function primaryCategory(slug: string): string | null {
@@ -184,6 +201,12 @@ describe("configureRule", () => {
     ).toThrow(/unknown stage: nope/);
   });
 
+  it("sets the absolute order with setOrder", () => {
+    expect(sortIndex("lint-max-lines")).toBe(100);
+    configureRule(db, "lint-max-lines", { setOrder: 5 });
+    expect(sortIndex("lint-max-lines")).toBe(5);
+  });
+
   it("re-points the primary when the primary category is removed", () => {
     addRule(db, {
       slug: "lint-multi",
@@ -290,5 +313,40 @@ describe("configureRule", () => {
         setAction: { type: "halt", environment: "vim", delayMs: null },
       }),
     ).toThrow(/unknown environment/);
+  });
+});
+
+describe("reorderRule", () => {
+  beforeEach(() => {
+    // All three seed to sort_index 100, so their order is alphabetical by slug.
+    addRule(db, { slug: "rule-a", name: "A" });
+    addRule(db, { slug: "rule-b", name: "B" });
+    addRule(db, { slug: "rule-c", name: "C" });
+  });
+
+  it("renumbers to contiguous indices even from an all-equal start", () => {
+    expect(order()).toEqual(["rule-a", "rule-b", "rule-c"]);
+    reorderRule(db, "rule-c", "up");
+    expect(order()).toEqual(["rule-a", "rule-c", "rule-b"]);
+    expect([sortIndex("rule-a"), sortIndex("rule-c"), sortIndex("rule-b")]).toEqual([0, 1, 2]);
+  });
+
+  it("moves a rule down past its neighbor", () => {
+    reorderRule(db, "rule-a", "down");
+    expect(order()).toEqual(["rule-b", "rule-a", "rule-c"]);
+  });
+
+  it("is a no-op moving the first rule up", () => {
+    reorderRule(db, "rule-a", "up");
+    expect(order()).toEqual(["rule-a", "rule-b", "rule-c"]);
+  });
+
+  it("is a no-op moving the last rule down", () => {
+    reorderRule(db, "rule-c", "down");
+    expect(order()).toEqual(["rule-a", "rule-b", "rule-c"]);
+  });
+
+  it("rejects an unknown rule", () => {
+    expect(() => reorderRule(db, "nope", "up")).toThrow(/unknown rule/);
   });
 });

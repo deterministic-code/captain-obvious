@@ -40,7 +40,8 @@ CREATE TABLE IF NOT EXISTS rules (
   config_json TEXT,                       -- thresholds: {"maxLines":300}
   control_json TEXT,                      -- serialized ControlSpec (settings dialog), or null
   deps_json   TEXT,                       -- serialized RuleDependency[] (external tools), or null
-  enabled     INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1))
+  enabled     INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+  sort_index  INTEGER NOT NULL DEFAULT 100 -- execution/display order, ascending; ties break by slug
 ) STRICT;
 
 -- Rule <-> Language (many-to-many) ----------------------------------------

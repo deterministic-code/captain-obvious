@@ -41,6 +41,17 @@ describe("selectDispatch", () => {
     expect(slugsFor("pre-commit")).toEqual(expected);
   });
 
+  it("orders dispatched rules by sort_index, lowest first", () => {
+    const before = slugsFor("pre-commit");
+    expect(before.length).toBeGreaterThan(1);
+    const last = before[before.length - 1];
+    db.prepare("UPDATE rules SET sort_index = 1 WHERE slug = ?").run(last);
+    const after = slugsFor("pre-commit");
+    expect(after[0]).toBe(last);
+    // Same membership, just reordered.
+    expect([...after].sort()).toEqual([...before].sort());
+  });
+
   it("never includes server-stage rules in a local stage", () => {
     const all = [...slugsFor("pre-commit"), ...slugsFor("pre-push")];
     expect(all).not.toContain("gov-require-pr");

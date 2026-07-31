@@ -78,6 +78,9 @@ export interface RulePluginMeta {
   ratchetable: boolean;
   modes: LintMode[];
   stages: Stage[];
+  /** Execution/display order, ascending; ties break by slug. Seeds sort_index on first
+   *  register only, so a later CLI/panel reorder survives re-seed (like `enabled`). */
+  order?: number;
   actions?: RuleActionMeta[];
 }
 

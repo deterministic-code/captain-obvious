@@ -23,6 +23,8 @@ export interface RuleRow {
   /** Serialized RuleDependency[] (external tools the check needs), or null. */
   deps_json: string | null;
   enabled: number;
+  /** Execution/display order, ascending; ties break by slug. */
+  sort_index: number;
 }
 
 export interface ActionTypeRow {
@@ -108,6 +110,8 @@ export interface ConfigureRuleOpts {
   removeCategories?: string[];
   /** Replace the rule's full stage set (rule_stages). Each must be a known stage. */
   setStages?: string[];
+  /** Absolute execution/display order (rules.sort_index); lower runs first. */
+  setOrder?: number;
   setAction?: ActionBinding;
   /** Environment slug to remove, or "all" to clear every binding. */
   removeAction?: string;

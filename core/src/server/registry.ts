@@ -14,7 +14,7 @@ import {
   setProjectRule,
   syncProjectRules,
 } from "../db/projects.js";
-import { configureRule } from "../db/rules.js";
+import { configureRule, reorderRule } from "../db/rules.js";
 import { seedRules, type SeedSummary } from "../db/seed.js";
 import type { Db } from "../db/open.js";
 import { resolveMode, type Mode } from "../db/location.js";
@@ -63,6 +63,12 @@ export interface RuleView {
    * column, and the dispatcher reads rule_stages directly.
    */
   stages: string[];
+  /**
+   * The rule's execution/display order (rules.sort_index), ascending. Additive
+   * field — the prebuilt panel ignores it; panelExt reads it and renders the
+   * per-row reorder arrows that PATCH `{ move }`.
+   */
+  order: number;
   enabled: boolean;
   config: Record<string, unknown> | null;
   defaultAction: ActionView | null;
@@ -123,7 +129,7 @@ function orderCategories(primary: string | null, all: string[]): string[] {
 /** GET /api/rules — every rule with its actions resolved to slugs. */
 export function listRules(db: Db): RuleView[] {
   const rules = db
-    .prepare("SELECT * FROM rules ORDER BY category, slug")
+    .prepare("SELECT * FROM rules ORDER BY sort_index, slug")
     .all() as RuleRow[];
 
   const actions = db
@@ -233,6 +239,7 @@ export function listRules(db: Db): RuleView[] {
       languageIndependent: languages.length === 0,
       stage: stages[0] ?? null,
       stages,
+      order: r.sort_index,
       enabled: r.enabled === 1,
       config: parseConfig(r.config_json),
       defaultAction: def ? { type: def.type, delayMs: def.delayMs } : null,
@@ -366,6 +373,8 @@ export interface RulePatch {
   categories?: string[];
   /** The rule's full desired stage set (global catalog); replaces the current links. */
   stages?: string[];
+  /** Move the rule one step earlier/later in the global execution order. */
+  move?: "up" | "down";
 }
 
 /** The rule's currently-linked language slugs. */
@@ -437,6 +446,9 @@ export function patchRule(db: Db, slug: string, patch: RulePatch): RuleView {
   }
   if (patch.stages !== undefined) {
     configureRule(db, slug, { setStages: patch.stages });
+  }
+  if (patch.move !== undefined) {
+    reorderRule(db, slug, patch.move);
   }
   const view = listRules(db).find((r) => r.slug === slug);
   if (!view) throw new Error(`unknown rule: ${slug}`);

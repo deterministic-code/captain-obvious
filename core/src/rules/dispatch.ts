@@ -32,14 +32,23 @@ function scriptFixAction(db: Db, slug: string): RuleAction {
 }
 
 /**
- * The enabled rules bound to `stage`, in seed order. Stage membership lives in
- * the DB (rule_stages), so toggling a rule's stages in the panel changes what
- * runs with no reinstall; the DB also supplies `enabled` and each rule's default
- * action-type binding. Intersected with RULES so only rules that ship a hook
- * impl dispatch. The binding drives runner behavior (see action-behavior.ts): a
- * `warn` rule is advisory, a `fix*` rule runs its deterministic fix first.
+ * The enabled rules bound to `stage`, in the order set by rules.sort_index (ties
+ * break by slug). Stage membership lives in the DB (rule_stages), so toggling a
+ * rule's stages in the panel changes what runs with no reinstall; the DB also
+ * supplies `enabled`, the sort order, and each rule's default action-type binding.
+ * Intersected with RULES so only rules that ship a hook impl dispatch. The binding
+ * drives runner behavior (see action-behavior.ts): a `warn` rule is advisory, a
+ * `fix*` rule runs its deterministic fix first.
  */
 export function selectDispatch(db: Db, stage: Stage): Dispatched[] {
+  const order = new Map(
+    (
+      db.prepare("SELECT slug, sort_index AS sortIndex FROM rules").all() as {
+        slug: string;
+        sortIndex: number;
+      }[]
+    ).map((r) => [r.slug, r.sortIndex] as const),
+  );
   const enabled = new Set(
     (
       db.prepare("SELECT slug FROM rules WHERE enabled = 1").all() as {
@@ -69,7 +78,12 @@ export function selectDispatch(db: Db, stage: Stage): Dispatched[] {
       r.checkEntry !== null &&
       staged.has(r.meta.slug) &&
       enabled.has(r.meta.slug),
-  ).map((r) => {
+  ).sort((a, b) => {
+    // Both rules passed the `enabled` filter, so both are rows in `rules` and
+    // present in the order map — the assertions can't be undefined.
+    const d = order.get(a.meta.slug)! - order.get(b.meta.slug)!;
+    return d !== 0 ? d : a.meta.slug.localeCompare(b.meta.slug);
+  }).map((r) => {
     const bound = defaultBinding.get(r.meta.slug) as { slug: string } | undefined;
     const action = bound?.slug ?? DEFAULT_ACTION;
     return {
