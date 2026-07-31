@@ -33,6 +33,9 @@ export const PANEL_EXT = `(() => {
   let runnableSlugs = [];
   let slugList = [];
   const selectedSlugs = new Set();
+  // The single rule the reorder bar acts on (click a row to select). Separate
+  // from selectedSlugs, which is the Run overlay's multi-select.
+  let orderSelectedSlug = null;
   let runActive = false;
   let running = false;
   let browsePath = "";
@@ -104,8 +107,6 @@ export const PANEL_EXT = `(() => {
   const THEME_ICONS = { auto: ICON_THEME_AUTO, light: ICON_THEME_LIGHT, dark: ICON_THEME_DARK };
   const THEME_TITLES = { auto: "System theme", light: "Light theme", dark: "Dark theme" };
   const ACTIONS_HTML =
-    '<button type="button" class="co-act-btn" data-act="up" title="Move earlier (runs sooner)" aria-label="Move rule earlier">' + ICON_UP + "</button>" +
-    '<button type="button" class="co-act-btn" data-act="down" title="Move later (runs later)" aria-label="Move rule later">' + ICON_DOWN + "</button>" +
     '<button type="button" class="co-act-btn" data-act="run" title="Run this rule" aria-label="Run this rule">' + ICON_RUN + "</button>" +
     '<button type="button" class="co-act-btn" data-act="activity" title="Open activity" aria-label="Open activity">' + ICON_ACTIVITY + "</button>" +
     '<button type="button" class="co-act-btn" data-act="settings" title="Project settings" aria-label="Project settings">' + ICON_SETTINGS + "</button>";
@@ -853,6 +854,8 @@ export const PANEL_EXT = `(() => {
     setupFilters();
     applyFilter();
     applySort();
+    ensureOrderBar();
+    applyRowSelection();
   }
 
   // The Run icon opens the overlay with just this rule preselected — but only if
@@ -886,7 +889,6 @@ export const PANEL_EXT = `(() => {
     if (act === "run") openRunForRule(slug);
     else if (act === "activity") openActivityForRule(slug);
     else if (act === "settings") openRuleSettingsModal(slug);
-    else if (act === "up" || act === "down") moveRule(slug, act);
   }
 
   // Reorder the tbody to match rules.sort_index (the fresh order field), reusing
@@ -905,10 +907,99 @@ export const PANEL_EXT = `(() => {
     for (const tr of rows) tbody.appendChild(tr);
   }
 
+  // Every rule's slug in global execution order (order, then slug) — the index a
+  // move operates on, so it matches the server's renumber even when the table is
+  // filtered. Reads ruleBySlug, so it reflects the latest loadData().
+  function orderedSlugs() {
+    return Object.values(ruleBySlug)
+      .slice()
+      .sort((a, b) => (a.order - b.order) || String(a.slug).localeCompare(String(b.slug)))
+      .map((r) => r.slug);
+  }
+
+  // Paint the selected row's highlight; a row whose slug matches gets the class,
+  // all others lose it. Order-independent, so it's safe to call after a re-sort.
+  function applyRowSelection() {
+    const table = document.querySelector("table");
+    if (!table) return;
+    for (const tr of table.querySelectorAll("tbody tr")) {
+      tr.classList.toggle("co-row-selected", rowSlug(tr) === orderSelectedSlug);
+    }
+  }
+
+  // Click a row to select it for reordering; click it again to deselect. Ignores
+  // clicks on the row's own interactive controls (toggles, dropdowns, action
+  // buttons) so selecting never eats one of those.
+  function onRowSelectClick(e) {
+    if (!e.target.closest) return;
+    if (e.target.closest("input,select,button,a,label,summary,details,.co-dd")) return;
+    const table = document.querySelector("table");
+    const tr = e.target.closest("tbody tr");
+    if (!tr || !table || !table.contains(tr)) return;
+    const slug = rowSlug(tr);
+    if (!slug) return;
+    orderSelectedSlug = orderSelectedSlug === slug ? null : slug;
+    applyRowSelection();
+    updateOrderBar();
+  }
+
+  // The reorder bar under the table: acts on the selected row. Created once and
+  // re-inserted if a React re-render drops it; the buttons read the live
+  // selection at click time, so they never need re-binding.
+  function ensureOrderBar() {
+    const table = document.querySelector("table");
+    if (!table) return;
+    const wrap = table.closest(".co-table-wrap") || table.parentElement;
+    if (!wrap || !wrap.parentNode) return;
+    let bar = document.getElementById("co-order-bar");
+    if (!bar) {
+      bar = document.createElement("div");
+      bar.id = "co-order-bar";
+      bar.className = "co-order-bar";
+      const label = document.createElement("span");
+      label.className = "co-order-label";
+      const up = document.createElement("button");
+      up.type = "button";
+      up.className = "co-order-btn co-order-up";
+      up.innerHTML = ICON_UP + "<span>Move up</span>";
+      up.addEventListener("click", () => moveSelected("up"));
+      const down = document.createElement("button");
+      down.type = "button";
+      down.className = "co-order-btn co-order-down";
+      down.innerHTML = ICON_DOWN + "<span>Move down</span>";
+      down.addEventListener("click", () => moveSelected("down"));
+      bar.appendChild(label);
+      bar.appendChild(up);
+      bar.appendChild(down);
+    }
+    if (!bar.isConnected) wrap.parentNode.insertBefore(bar, wrap.nextSibling);
+    updateOrderBar();
+  }
+
+  // Sync the bar's label and the two buttons' disabled state to the current
+  // selection and its position: no selection disables both; index 0 disables up;
+  // the last index disables down.
+  function updateOrderBar() {
+    const bar = document.getElementById("co-order-bar");
+    if (!bar) return;
+    if (orderSelectedSlug && !ruleBySlug[orderSelectedSlug]) orderSelectedSlug = null;
+    const ordered = orderedSlugs();
+    const idx = orderSelectedSlug ? ordered.indexOf(orderSelectedSlug) : -1;
+    bar.querySelector(".co-order-label").textContent = orderSelectedSlug
+      ? "Reorder: " + orderSelectedSlug
+      : "Select a rule to reorder";
+    bar.querySelector(".co-order-up").disabled = idx <= 0;
+    bar.querySelector(".co-order-down").disabled = idx < 0 || idx >= ordered.length - 1;
+  }
+
+  function moveSelected(direction) {
+    if (orderSelectedSlug) moveRule(orderSelectedSlug, direction);
+  }
+
   // The reorder edits the global rule order (rules.sort_index), so it always hits
   // /api/rules/:slug even under a project — the panel's per-project overlay does
   // not carry order. Refetch so every row's order reflects the renumber, then
-  // reorder the DOM to show it without a page reload.
+  // reorder the DOM (and re-apply the highlight, which follows the moved row).
   async function moveRule(slug, direction) {
     try {
       await patchGlobalRule(slug, { move: direction });
@@ -918,6 +1009,8 @@ export const PANEL_EXT = `(() => {
       return;
     }
     reorderByOrder();
+    applyRowSelection();
+    updateOrderBar();
     toast("Moved " + slug + " " + direction);
   }
 
@@ -1137,6 +1230,17 @@ export const PANEL_EXT = `(() => {
       ".co-act-td{white-space:nowrap;text-align:right}" +
       ".co-act-btn{cursor:pointer;border:0;background:none;border-radius:6px;padding:5px;margin-left:2px;color:#64748b;display:inline-flex;align-items:center;vertical-align:middle}" +
       ".co-act-btn:hover{background:#f1f5f9;color:#0f172a}" +
+      // Row selection for the reorder bar: rows are clickable, the selected one
+      // is tinted and marked with a left accent bar.
+      ".co-table-wrap table tbody tr{cursor:pointer}" +
+      ".co-row-selected>td{background:#eff6ff!important;box-shadow:inset 3px 0 0 #3b82f6}" +
+      // Reorder bar under the table.
+      ".co-order-bar{display:flex;align-items:center;gap:10px;margin:10px 0 4px;padding:8px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px}" +
+      ".co-order-label{font-size:13px;color:#475569;font-weight:600;margin-right:auto}" +
+      ".co-order-btn{cursor:pointer;display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;padding:6px 12px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;color:#334155}" +
+      ".co-order-btn svg{width:16px;height:16px}" +
+      ".co-order-btn:hover:not(:disabled){background:#f1f5f9}" +
+      ".co-order-btn:disabled{opacity:.45;cursor:not-allowed}" +
       // Project settings dialog.
       ".co-set-card{gap:14px;max-height:calc(100vh - 48px);overflow:auto}" +
       ".co-set-sub{margin-top:-6px}" +
@@ -1227,6 +1331,11 @@ export const PANEL_EXT = `(() => {
       D + ".border-red-200{border-color:#7f1d1d}" +
       D + ".divide-slate-100 > :not([hidden]) ~ :not([hidden]){border-color:#334155}" +
       // Our co-* components: surfaces.
+      D + ".co-row-selected>td{background:#1e293b!important;box-shadow:inset 3px 0 0 #3b82f6}" +
+      D + ".co-order-bar{background:#0f172a;border-color:#334155}" +
+      D + ".co-order-label{color:#cbd5e1}" +
+      D + ".co-order-btn{background:#1e293b;border-color:#475569;color:#cbd5e1}" +
+      D + ".co-order-btn:hover:not(:disabled){background:#334155}" +
       D + ":is(#co-run-overlay,#co-activity-overlay){background:#0b1220}" +
       D + ".co-run-editor{background:#0f172a}" +
       D + ".co-modal{background:rgba(0,0,0,.6)}" +
@@ -3761,6 +3870,7 @@ export const PANEL_EXT = `(() => {
     // Delegate on document so a React re-render of the table can't drop the
     // handler; the actions column is re-decorated but never re-bound.
     document.addEventListener("click", onActionClick);
+    document.addEventListener("click", onRowSelectClick);
     document.addEventListener("click", onHeaderClick);
     document.addEventListener("click", onOutsideDropdownClick);
     decorate();

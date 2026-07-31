@@ -11,6 +11,7 @@ const RULES = [
   {
     slug: "lint-a",
     name: "A",
+    order: 0,
     categories: ["size"],
     stages: ["pre-commit"],
     languages: ["typescript"],
@@ -22,13 +23,14 @@ const RULES = [
   {
     slug: "lint-b",
     name: "B",
+    order: 1,
     categories: ["naming"],
     stages: ["pre-commit", "pre-push"],
     languages: [],
     actions: [{ kind: "script", scriptBody: "prettier --write" }],
   },
   // No category/stage and language-independent: the filters can't exclude it, so it always shows.
-  { slug: "lint-c", name: "C", categories: [], stages: [], languages: [], languageIndependent: true, actions: [] },
+  { slug: "lint-c", name: "C", order: 2, categories: [], stages: [], languages: [], languageIndependent: true, actions: [] },
 ];
 const META = {
   languages: [
@@ -1183,17 +1185,29 @@ describe("panelExt injected script", () => {
     return tr.querySelector<HTMLButtonElement>('.co-act-td .co-act-btn[data-act="' + act + '"]')!;
   };
 
-  it("adds a trailing actions column with reorder/Run/Activity/Settings icon buttons per row", async () => {
+  it("adds a trailing actions column with Run/Activity/Settings icon buttons per row", async () => {
     await runInjected();
     const cells = document.querySelectorAll(".co-act-td");
     expect(cells).toHaveLength(3);
     const acts = [...cells[0].querySelectorAll(".co-act-btn")].map((b) =>
       b.getAttribute("data-act"),
     );
-    expect(acts).toEqual(["up", "down", "run", "activity", "settings"]);
+    expect(acts).toEqual(["run", "activity", "settings"]);
     // Icons are inline Lucide SVGs, not emoji or text.
     expect(cells[0].querySelector(".co-act-btn svg")).not.toBeNull();
   });
+
+  const rowFor = (slug: string) =>
+    [...document.querySelectorAll("tbody tr")].find(
+      (r) => r.querySelector(".font-mono")?.textContent === slug,
+    )!;
+  const selectRow = (slug: string) =>
+    rowFor(slug).querySelector(".font-mono")!.dispatchEvent(
+      new Event("click", { bubbles: true }),
+    );
+  const orderBar = () => document.getElementById("co-order-bar")!;
+  const orderBtn = (dir: "up" | "down") =>
+    orderBar().querySelector<HTMLButtonElement>(".co-order-" + dir)!;
 
   const toasts = () => [...document.querySelectorAll("#co-toast-region .co-toast")];
   const toastText = (el: Element) => el.querySelector(".co-toast-msg")?.textContent;
@@ -1208,9 +1222,48 @@ describe("panelExt injected script", () => {
     expect(toasts()[0].classList.contains("co-toast-success")).toBe(true);
   });
 
-  it("reorder arrow PATCHes the global rule order and toasts", async () => {
+  it("starts with the reorder bar present and both buttons disabled", async () => {
     await runInjected();
-    actBtn("lint-b", "up").click();
+    expect(orderBar()).not.toBeNull();
+    expect(orderBar().querySelector(".co-order-label")!.textContent).toBe(
+      "Select a rule to reorder",
+    );
+    expect(orderBtn("up").disabled).toBe(true);
+    expect(orderBtn("down").disabled).toBe(true);
+  });
+
+  it("selecting a row highlights it and gates the arrows by its position", async () => {
+    await runInjected();
+    // Middle row (a,b,c): both arrows enabled.
+    selectRow("lint-b");
+    await flush();
+    expect(rowFor("lint-b").classList.contains("co-row-selected")).toBe(true);
+    expect(orderBar().querySelector(".co-order-label")!.textContent).toBe("Reorder: lint-b");
+    expect(orderBtn("up").disabled).toBe(false);
+    expect(orderBtn("down").disabled).toBe(false);
+    // First row: up disabled. Selecting a new row moves the highlight.
+    selectRow("lint-a");
+    await flush();
+    expect(rowFor("lint-b").classList.contains("co-row-selected")).toBe(false);
+    expect(orderBtn("up").disabled).toBe(true);
+    expect(orderBtn("down").disabled).toBe(false);
+    // Last row: down disabled.
+    selectRow("lint-c");
+    await flush();
+    expect(orderBtn("up").disabled).toBe(false);
+    expect(orderBtn("down").disabled).toBe(true);
+    // Clicking the selected row again clears the selection.
+    selectRow("lint-c");
+    await flush();
+    expect(rowFor("lint-c").classList.contains("co-row-selected")).toBe(false);
+    expect(orderBtn("up").disabled).toBe(true);
+  });
+
+  it("the footer arrow PATCHes the global order for the selected row and toasts", async () => {
+    await runInjected();
+    selectRow("lint-b");
+    await flush();
+    orderBtn("up").click();
     for (let i = 0; i < 3; i++) await flush();
     // The move edits the global order, so it hits /api/rules/:slug (not the
     // project-scoped route) with a { move } body.
