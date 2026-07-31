@@ -181,3 +181,176 @@ describe("runDispatch", () => {
     expect(spawnMock).not.toHaveBeenCalled();
   });
 });
+
+// A child whose stdout emits `data` before it exits, like `git diff` piping names.
+function childWithStdout(data: string, code: number): EventEmitter {
+  const c = new EventEmitter() as EventEmitter & { stdout: EventEmitter };
+  c.stdout = new EventEmitter();
+  queueMicrotask(() => {
+    c.stdout.emit("data", Buffer.from(data));
+    c.emit("exit", code, null);
+  });
+  return c;
+}
+
+/** Bind `slug`'s default (env-null) action to `actionSlug` in the registry DB. */
+function bindDefault(slug: string, actionSlug: string): void {
+  const db = openDb(dbPath);
+  const rid = (db.prepare("SELECT id FROM rules WHERE slug = ?").get(slug) as { id: number }).id;
+  const aid = (
+    db.prepare("SELECT id FROM action_types WHERE slug = ?").get(actionSlug) as { id: number }
+  ).id;
+  db.prepare(
+    "INSERT INTO rule_actions (rule_id, environment_id, action_type_id) VALUES (?, NULL, ?)",
+  ).run(rid, aid);
+  db.close();
+}
+
+/** Swap a rule's `script` fix from a scriptPath to a shell scriptBody. */
+function useShellFix(slug: string, body: string): void {
+  const db = openDb(dbPath);
+  const rid = (db.prepare("SELECT id FROM rules WHERE slug = ?").get(slug) as { id: number }).id;
+  db.prepare(
+    "UPDATE fixes SET script_path = NULL, script_body = ? WHERE rule_id = ? AND kind = 'script'",
+  ).run(body, rid);
+  db.close();
+}
+
+/** Also run `slug` at `stage` (lint-prettier ships pre-commit only). */
+function addStage(slug: string, stage: string): void {
+  const db = openDb(dbPath);
+  const rid = (db.prepare("SELECT id FROM rules WHERE slug = ?").get(slug) as { id: number }).id;
+  db.prepare("INSERT INTO rule_stages (rule_id, stage) VALUES (?, ?)").run(rid, stage);
+  db.close();
+}
+
+interface FixMock {
+  staged?: string;
+  fixCode?: number;
+  checkCode?: number;
+  addCode?: number;
+  diffFails?: boolean;
+}
+
+/** Route each spawn by command: git diff/add, the `--fix` run, and the plain check. */
+function mockFixRun({
+  staged = "a.ts\nb.ts\n",
+  fixCode = 0,
+  checkCode = 0,
+  addCode = 0,
+  diffFails = false,
+}: FixMock = {}): void {
+  spawnMock.mockImplementation(((cmd: string, args: string[]) => {
+    if (cmd === "git" && args[0] === "diff") {
+      return diffFails
+        ? fakeChild((c) => c.emit("exit", 1, null))
+        : childWithStdout(staged, 0);
+    }
+    if (cmd === "git" && args[0] === "add") {
+      return fakeChild((c) => c.emit("exit", addCode, null));
+    }
+    if (args.includes("--fix")) return fakeChild((c) => c.emit("exit", fixCode, null));
+    return fakeChild((c) => c.emit("exit", checkCode, null));
+  }) as never);
+}
+
+/** [command, args] for every spawn, so tests match without pinning absolute paths. */
+function spawnCalls(): [string, string[]][] {
+  return spawnMock.mock.calls.map(([cmd, args]) => [cmd as string, args as string[]]);
+}
+const fixRun = (calls: [string, string[]][]) =>
+  calls.find(([cmd, args]) => cmd === process.execPath && args.includes("--fix"));
+const checkRun = (calls: [string, string[]][]) =>
+  calls.find(
+    ([cmd, args]) => cmd === process.execPath && !args.includes("--fix") && args.includes("--staged"),
+  );
+const gitAdd = (calls: [string, string[]][]) =>
+  calls.find(([cmd, args]) => cmd === "git" && args[0] === "add");
+
+describe("runDispatch fix actions", () => {
+  it("fix_and_halt: runs the fix, re-stages, then halts on remaining violations", async () => {
+    isolatePreCommit("lint-prettier");
+    bindDefault("lint-prettier", "fix_and_halt");
+    mockFixRun({ staged: "a.ts\nb.ts\n", fixCode: 0, checkCode: 2 });
+
+    await expect(runDispatch(["pre-commit"])).rejects.toThrow("process.exit:2");
+    expect(exitSpy).toHaveBeenCalledWith(2);
+    const calls = spawnCalls();
+    expect(fixRun(calls)?.[1]).toContain("--fix");
+    expect(gitAdd(calls)).toEqual(["git", ["add", "--", "a.ts", "b.ts"]]);
+    expect(checkRun(calls)).toBeDefined();
+    expect(recordedRuns()).toEqual([
+      { slug: "lint-prettier", stage: "pre-commit", status: "failure" },
+    ]);
+  });
+
+  it("fix_and_warn: runs the fix and re-checks but never fails the stage", async () => {
+    isolatePreCommit("lint-prettier");
+    bindDefault("lint-prettier", "fix_and_warn");
+    mockFixRun({ checkCode: 1 });
+
+    await expect(runDispatch(["pre-commit"])).resolves.toBeUndefined();
+    expect(exitSpy).not.toHaveBeenCalled();
+    expect(checkRun(spawnCalls())).toBeDefined();
+  });
+
+  it("fix: runs the fix, never runs the check, and never blocks", async () => {
+    isolatePreCommit("lint-prettier");
+    bindDefault("lint-prettier", "fix");
+    mockFixRun({ fixCode: 0 });
+
+    await expect(runDispatch(["pre-commit"])).resolves.toBeUndefined();
+    const calls = spawnCalls();
+    expect(fixRun(calls)).toBeDefined();
+    expect(checkRun(calls)).toBeUndefined();
+    expect(recordedRuns()).toEqual([
+      { slug: "lint-prettier", stage: "pre-commit", status: "success" },
+    ]);
+  });
+
+  it("skips the fix at pre-push and applies the gate to the check", async () => {
+    const db = openDb(dbPath);
+    db.prepare("UPDATE rules SET enabled = 0 WHERE slug != ?").run("lint-prettier");
+    db.close();
+    addStage("lint-prettier", "pre-push");
+    bindDefault("lint-prettier", "fix_and_halt");
+    mockFixRun({ checkCode: 2 });
+
+    await expect(runDispatch(["pre-push"])).rejects.toThrow("process.exit:2");
+    const calls = spawnCalls();
+    expect(fixRun(calls)).toBeUndefined();
+    expect(gitAdd(calls)).toBeUndefined();
+    expect(calls.find(([cmd, args]) => cmd === "git" && args[0] === "diff")).toBeUndefined();
+  });
+
+  it("runs a shell scriptBody fix over the staged files", async () => {
+    isolatePreCommit("lint-prettier");
+    useShellFix("lint-prettier", "prettier --write");
+    bindDefault("lint-prettier", "fix_and_warn");
+    mockFixRun({ staged: "a.ts\nb.ts\n", checkCode: 0 });
+
+    await expect(runDispatch(["pre-commit"])).resolves.toBeUndefined();
+    const calls = spawnCalls();
+    expect(calls).toContainEqual(["prettier", ["--write", "a.ts", "b.ts"]]);
+  });
+
+  it("skips a shell scriptBody fix when nothing is staged", async () => {
+    isolatePreCommit("lint-prettier");
+    useShellFix("lint-prettier", "prettier --write");
+    bindDefault("lint-prettier", "fix");
+    mockFixRun({ staged: "", checkCode: 0 });
+
+    await expect(runDispatch(["pre-commit"])).resolves.toBeUndefined();
+    const calls = spawnCalls();
+    expect(calls.some(([cmd]) => cmd === "prettier")).toBe(false);
+    expect(gitAdd(calls)).toBeUndefined();
+  });
+
+  it("aborts when staged-file collection fails", async () => {
+    isolatePreCommit("lint-prettier");
+    bindDefault("lint-prettier", "fix_and_halt");
+    mockFixRun({ diffFails: true });
+
+    await expect(runDispatch(["pre-commit"])).rejects.toThrow(/git diff exited 1/);
+  });
+});

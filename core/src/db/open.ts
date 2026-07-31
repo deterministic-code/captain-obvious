@@ -25,6 +25,9 @@ const ACTION_TYPES: ReadonlyArray<readonly [string, string]> = [
   ["warn", "Warn"],
   ["halt", "Halt"],
   ["delay_halt", "Delayed halt"],
+  ["fix", "Fix"],
+  ["fix_and_warn", "Fix and Warn"],
+  ["fix_and_halt", "Fix and Halt"],
 ];
 
 export interface DbPathOpts {

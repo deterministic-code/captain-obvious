@@ -19,6 +19,7 @@ import { seedRules, type SeedSummary } from "../db/seed.js";
 import type { Db } from "../db/open.js";
 import { resolveMode, type Mode } from "../db/location.js";
 import type { ProjectRow, RuleRow } from "../db/types.js";
+import { FIX_ACTIONS } from "../rules/action-behavior.js";
 import { RULES } from "../rules/index.js";
 import type { ControlSpec, RuleDependency } from "../rules/plugin.js";
 import { STAGES, stageOrder } from "../rules/stages.js";
@@ -245,7 +246,12 @@ export function listRules(db: Db): RuleView[] {
 }
 
 export interface MetaView {
-  actionTypes: { slug: string; name: string }[];
+  /**
+   * `requiresFix` is an additive field the prebuilt panel ignores; panelExt uses
+   * it to offer the fix actions (Fix / Fix and Warn / Fix and Halt) only for
+   * rules that declare a deterministic `script` fix.
+   */
+  actionTypes: { slug: string; name: string; requiresFix: boolean }[];
   environments: { slug: string; name: string }[];
   /**
    * Supported languages only (is_supported = 1). Additive field — the prebuilt
@@ -263,9 +269,12 @@ export interface MetaView {
 /** GET /api/meta — dropdown sources for the action/environment/language/stage selectors. */
 export function getMeta(db: Db): MetaView {
   return {
-    actionTypes: db
-      .prepare("SELECT slug, name FROM action_types ORDER BY name")
-      .all() as MetaView["actionTypes"],
+    actionTypes: (
+      db.prepare("SELECT slug, name FROM action_types ORDER BY name").all() as {
+        slug: string;
+        name: string;
+      }[]
+    ).map((a) => ({ ...a, requiresFix: FIX_ACTIONS.includes(a.slug) })),
     environments: db
       .prepare("SELECT slug, name FROM environments ORDER BY name")
       .all() as MetaView["environments"],

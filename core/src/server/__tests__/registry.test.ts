@@ -165,6 +165,9 @@ describe("getMeta", () => {
     const meta = getMeta(db);
     expect(meta.actionTypes.map((a) => a.slug)).toEqual([
       "delay_halt",
+      "fix",
+      "fix_and_halt",
+      "fix_and_warn",
       "halt",
       "warn",
     ]);
@@ -173,6 +176,16 @@ describe("getMeta", () => {
       "cursor",
       "github",
     ]);
+  });
+
+  it("flags the fix actions with requiresFix so the panel can gate them", () => {
+    const bySlug = new Map(getMeta(db).actionTypes.map((a) => [a.slug, a.requiresFix]));
+    expect(bySlug.get("fix")).toBe(true);
+    expect(bySlug.get("fix_and_warn")).toBe(true);
+    expect(bySlug.get("fix_and_halt")).toBe(true);
+    expect(bySlug.get("warn")).toBe(false);
+    expect(bySlug.get("halt")).toBe(false);
+    expect(bySlug.get("delay_halt")).toBe(false);
   });
 
   it("lists only supported languages, alphabetically by name", () => {

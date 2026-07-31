@@ -3,7 +3,7 @@ import type { Db } from "./open.js";
 import type { ActionTypeRow, ConfigureActionOpts } from "./types.js";
 
 /**
- * Manage the action-type catalog (warn / halt / delay_halt / custom). With
+ * Manage the action-type catalog (warn / halt / delay_halt / fix* / custom). With
  * `add: true` a missing type is created; otherwise it must already exist.
  * `name` is updated when provided.
  */

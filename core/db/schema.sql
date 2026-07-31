@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS environments (
 
 CREATE TABLE IF NOT EXISTS action_types (
   id   INTEGER PRIMARY KEY,
-  slug TEXT NOT NULL UNIQUE,              -- 'warn' | 'halt' | 'delay_halt'
+  slug TEXT NOT NULL UNIQUE,              -- warn | halt | delay_halt | fix | fix_and_warn | fix_and_halt
   name TEXT NOT NULL
 ) STRICT;
 

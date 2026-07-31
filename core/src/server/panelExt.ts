@@ -2895,7 +2895,10 @@ export const PANEL_EXT = `(() => {
     return { row, read: () => input.value };
   }
 
-  function severitySelect(current, inheritLabel) {
+  // The fix actions (requiresFix) only make sense for a rule that declares a
+  // deterministic script fix; disable them otherwise, unless one is already the
+  // saved value (so an existing binding stays selectable rather than vanishing).
+  function severitySelect(current, inheritLabel, hasScriptFix) {
     const sel = document.createElement("select");
     sel.className = "co-set-select";
     const none = document.createElement("option");
@@ -2906,6 +2909,10 @@ export const PANEL_EXT = `(() => {
       const opt = document.createElement("option");
       opt.value = at.slug;
       opt.textContent = at.name;
+      if (at.requiresFix && !hasScriptFix && at.slug !== current) {
+        opt.disabled = true;
+        opt.textContent = at.name + " (needs a fix)";
+      }
       sel.appendChild(opt);
     }
     sel.value = current || "";
@@ -3046,9 +3053,11 @@ export const PANEL_EXT = `(() => {
     const defLabel = document.createElement("label");
     defLabel.className = "co-set-label";
     defLabel.textContent = "Default";
+    const hasScriptFix = (rule.actions || []).some((a) => a.kind === "script");
     const defSel = severitySelect(
       rule.defaultAction ? rule.defaultAction.type : "",
       "No default binding",
+      hasScriptFix,
     );
     const delayInput = document.createElement("input");
     delayInput.type = "number";
@@ -3076,7 +3085,7 @@ export const PANEL_EXT = `(() => {
       const label = document.createElement("label");
       label.className = "co-set-label";
       label.textContent = env.name;
-      const sel = severitySelect(envByName[env.slug] || "", "Inherit default");
+      const sel = severitySelect(envByName[env.slug] || "", "Inherit default", hasScriptFix);
       row.appendChild(label);
       row.appendChild(sel);
       sevSection.appendChild(row);
