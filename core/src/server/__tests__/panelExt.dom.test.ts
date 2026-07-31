@@ -295,7 +295,9 @@ describe("panelExt injected script", () => {
     const heads = [...document.querySelectorAll("thead th")].map((t) =>
       t.textContent,
     );
-    // Native: Rule, Category, Stage, Enabled, Action.
+    // Native: Rule, Category, Stage, Enabled, Action. The injected Action column
+    // (co-sev-th) is the per-row default-binding selector, distinct from the
+    // native Action column.
     expect(heads).toEqual([
       "Rule",
       "Category",
@@ -304,7 +306,7 @@ describe("panelExt injected script", () => {
       "Enabled",
       "Action",
       "Fix",
-      "Severity",
+      "Action",
       "",
     ]);
     // The native Category/Stage cells are hidden and replaced in place by

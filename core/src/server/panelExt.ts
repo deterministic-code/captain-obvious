@@ -737,7 +737,7 @@ export const PANEL_EXT = `(() => {
       addHeader(headRow, "co-fix-th", "Fix");
       // Languages sits right after the native Category column (index 1).
       addHeader(headRow, "co-lang-th", "Languages", headRow.children[1]);
-      addHeader(headRow, "co-sev-th", "Severity");
+      addHeader(headRow, "co-sev-th", "Action");
       addHeader(headRow, "co-act-th", "");
       updateSortIndicators();
     }
