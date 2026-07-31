@@ -89,6 +89,23 @@ describe("dispatch integration — real hooks run and log activity", () => {
     db.prepare(
       "UPDATE rules SET enabled = CASE WHEN slug = 'lint-naming' THEN 1 ELSE 0 END",
     ).run();
+    // lint-naming now ships a `warn` default; bind halt so the violation blocks.
+    const rid = (
+      db.prepare("SELECT id FROM rules WHERE slug = 'lint-naming'").get() as {
+        id: number;
+      }
+    ).id;
+    const haltId = (
+      db.prepare("SELECT id FROM action_types WHERE slug = 'halt'").get() as {
+        id: number;
+      }
+    ).id;
+    db.prepare(
+      "DELETE FROM rule_actions WHERE rule_id = ? AND environment_id IS NULL",
+    ).run(rid);
+    db.prepare(
+      "INSERT INTO rule_actions (rule_id, environment_id, action_type_id) VALUES (?, NULL, ?)",
+    ).run(rid, haltId);
     db.close();
     // A staged snake_case declaration makes the real lint-naming hook exit non-zero.
     await writeFile(join(repo, "bad.ts"), "const new_version = 1;\n");

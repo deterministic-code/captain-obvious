@@ -359,9 +359,9 @@ describe("patchRule", () => {
   it("replaces the stage set (canonical order) via setStages", () => {
     addRule(db, { slug: "lint-pst", name: "PSt", stages: ["pre-commit"] });
     const v = patchRule(db, "lint-pst", {
-      stages: ["pre-push", "claude-tool"],
+      stages: ["pre-push", "tool"],
     });
-    expect(v.stages).toEqual(["pre-push", "claude-tool"]);
+    expect(v.stages).toEqual(["pre-push", "tool"]);
     expect(v.stage).toBe("pre-push");
   });
 

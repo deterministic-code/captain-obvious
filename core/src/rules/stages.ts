@@ -1,6 +1,6 @@
 /**
  * The canonical stage list — the single source of truth for the stage taxonomy.
- * The git stages fire locally (pre-commit / pre-push); `claude-tool` fires from
+ * The git stages fire locally (pre-commit / pre-push); `tool` fires from
  * the Claude Code PreToolUse guard, not from git; `server` marks a governance
  * policy only GitHub can enforce. A stage's `gitFlag` is the lint-mode flag its
  * rules receive when the git hook dispatches it — stages with no local git
@@ -10,7 +10,7 @@
 export const STAGES = [
   { slug: "pre-commit", name: "Pre-commit", gitFlag: "--staged" },
   { slug: "pre-push", name: "Pre-push", gitFlag: "--push" },
-  { slug: "claude-tool", name: "Claude tool", gitFlag: null },
+  { slug: "tool", name: "Tool", gitFlag: null },
   { slug: "server", name: "Server", gitFlag: null },
 ] as const;
 

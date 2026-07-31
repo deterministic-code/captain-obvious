@@ -125,6 +125,20 @@ describe("assertRulePlugin", () => {
     expect(() => assertRulePlugin(p, "r")).toThrow(/unknown stage/);
   });
 
+  it("accepts a string defaultAction", () => {
+    const p = validPlugin();
+    (p.meta as { defaultAction?: string }).defaultAction = "warn";
+    expect(() => assertRulePlugin(p, "r")).not.toThrow();
+  });
+
+  it("rejects a non-string defaultAction", () => {
+    const p = validPlugin();
+    (p.meta as { defaultAction: unknown }).defaultAction = 7;
+    expect(() => assertRulePlugin(p, "r")).toThrow(
+      /meta.defaultAction must be a string/,
+    );
+  });
+
   it("rejects a non-string, non-null checkEntry", () => {
     const p = validPlugin();
     (p as { checkEntry: unknown }).checkEntry = 7;

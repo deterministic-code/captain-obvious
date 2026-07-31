@@ -136,6 +136,10 @@ export function assertRulePlugin(value: unknown, slug: string): RulePlugin {
   }
   for (const stage of m.stages) requireStage(String(stage));
 
+  if (m.defaultAction !== undefined && typeof m.defaultAction !== "string") {
+    throw new Error(`rule ${slug}: meta.defaultAction must be a string`);
+  }
+
   const { checkEntry, control } = plugin;
   if (checkEntry !== null && typeof checkEntry !== "string") {
     throw new Error(`rule ${slug}: checkEntry must be a string or null`);

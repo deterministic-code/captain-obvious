@@ -66,6 +66,31 @@ function enableOnly(...slugs: string[]): void {
   db.close();
 }
 
+/** Force the given slugs to block (halt), overriding the seeded `warn` default,
+ *  so the fail-fast abort path is exercised regardless of the shipped default. */
+function bindHalt(...slugs: string[]): void {
+  const db = openDb(dbPath);
+  const haltId = (
+    db.prepare("SELECT id FROM action_types WHERE slug = 'halt'").get() as {
+      id: number;
+    }
+  ).id;
+  for (const slug of slugs) {
+    const rid = (
+      db.prepare("SELECT id FROM rules WHERE slug = ?").get(slug) as {
+        id: number;
+      }
+    ).id;
+    db.prepare(
+      "DELETE FROM rule_actions WHERE rule_id = ? AND environment_id IS NULL",
+    ).run(rid);
+    db.prepare(
+      "INSERT INTO rule_actions (rule_id, environment_id, action_type_id) VALUES (?, NULL, ?)",
+    ).run(rid, haltId);
+  }
+  db.close();
+}
+
 beforeEach(() => {
   tmpDir = mkdtempSync(join(tmpdir(), "co-activity-"));
   dbPath = join(tmpDir, "registry.db");
@@ -113,6 +138,7 @@ describe("dispatch activity coverage — every git-stage rule logs a hook_run", 
     "$slug logs a failure hook_run at $stage even when its hook errors",
     async ({ slug, stage }) => {
       enableOnly(slug);
+      bindHalt(slug);
       spawnMock.mockImplementationOnce(
         () => fakeChild((c) => c.emit("exit", 1, null)) as never,
       );
@@ -129,6 +155,7 @@ describe("dispatch activity coverage — every git-stage rule logs a hook_run", 
       pair.includes(s),
     ) as string;
     enableOnly(...pair);
+    bindHalt(...pair);
     spawnMock.mockImplementationOnce(
       () => fakeChild((c) => c.emit("exit", 1, null)) as never,
     );
