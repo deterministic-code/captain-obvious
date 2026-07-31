@@ -1515,6 +1515,57 @@ describe("panelExt injected script", () => {
     expect(toasts().map(toastText)).toContain("Moved lint-b up");
   });
 
+  const grip = (slug: string) =>
+    rowFor(slug).querySelector<HTMLElement>(".co-drag-handle")!;
+  const fireDrag = (el: Element, type: string) =>
+    el.dispatchEvent(new Event(type, { bubbles: true }));
+
+  it("gives each row a draggable grip in its actions cell", async () => {
+    await runInjected();
+    const grips = document.querySelectorAll(".co-act-td .co-drag-handle");
+    expect(grips).toHaveLength(3);
+    expect(grips[0].getAttribute("draggable")).toBe("true");
+  });
+
+  it("dragging a grip onto another row PATCHes moveBefore and toasts", async () => {
+    await runInjected();
+    // happy-dom's getBoundingClientRect is all-zero, so the drop lands in the
+    // hovered row's top half — i.e. before that row.
+    fireDrag(grip("lint-a"), "dragstart");
+    expect(rowFor("lint-a").classList.contains("co-dragging")).toBe(true);
+    fireDrag(rowFor("lint-c"), "dragover");
+    expect(rowFor("lint-c").classList.contains("co-drop-before")).toBe(true);
+    fireDrag(rowFor("lint-c"), "drop");
+    for (let i = 0; i < 3; i++) await flush();
+    expect(
+      patchCalls.some(
+        (c) => c.url === "/api/rules/lint-a" && c.body.moveBefore === "lint-c",
+      ),
+    ).toBe(true);
+    expect(toasts().map(toastText)).toContain("Moved lint-a");
+    // dragend clears the dragging + insertion-line classes.
+    fireDrag(grip("lint-a"), "dragend");
+    expect(document.querySelector(".co-dragging")).toBeNull();
+    expect(document.querySelector(".co-drop-before")).toBeNull();
+  });
+
+  it("dropping a rule on itself is a no-op (no moveBefore PATCH)", async () => {
+    await runInjected();
+    fireDrag(grip("lint-b"), "dragstart");
+    fireDrag(rowFor("lint-b"), "dragover");
+    fireDrag(rowFor("lint-b"), "drop");
+    for (let i = 0; i < 3; i++) await flush();
+    expect(patchCalls.some((c) => "moveBefore" in c.body)).toBe(false);
+    fireDrag(grip("lint-b"), "dragend");
+  });
+
+  it("clicking the grip does not toggle row selection", async () => {
+    await runInjected();
+    grip("lint-b").dispatchEvent(new Event("click", { bubbles: true }));
+    await flush();
+    expect(rowFor("lint-b").classList.contains("co-row-selected")).toBe(false);
+  });
+
   it("toasts after saving rule settings", async () => {
     await runInjected();
     actBtn("lint-a", "settings").click();

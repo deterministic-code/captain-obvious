@@ -14,7 +14,7 @@ import {
   setProjectRule,
   syncProjectRules,
 } from "../db/projects.js";
-import { configureRule, reorderRule } from "../db/rules.js";
+import { configureRule, reorderRule, reorderRuleBefore } from "../db/rules.js";
 import { seedRules, type SeedSummary } from "../db/seed.js";
 import type { Db } from "../db/open.js";
 import { resolveMode, type Mode } from "../db/location.js";
@@ -72,7 +72,8 @@ export interface RuleView {
   /**
    * The rule's execution/display order (rules.sort_index), ascending. Additive
    * field — the prebuilt panel ignores it; panelExt reads it and renders the
-   * per-row reorder arrows that PATCH `{ move }`.
+   * per-row reorder arrows (PATCH `{ move }`) and drag-and-drop (PATCH
+   * `{ moveBefore }`).
    */
   order: number;
   enabled: boolean;
@@ -382,6 +383,11 @@ export interface RulePatch {
   stages?: string[];
   /** Move the rule one step earlier/later in the global execution order. */
   move?: "up" | "down";
+  /**
+   * Move the rule to sit immediately before this slug in the global execution
+   * order, or to the end when null. Backs the panel's drag-and-drop reorder.
+   */
+  moveBefore?: string | null;
 }
 
 /** The rule's currently-linked language slugs. */
@@ -456,6 +462,9 @@ export function patchRule(db: Db, slug: string, patch: RulePatch): RuleView {
   }
   if (patch.move !== undefined) {
     reorderRule(db, slug, patch.move);
+  }
+  if (patch.moveBefore !== undefined) {
+    reorderRuleBefore(db, slug, patch.moveBefore);
   }
   const view = listRules(db).find((r) => r.slug === slug);
   if (!view) throw new Error(`unknown rule: ${slug}`);

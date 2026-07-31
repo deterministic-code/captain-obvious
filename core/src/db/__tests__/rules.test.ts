@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { openDb, type Db } from "../open.js";
-import { addRule, configureRule, reorderRule } from "../rules.js";
+import {
+  addRule,
+  configureRule,
+  reorderRule,
+  reorderRuleBefore,
+} from "../rules.js";
 import type { RuleActionRow } from "../types.js";
 
 let db: Db;
@@ -380,5 +385,50 @@ describe("reorderRule", () => {
 
   it("rejects an unknown rule", () => {
     expect(() => reorderRule(db, "nope", "up")).toThrow(/unknown rule/);
+  });
+});
+
+describe("reorderRuleBefore", () => {
+  beforeEach(() => {
+    addRule(db, { slug: "rule-a", name: "A" });
+    addRule(db, { slug: "rule-b", name: "B" });
+    addRule(db, { slug: "rule-c", name: "C" });
+  });
+
+  it("moves a rule to sit before a later target", () => {
+    reorderRuleBefore(db, "rule-c", "rule-a");
+    expect(order()).toEqual(["rule-c", "rule-a", "rule-b"]);
+    expect([
+      sortIndex("rule-c"),
+      sortIndex("rule-a"),
+      sortIndex("rule-b"),
+    ]).toEqual([0, 1, 2]);
+  });
+
+  it("moves a rule to sit before an earlier target", () => {
+    reorderRuleBefore(db, "rule-a", "rule-c");
+    expect(order()).toEqual(["rule-b", "rule-a", "rule-c"]);
+  });
+
+  it("moves a rule to the end when target is null", () => {
+    reorderRuleBefore(db, "rule-a", null);
+    expect(order()).toEqual(["rule-b", "rule-c", "rule-a"]);
+  });
+
+  it("is a no-op when dropped on itself", () => {
+    reorderRuleBefore(db, "rule-b", "rule-b");
+    expect(order()).toEqual(["rule-a", "rule-b", "rule-c"]);
+  });
+
+  it("rejects an unknown rule", () => {
+    expect(() => reorderRuleBefore(db, "nope", "rule-a")).toThrow(
+      /unknown rule/,
+    );
+  });
+
+  it("rejects an unknown target", () => {
+    expect(() => reorderRuleBefore(db, "rule-a", "nope")).toThrow(
+      /unknown rule/,
+    );
   });
 });

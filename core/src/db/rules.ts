@@ -249,6 +249,44 @@ export function reorderRule(
   return row;
 }
 
+/**
+ * Move a rule to sit immediately before `beforeSlug` in the global execution
+ * order, or to the end when `beforeSlug` is null. Backs the panel's drag-and-drop
+ * reorder, which needs an arbitrary-position move rather than the single-step
+ * swap `reorderRule` gives. Renumbers to contiguous sort_index values so the drop
+ * always takes effect even from an all-equal seeded start.
+ */
+export function reorderRuleBefore(
+  db: Db,
+  slug: string,
+  beforeSlug: string | null,
+): RuleRow {
+  const rule = requireRule(db, slug);
+  if (beforeSlug === slug) return rule;
+  const before = beforeSlug === null ? null : requireRule(db, beforeSlug);
+  const move = db.transaction((): RuleRow => {
+    const ordered = db
+      .prepare("SELECT id FROM rules ORDER BY sort_index, slug")
+      .all() as { id: number }[];
+    const from = ordered.findIndex((r) => r.id === rule.id);
+    ordered.splice(from, 1);
+    const at =
+      before === null ? ordered.length : ordered.findIndex((r) => r.id === before.id);
+    ordered.splice(at, 0, { id: rule.id });
+    const renumber = db.prepare("UPDATE rules SET sort_index = ? WHERE id = ?");
+    ordered.forEach((r, idx) => renumber.run(idx, r.id));
+    return db.prepare("SELECT * FROM rules WHERE id = ?").get(rule.id) as RuleRow;
+  });
+  const row = move();
+  logEvent(
+    "rule.configured",
+    beforeSlug === null
+      ? `moved rule ${slug} to the end`
+      : `moved rule ${slug} before ${beforeSlug}`,
+  );
+  return row;
+}
+
 /** Emit one audit event per distinct change a configureRule call made. */
 function auditConfigureRule(
   slug: string,

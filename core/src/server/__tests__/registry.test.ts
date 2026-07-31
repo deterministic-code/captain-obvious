@@ -380,6 +380,27 @@ describe("patchRule", () => {
     ).toEqual(["lint-pm-b", "lint-pm-a"]);
   });
 
+  it("moves a rule before a target via moveBefore, exposing the new order", () => {
+    addRule(db, { slug: "lint-mb-a", name: "MBA" });
+    addRule(db, { slug: "lint-mb-b", name: "MBB" });
+    addRule(db, { slug: "lint-mb-c", name: "MBC" });
+    patchRule(db, "lint-mb-c", { moveBefore: "lint-mb-a" });
+    expect(
+      listRules(db)
+        .map((r) => r.slug)
+        .slice(0, 3),
+    ).toEqual(["lint-mb-c", "lint-mb-a", "lint-mb-b"]);
+  });
+
+  it("moves a rule to the end via moveBefore: null", () => {
+    addRule(db, { slug: "lint-me-a", name: "MEA" });
+    addRule(db, { slug: "lint-me-b", name: "MEB" });
+    const v = patchRule(db, "lint-me-a", { moveBefore: null });
+    const all = listRules(db).map((r) => r.slug);
+    expect(all.indexOf("lint-me-a")).toBeGreaterThan(all.indexOf("lint-me-b"));
+    expect(v.slug).toBe("lint-me-a");
+  });
+
   it("throws for an unknown rule when the patch is a no-op", () => {
     // With no mutation op, configureRule is never called; the missing view on the
     // final read is what surfaces the unknown rule.
