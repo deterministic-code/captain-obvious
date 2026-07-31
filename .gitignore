@@ -12,6 +12,16 @@ core/data/*.db
 coverage/
 .worktrees/
 
+# Local Claude Code state: per-machine settings overrides and scratch scripts
+# (CLAUDE.md keeps scratch under .claude/tmp/). The shared .claude/settings.json
+# stays tracked.
+.claude/settings.local.json
+**/.claude/tmp/
+
+# External profiler DB (Activity data source) — machine-local runtime data
+# regenerated on profiling, like the registry/audit DBs above.
+.profile/
+
 # The prebuilt control-panel bundle is shipped (see core package.json "files") and
 # has no source in this repo, so it must be committed despite the dist/ rule.
 !core/web/dist/
