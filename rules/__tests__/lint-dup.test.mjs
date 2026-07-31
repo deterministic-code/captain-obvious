@@ -141,7 +141,7 @@ describe("lint-dup / isImportOnlyFragment", () => {
 
   // A closer line `} from "x";` as the very FIRST line (never inImport) matches
   // IMPORT_MEMBER_RE and, because it carries `from`, sets sawImport directly.
-  test("a lone `} from \"x\";` closer is import-only via the member+from branch", () => {
+  test('a lone `} from "x";` closer is import-only via the member+from branch', () => {
     expect(isImportOnlyFragment('} from "x";')).toBe(true);
   });
 

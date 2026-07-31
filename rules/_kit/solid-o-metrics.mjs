@@ -48,7 +48,8 @@ function isExhaustive(discriminantText) {
 function stringCaseCount(switchNode) {
   let n = 0;
   for (const clause of switchNode.caseBlock.clauses) {
-    if (ts.isCaseClause(clause) && ts.isStringLiteralLike(clause.expression)) n++;
+    if (ts.isCaseClause(clause) && ts.isStringLiteralLike(clause.expression))
+      n++;
   }
   return n;
 }
@@ -109,7 +110,8 @@ function switchViolation(sf, path, node) {
 function ifChainViolation(sf, path, node) {
   if (isChainContinuation(node)) return null;
   const chain = ifChain(node);
-  if (!chain || chain.arms < MIN_ARMS || isExhaustive(chain.operand)) return null;
+  if (!chain || chain.arms < MIN_ARMS || isExhaustive(chain.operand))
+    return null;
   return {
     path,
     ...locOf(sf, node),

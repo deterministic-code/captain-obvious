@@ -299,7 +299,9 @@ describe("solid-s-metrics / runSolidSHook runner", () => {
   });
 
   test("empty argv prints usage and exits 2", async () => {
-    await expect(runSolidSHook(["node", "s.mjs"])).rejects.toThrow(/__exit__:2/);
+    await expect(runSolidSHook(["node", "s.mjs"])).rejects.toThrow(
+      /__exit__:2/,
+    );
     expect(io.text(io.stderrSpy)).toMatch(/Usage/);
   });
 
@@ -348,11 +350,15 @@ describe("solid-s-metrics / runSolidSHook runner", () => {
     await expect(
       runSolidSHook(["node", "s.mjs", "--files", bad]),
     ).rejects.toThrow(/__exit__:1/);
-    expect(io.text(io.stderrSpy)).toContain("independent groups sharing no state");
+    expect(io.text(io.stderrSpy)).toContain(
+      "independent groups sharing no state",
+    );
   });
 
   test("--files with a high fan-out class emits a fan-out violation", async () => {
-    const deps = Array.from({ length: 9 }, (_, i) => String.fromCharCode(65 + i));
+    const deps = Array.from({ length: 9 }, (_, i) =>
+      String.fromCharCode(65 + i),
+    );
     const src = [
       ...deps.map((d) => `import { ${d} } from "./${d}";`),
       "class Orchestrator {",
@@ -393,12 +399,7 @@ describe("solid-s-metrics / runSolidSHook runner", () => {
   });
 
   test("--files on a missing file swallows ENOENT and stays clean", async () => {
-    await runSolidSHook([
-      "node",
-      "s.mjs",
-      "--files",
-      join(tmpRoot, "gone.ts"),
-    ]);
+    await runSolidSHook(["node", "s.mjs", "--files", join(tmpRoot, "gone.ts")]);
     expect(io.exitSpy).not.toHaveBeenCalled();
   });
 
@@ -429,9 +430,9 @@ describe("solid-s-metrics / --staged diff scope", () => {
   test("a newly-staged offender class is caught in --staged scope", async () => {
     await writeFile(join(repo, "bad.ts"), SPLIT_CLASS, "utf8");
     await gitIn(repo, ["add", "bad.ts"]);
-    await expect(
-      runSolidSHook(["node", "s.mjs", "--staged"]),
-    ).rejects.toThrow(/__exit__:1/);
+    await expect(runSolidSHook(["node", "s.mjs", "--staged"])).rejects.toThrow(
+      /__exit__:1/,
+    );
     expect(io.text(io.stderrSpy)).toContain("cohesion");
   });
 

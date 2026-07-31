@@ -22,12 +22,24 @@ vi.mock("../_kit/dup-structural-metrics.mjs", async (importOriginal) => {
   return {
     ...actual,
     tableViolationsForFile: vi.fn(async () => [
-      { line: 3, col: 1, kind: "structural sibling duplication (3 entries)", detail: "x" },
+      {
+        line: 3,
+        col: 1,
+        kind: "structural sibling duplication (3 entries)",
+        detail: "x",
+      },
     ]),
     subtreesForFile: vi.fn(async () => ({
       path: "relative/mod.mjs",
       subtrees: [
-        { fp: "(Obj shared)", name: "a", kind: "ObjectLiteralExpression", start: 1, end: 4, nodeCount: 25 },
+        {
+          fp: "(Obj shared)",
+          name: "a",
+          kind: "ObjectLiteralExpression",
+          start: 1,
+          end: 4,
+          nodeCount: 25,
+        },
       ],
     })),
     cloneClusters: vi.fn(() => [

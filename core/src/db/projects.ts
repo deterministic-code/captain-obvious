@@ -1,6 +1,10 @@
 import { logEvent } from "./audit.js";
 import { isUniqueViolation } from "./languages.js";
-import { requireEnvironmentId, requireLanguageId, requireRule } from "./lookups.js";
+import {
+  requireEnvironmentId,
+  requireLanguageId,
+  requireRule,
+} from "./lookups.js";
 import { resolveBinding, type ResolvedBinding } from "./rules.js";
 import type { Db } from "./open.js";
 import type {
@@ -16,7 +20,8 @@ function slugify(name: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
-  if (!slug) throw new Error(`project name has no slug-able characters: ${name}`);
+  if (!slug)
+    throw new Error(`project name has no slug-able characters: ${name}`);
   return slug;
 }
 
@@ -69,8 +74,14 @@ interface InsertProjectFields {
 
 /** Insert one project row and snapshot the current global rule config into it. */
 function insertProject(db: Db, fields: InsertProjectFields): ProjectRow {
-  const { name, description, files, directories, protected: protectedGlobs, isDefault } =
-    fields;
+  const {
+    name,
+    description,
+    files,
+    directories,
+    protected: protectedGlobs,
+    isDefault,
+  } = fields;
   if (!name) throw new Error("add-project requires a name");
   const slug = slugify(name);
 
@@ -91,11 +102,14 @@ function insertProject(db: Db, fields: InsertProjectFields): ProjectRow {
           isDefault ? 1 : 0,
         ).lastInsertRowid;
     } catch (err) {
-      if (isUniqueViolation(err)) throw new Error(`project already exists: ${slug}`);
+      if (isUniqueViolation(err))
+        throw new Error(`project already exists: ${slug}`);
       throw err;
     }
     syncProjectRulesTx(db, Number(id));
-    return db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow;
+    return db
+      .prepare("SELECT * FROM projects WHERE id = ?")
+      .get(id) as ProjectRow;
   });
   return create();
 }
@@ -116,8 +130,7 @@ export function listProjects(db: Db): ProjectRow[] {
 
 export function getProject(db: Db, id: number): ProjectRow {
   const row = db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as
-    | ProjectRow
-    | undefined;
+    ProjectRow | undefined;
   if (row === undefined) throw new Error(`unknown project: ${id}`);
   return row;
 }
@@ -164,14 +177,17 @@ export function configureProject(
         id,
       );
     }
-    return db.prepare("SELECT * FROM projects WHERE id = ?").get(id) as ProjectRow;
+    return db
+      .prepare("SELECT * FROM projects WHERE id = ?")
+      .get(id) as ProjectRow;
   });
 
   let row: ProjectRow;
   try {
     row = apply();
   } catch (err) {
-    if (isUniqueViolation(err)) throw new Error("another project already uses that name");
+    if (isUniqueViolation(err))
+      throw new Error("another project already uses that name");
     throw err;
   }
   logEvent("project.configured", `updated project ${row.slug}`);
@@ -242,7 +258,9 @@ export function setProjectRule(
     opts.languages !== undefined
       ? opts.languages.map((s) => requireLanguageId(db, s))
       : undefined;
-  const binding = opts.setAction ? resolveBinding(db, opts.setAction) : undefined;
+  const binding = opts.setAction
+    ? resolveBinding(db, opts.setAction)
+    : undefined;
 
   const apply = db.transaction(() => {
     syncProjectRulesTx(db, projectId);
@@ -273,12 +291,23 @@ export function setProjectRule(
   apply();
 
   if (opts.enabled === true) {
-    logEvent("project.rule.enabled", `enabled ${ruleSlug} in project ${projectId}`);
+    logEvent(
+      "project.rule.enabled",
+      `enabled ${ruleSlug} in project ${projectId}`,
+    );
   }
   if (opts.enabled === false) {
-    logEvent("project.rule.disabled", `disabled ${ruleSlug} in project ${projectId}`);
+    logEvent(
+      "project.rule.disabled",
+      `disabled ${ruleSlug} in project ${projectId}`,
+    );
   }
-  if (opts.languages !== undefined || opts.config !== undefined || opts.setAction || opts.removeAction) {
+  if (
+    opts.languages !== undefined ||
+    opts.config !== undefined ||
+    opts.setAction ||
+    opts.removeAction
+  ) {
     logEvent(
       "project.rule.configured",
       `updated config for ${ruleSlug} in project ${projectId}`,
@@ -291,7 +320,11 @@ export function setProjectRule(
  * installed in. `name` is resolved by the caller (server layer) so this stays
  * free of filesystem concerns. Idempotent: re-syncs an existing default instead.
  */
-export function ensureDefaultProject(db: Db, root: string, name: string): ProjectRow {
+export function ensureDefaultProject(
+  db: Db,
+  root: string,
+  name: string,
+): ProjectRow {
   const existing = db
     .prepare("SELECT * FROM projects WHERE is_default = 1")
     .get() as ProjectRow | undefined;

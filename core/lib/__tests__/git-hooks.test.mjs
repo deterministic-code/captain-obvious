@@ -26,7 +26,9 @@ describe("renderHook", () => {
   it("appends run: passthroughs after the dispatch line, each blocking", () => {
     const script = renderHook("pre-push", "hooks/git", ["npm run test:unit"]);
     const lines = script.trim().split("\n");
-    expect(lines.at(-2)).toBe('node "$ROOT/hooks/git/dispatch.mjs" pre-push || exit 1');
+    expect(lines.at(-2)).toBe(
+      'node "$ROOT/hooks/git/dispatch.mjs" pre-push || exit 1',
+    );
     expect(lines.at(-1)).toBe("npm run test:unit || exit 1");
   });
 });
@@ -97,18 +99,28 @@ describe("installGitHooks", () => {
     const main = await mkdtemp(join(tmpdir(), "co-hooks-main-"));
     dirs.push(main);
     await execFileAsync("git", ["init"], { cwd: main });
-    await execFileAsync("git", ["config", "user.email", "t@example.com"], { cwd: main });
+    await execFileAsync("git", ["config", "user.email", "t@example.com"], {
+      cwd: main,
+    });
     await execFileAsync("git", ["config", "user.name", "t"], { cwd: main });
-    await execFileAsync("git", ["commit", "--allow-empty", "-m", "init"], { cwd: main });
+    await execFileAsync("git", ["commit", "--allow-empty", "-m", "init"], {
+      cwd: main,
+    });
     const wt = `${main}-wt`;
     dirs.push(wt);
-    await execFileAsync("git", ["worktree", "add", wt, "-b", "wtb"], { cwd: main });
+    await execFileAsync("git", ["worktree", "add", wt, "-b", "wtb"], {
+      cwd: main,
+    });
     return wt;
   }
 
   it("resolves the shared hooks dir from a linked worktree (absolute --git-path)", async () => {
     const target = await tempWorktree();
-    const [preCommitPath] = await installGitHooks({ target, pkgRoot: target, gitHooks: {} });
+    const [preCommitPath] = await installGitHooks({
+      target,
+      pkgRoot: target,
+      gitHooks: {},
+    });
     // The bug joined the absolute --git-path onto target, nesting the hook under
     // the worktree; the fix resolves it to the real (shared) hooks dir outside it.
     expect(preCommitPath.startsWith(target)).toBe(false);

@@ -55,8 +55,7 @@ describe("solid-d-metrics / concretion classification", () => {
     expect(injectableConcretions(REPO).has("BaseService")).toBe(false);
   });
   test("a class extending a non-Error base is still a concretion", () => {
-    const src =
-      "export class Repo extends BaseThing { save() {} }";
+    const src = "export class Repo extends BaseThing { save() {} }";
     expect(injectableConcretions(src).has("Repo")).toBe(true);
   });
   test("a class extending a qualified (non-identifier) base is a concretion", () => {
@@ -361,7 +360,11 @@ describe("solid-d-metrics / real module resolution + runner", () => {
 
   test("the thin wrapper main drives a clean --files run", async () => {
     const svc = join(root, "services", "wrap.ts");
-    await writeFile(svc, "export class W { constructor(private d) {} }\n", "utf8");
+    await writeFile(
+      svc,
+      "export class W { constructor(private d) {} }\n",
+      "utf8",
+    );
     await main(["node", "d.mjs", "--files", svc]);
     expect(io.exitSpy).not.toHaveBeenCalled();
   });

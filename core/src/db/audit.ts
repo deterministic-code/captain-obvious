@@ -97,7 +97,9 @@ export function listLogs(db: Db, opts: ListLogsOpts = {}): LogEntry[] {
   const params: (string | number)[] = [];
   if (opts.sinceMs !== undefined) {
     clauses.push("created >= ?");
-    params.push(new Date(opts.sinceMs).toISOString().slice(0, 19).replace("T", " "));
+    params.push(
+      new Date(opts.sinceMs).toISOString().slice(0, 19).replace("T", " "),
+    );
   }
   const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   const limit = opts.limit !== undefined ? " LIMIT ?" : "";

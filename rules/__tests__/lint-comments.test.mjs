@@ -156,9 +156,9 @@ describe("lint-comments / main", () => {
   test("--files with a consecutive-comment run writes violations and exits 1", async () => {
     const bad = join(tmpRoot, "bad.ts");
     await writeFile(bad, `// a\n// b\nconst x = 1;\n`, "utf8");
-    await expect(
-      main(["node", "script.mjs", "--files", bad]),
-    ).rejects.toThrow(/__exit__:1/);
+    await expect(main(["node", "script.mjs", "--files", bad])).rejects.toThrow(
+      /__exit__:1/,
+    );
     expect(exitSpy).toHaveBeenCalledWith(1);
     expect(stderrText()).toContain("consecutive comment block");
     expect(stderrText()).toMatch(/1 violation\(s\)/);
@@ -185,7 +185,11 @@ describe("lint-comments / main", () => {
 
   test("--staged over a clean repo prints the staged-diff OK line", async () => {
     const repo = await makeTempGitRepo("lc-staged-");
-    await writeFile(join(repo, "clean.ts"), `// one-liner\nconst x = 1;\n`, "utf8");
+    await writeFile(
+      join(repo, "clean.ts"),
+      `// one-liner\nconst x = 1;\n`,
+      "utf8",
+    );
     await commitAllIn(repo, "seed");
     process.chdir(repo);
     await main(["node", "script.mjs", "--staged"]);

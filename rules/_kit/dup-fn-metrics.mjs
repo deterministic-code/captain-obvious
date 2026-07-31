@@ -29,7 +29,10 @@ function toRepoRelative(path, repoRoot) {
  * callbacks — a reinvented helper has a name; a repeated `it(...)` arrow does
  * not. A cluster is only actionable if it spans ≥2 files or ≥2 distinct names.
  */
-export function functionClones(subtreesByFile, { minNodes = FN_MIN_NODES } = {}) {
+export function functionClones(
+  subtreesByFile,
+  { minNodes = FN_MIN_NODES } = {},
+) {
   return cloneClusters(subtreesByFile, { minNodes })
     .filter((cluster) => cluster.every((m) => FUNCTION_KINDS.has(m.kind)))
     .filter((cluster) => {
@@ -46,7 +49,9 @@ export function clusterTier(cluster) {
   const inSdk = cluster.some((m) => isCanonical(m.path));
   const outSdk = cluster.some((m) => !isCanonical(m.path));
   if (inSdk && outSdk) return "canonical";
-  return new Set(cluster.map((m) => m.path)).size > 1 ? "cross-file" : "same-file";
+  return new Set(cluster.map((m) => m.path)).size > 1
+    ? "cross-file"
+    : "same-file";
 }
 
 const TIER_ADVICE = {
@@ -58,10 +63,14 @@ const TIER_ADVICE = {
 
 /** One violation per cluster, anchored at `primary` (the diff member in ratchet mode, else the first non-canonical site). */
 export function clusterViolation(cluster, repoRoot, primary) {
-  const anchor = primary ?? cluster.find((m) => !isCanonical(m.path)) ?? cluster[0];
+  const anchor =
+    primary ?? cluster.find((m) => !isCanonical(m.path)) ?? cluster[0];
   const tier = clusterTier(cluster);
   const sites = cluster
-    .map((m) => `${toRepoRelative(m.path, repoRoot)}:${m.start} ${m.name ?? "(anon)"}`)
+    .map(
+      (m) =>
+        `${toRepoRelative(m.path, repoRoot)}:${m.start} ${m.name ?? "(anon)"}`,
+    )
     .join(" ↔ ");
   return {
     path: toRepoRelative(anchor.path, repoRoot),

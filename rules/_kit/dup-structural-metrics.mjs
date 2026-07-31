@@ -139,7 +139,10 @@ export async function tableViolationsForFile(path) {
   return tableViolations(path, parseSourceFile(path, src));
 }
 
-export async function subtreesForFile(path, { minNodes = MIN_CLONE_NODES } = {}) {
+export async function subtreesForFile(
+  path,
+  { minNodes = MIN_CLONE_NODES } = {},
+) {
   const src = await readOrNull(path);
   if (src === null) return { path, subtrees: [] };
   return {
@@ -147,4 +150,3 @@ export async function subtreesForFile(path, { minNodes = MIN_CLONE_NODES } = {})
     subtrees: collectSubtrees(parseSourceFile(path, src), { minNodes }),
   };
 }
-

@@ -51,11 +51,21 @@ export function findEmptyTests(src) {
     const inner = stripped.slice(open + 1, close);
     if (!CALLBACK_RE.test(inner)) {
       out.push(
-        at(src, m.index, "test-no-body", "it()/test() has no callback — a pending stub asserts nothing."),
+        at(
+          src,
+          m.index,
+          "test-no-body",
+          "it()/test() has no callback — a pending stub asserts nothing.",
+        ),
       );
     } else if (!ASSERTION_RE.test(inner)) {
       out.push(
-        at(src, m.index, "test-no-assertion", "test body has no assertion (expect/assert) — it passes vacuously."),
+        at(
+          src,
+          m.index,
+          "test-no-assertion",
+          "test body has no assertion (expect/assert) — it passes vacuously.",
+        ),
       );
     }
     TEST_CALL_RE.lastIndex = close;

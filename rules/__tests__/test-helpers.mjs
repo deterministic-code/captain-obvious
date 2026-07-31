@@ -9,12 +9,19 @@ const execFileAsync = promisify(execFile);
 
 /** Recursively remove a temp dir, tolerating Windows/AV retry races. */
 export async function cleanupTmp(root) {
-  await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  await rm(root, {
+    recursive: true,
+    force: true,
+    maxRetries: 5,
+    retryDelay: 50,
+  });
 }
 
 /** Deterministic git identity so commits in tests don't depend on the host's git config. */
 const GIT_TEST_ENV = {
-  ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_"))),
+  ...Object.fromEntries(
+    Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")),
+  ),
   GIT_AUTHOR_NAME: "t",
   GIT_AUTHOR_EMAIL: "t@t",
   GIT_COMMITTER_NAME: "t",
@@ -22,7 +29,11 @@ const GIT_TEST_ENV = {
 };
 
 export async function gitIn(repo, args) {
-  return execFileAsync("git", args, { cwd: repo, encoding: "utf8", env: GIT_TEST_ENV });
+  return execFileAsync("git", args, {
+    cwd: repo,
+    encoding: "utf8",
+    env: GIT_TEST_ENV,
+  });
 }
 
 export async function makeTempGitRepo(prefix) {
@@ -44,15 +55,23 @@ export async function markCurrentAsOriginMain(repo) {
 
 export async function runHookPush(scriptPath, repo, args = ["--push"]) {
   try {
-    const { stdout, stderr } = await execFileAsync(process.execPath, [scriptPath, ...args], {
-      cwd: repo,
-      encoding: "utf8",
-      env: GIT_TEST_ENV,
-      maxBuffer: 64 * 1024 * 1024,
-    });
+    const { stdout, stderr } = await execFileAsync(
+      process.execPath,
+      [scriptPath, ...args],
+      {
+        cwd: repo,
+        encoding: "utf8",
+        env: GIT_TEST_ENV,
+        maxBuffer: 64 * 1024 * 1024,
+      },
+    );
     return { code: 0, stdout, stderr };
   } catch (err) {
-    return { code: err.code ?? 1, stdout: err.stdout ?? "", stderr: err.stderr ?? "" };
+    return {
+      code: err.code ?? 1,
+      stdout: err.stdout ?? "",
+      stderr: err.stderr ?? "",
+    };
   }
 }
 

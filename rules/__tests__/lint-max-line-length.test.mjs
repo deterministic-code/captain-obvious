@@ -52,7 +52,9 @@ describe("main / runner", () => {
   const overlong = () => "const s = " + '"'.repeat(MAX_LINE_LENGTH + 1) + ";\n";
 
   test("unknown mode prints usage and exits 2", async () => {
-    await expect(main(["node", "s.mjs", "--bogus"])).rejects.toThrow(/__exit__:2/);
+    await expect(main(["node", "s.mjs", "--bogus"])).rejects.toThrow(
+      /__exit__:2/,
+    );
     expect(io.text(io.stderrSpy)).toMatch(/Usage:/);
   });
 
@@ -71,7 +73,9 @@ describe("main / runner", () => {
     const p = join(repo, "wide.ts");
     await writeFile(p, overlong(), "utf8");
     process.chdir(repo);
-    await expect(main(["node", "s.mjs", "--files", p])).rejects.toThrow(/__exit__:1/);
+    await expect(main(["node", "s.mjs", "--files", p])).rejects.toThrow(
+      /__exit__:1/,
+    );
     expect(io.text(io.stderrSpy)).toMatch(/max-line-length/);
     await cleanupTmp(repo);
   });
@@ -102,7 +106,9 @@ describe("main / runner", () => {
     await writeFile(join(repo, "wide.ts"), overlong(), "utf8");
     await commitAllIn(repo, "seed");
     process.chdir(repo);
-    await expect(main(["node", "s.mjs", "--all"])).rejects.toThrow(/__exit__:1/);
+    await expect(main(["node", "s.mjs", "--all"])).rejects.toThrow(
+      /__exit__:1/,
+    );
     expect(io.text(io.stderrSpy)).toMatch(/max-line-length/);
     await cleanupTmp(repo);
   });

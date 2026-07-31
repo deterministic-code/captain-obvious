@@ -6,14 +6,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("node:child_process", () => ({
   spawn: vi.fn(),
-  execFile: vi.fn((_cmd: string, _args: string[], cb: (e: unknown, r: unknown) => void) =>
-    cb(null, { stdout: "true\n", stderr: "" }),
+  execFile: vi.fn(
+    (_cmd: string, _args: string[], cb: (e: unknown, r: unknown) => void) =>
+      cb(null, { stdout: "true\n", stderr: "" }),
   ),
 }));
 
 import { execFile, spawn } from "node:child_process";
 import { checkScriptPath } from "../../rules/dispatch.js";
-import { browse, readSource, RUNNABLE_SLUGS, runMeta, runRules } from "../run.js";
+import {
+  browse,
+  readSource,
+  RUNNABLE_SLUGS,
+  runMeta,
+  runRules,
+} from "../run.js";
 
 const spawnMock = vi.mocked(spawn);
 const execFileMock = vi.mocked(execFile);
@@ -42,7 +49,8 @@ function fakeChild(opts: ChildOpts): EventEmitter {
   return c;
 }
 
-const jsonLine = (violations: unknown[]) => JSON.stringify({ violations }) + "\n";
+const jsonLine = (violations: unknown[]) =>
+  JSON.stringify({ violations }) + "\n";
 const V = { path: "a.ts", line: 1, col: 3, kind: "k", detail: "d" };
 
 let dir: string;
@@ -67,7 +75,9 @@ beforeEach(() => {
     // `--show-toplevel` anchors the run at the repo root; the work-tree probe just needs a truthy line.
   ) =>
     cb(null, {
-      stdout: args.includes("--show-toplevel") ? `${process.cwd()}\n` : "true\n",
+      stdout: args.includes("--show-toplevel")
+        ? `${process.cwd()}\n`
+        : "true\n",
       stderr: "",
     })) as never);
 });
@@ -177,7 +187,9 @@ describe("runRules — validation", () => {
 describe("runRules — folder mode (--all)", () => {
   it("runs each rule over the whole folder", async () => {
     const results = await runRules({ slugs: ["lint-naming"], path: dir });
-    expect(results).toEqual([{ slug: "lint-naming", ok: true, violations: [V] }]);
+    expect(results).toEqual([
+      { slug: "lint-naming", ok: true, violations: [V] },
+    ]);
     const [cmd, args, opts] = spawnMock.mock.calls[0] as [
       string,
       string[],
@@ -200,7 +212,10 @@ describe("runRules — folder mode (--all)", () => {
       slugs: ["lint-naming", "lint-naming", "lint-max-lines"],
       path: dir,
     });
-    expect(results.map((r) => r.slug)).toEqual(["lint-naming", "lint-max-lines"]);
+    expect(results.map((r) => r.slug)).toEqual([
+      "lint-naming",
+      "lint-max-lines",
+    ]);
     expect(spawnMock).toHaveBeenCalledTimes(2);
   });
 });
@@ -208,7 +223,11 @@ describe("runRules — folder mode (--all)", () => {
 describe("runRules — file mode (--files)", () => {
   it("runs each rule over just the chosen file, from its parent dir", async () => {
     const results = await runRules({ slugs: ["lint-naming"], path: filePath });
-    expect(results[0]).toEqual({ slug: "lint-naming", ok: true, violations: [V] });
+    expect(results[0]).toEqual({
+      slug: "lint-naming",
+      ok: true,
+      violations: [V],
+    });
     const [, args, opts] = spawnMock.mock.calls[0] as [
       string,
       string[],
@@ -232,7 +251,11 @@ describe("runRules — file mode (--files)", () => {
       })) as never);
     const results = await runRules({ slugs: ["lint-naming"], path: "a.ts" });
     expect(results[0].ok).toBe(true);
-    const [, args, opts] = spawnMock.mock.calls[0] as [string, string[], { cwd: string }];
+    const [, args, opts] = spawnMock.mock.calls[0] as [
+      string,
+      string[],
+      { cwd: string },
+    ];
     expect(args).toEqual([checkScriptPath("lint-naming"), "--files", filePath]);
     expect(opts.cwd).toBe(dir);
   });
@@ -244,7 +267,11 @@ describe("runRules — per-rule outcomes", () => {
       () => fakeChild({ stdout: jsonLine([]), code: 0 }) as never,
     );
     const results = await runRules({ slugs: ["lint-naming"], path: dir });
-    expect(results[0]).toEqual({ slug: "lint-naming", ok: true, violations: [] });
+    expect(results[0]).toEqual({
+      slug: "lint-naming",
+      ok: true,
+      violations: [],
+    });
   });
 
   it("flags an unknown slug without spawning", async () => {

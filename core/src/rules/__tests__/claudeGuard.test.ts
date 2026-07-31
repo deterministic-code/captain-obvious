@@ -9,12 +9,18 @@ const REPO = "/repo";
 const PROTECTED = ["db/schema.sql", ".github/**"];
 
 function edit(filePath: string, tool = "Edit"): string {
-  return JSON.stringify({ tool_name: tool, tool_input: { file_path: filePath } });
+  return JSON.stringify({
+    tool_name: tool,
+    tool_input: { file_path: filePath },
+  });
 }
 
 describe("evaluateGuard", () => {
   it("allows a tool that is not an editing tool", () => {
-    const input = JSON.stringify({ tool_name: "Bash", tool_input: { command: "ls" } });
+    const input = JSON.stringify({
+      tool_name: "Bash",
+      tool_input: { command: "ls" },
+    });
     expect(evaluateGuard(input, REPO, PROTECTED)).toEqual({ deny: false });
   });
 
@@ -40,7 +46,11 @@ describe("evaluateGuard", () => {
   });
 
   it("denies an in-repo file that matches a protected glob", () => {
-    const decision = evaluateGuard(edit("/repo/db/schema.sql"), REPO, PROTECTED);
+    const decision = evaluateGuard(
+      edit("/repo/db/schema.sql"),
+      REPO,
+      PROTECTED,
+    );
     expect(decision.deny).toBe(true);
     expect(decision.reason).toContain("db/schema.sql");
   });
@@ -70,9 +80,9 @@ describe("guardDecision", () => {
   });
 
   it("denies a protected edit when the rule is enabled at claude-tool", () => {
-    expect(guardDecision(edit("/repo/db/schema.sql"), REPO, db).decision.deny).toBe(
-      true,
-    );
+    expect(
+      guardDecision(edit("/repo/db/schema.sql"), REPO, db).decision.deny,
+    ).toBe(true);
   });
 
   it("logs a failure hook_run for a denied protected edit", () => {
@@ -86,7 +96,11 @@ describe("guardDecision", () => {
   it("logs a success hook_run when the rule runs but allows the edit", () => {
     expect(guardDecision(edit("/repo/src/index.ts"), REPO, db)).toEqual({
       decision: { deny: false },
-      run: { slug: "lint-protected-paths", stage: "claude-tool", status: "success" },
+      run: {
+        slug: "lint-protected-paths",
+        stage: "claude-tool",
+        status: "success",
+      },
     });
   });
 
@@ -115,9 +129,9 @@ describe("formatDeny", () => {
 
 describe("claude-tool registry invariant", () => {
   it("lint-protected-paths is the only claude-tool rule (extend guardDecision if this fails)", () => {
-    const claudeTool = RULES.filter((r) => r.meta.stages.includes("claude-tool")).map(
-      (r) => r.meta.slug,
-    );
+    const claudeTool = RULES.filter((r) =>
+      r.meta.stages.includes("claude-tool"),
+    ).map((r) => r.meta.slug);
     expect(claudeTool).toEqual(["lint-protected-paths"]);
   });
 });

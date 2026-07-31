@@ -14,7 +14,10 @@ const repoRoot = resolve(pkgRoot, "..");
 const RULES_DIR = resolve(repoRoot, "rules");
 
 const exists = (p: string): Promise<boolean> =>
-  access(p).then(() => true, () => false);
+  access(p).then(
+    () => true,
+    () => false,
+  );
 
 interface Discovered {
   plugin: RulePlugin;
@@ -31,15 +34,23 @@ async function readPluginEntries(configDir: string): Promise<string[]> {
 }
 
 /** Resolve a `plugins[]` entry — an npm package name or a local path — to its descriptor. */
-async function resolveEntry(entry: string, configDir: string): Promise<Discovered> {
+async function resolveEntry(
+  entry: string,
+  configDir: string,
+): Promise<Discovered> {
   const descriptor =
     entry.startsWith(".") || entry.startsWith("/")
       ? resolve(configDir, entry, "plugin.mjs")
       : require.resolve(`${entry}/plugin.mjs`);
-  const mod = (await import(pathToFileURL(descriptor).href)) as { default?: unknown };
+  const mod = (await import(pathToFileURL(descriptor).href)) as {
+    default?: unknown;
+  };
   const slug = (mod.default as { meta?: { slug?: unknown } })?.meta?.slug;
   return {
-    plugin: assertRulePlugin(mod.default, typeof slug === "string" ? slug : entry),
+    plugin: assertRulePlugin(
+      mod.default,
+      typeof slug === "string" ? slug : entry,
+    ),
     dir: dirname(descriptor),
   };
 }
@@ -74,7 +85,9 @@ export async function loadPlugins(
     if (await exists(resolve(root, slug, "package.json"))) continue;
     const descriptor = resolve(root, slug, "plugin.mjs");
     if (!(await exists(descriptor))) continue;
-    const mod = (await import(pathToFileURL(descriptor).href)) as { default?: unknown };
+    const mod = (await import(pathToFileURL(descriptor).href)) as {
+      default?: unknown;
+    };
     const plugin = assertRulePlugin(mod.default, slug);
     if (!bySlug.has(plugin.meta.slug)) {
       bySlug.set(plugin.meta.slug, { plugin, dir: resolve(root, slug) });
@@ -83,9 +96,12 @@ export async function loadPlugins(
 
   const out: RulePlugin[] = [];
   for (const { plugin, dir } of bySlug.values()) {
-    const checkPath = plugin.checkEntry === null ? null : resolve(dir, plugin.checkEntry);
+    const checkPath =
+      plugin.checkEntry === null ? null : resolve(dir, plugin.checkEntry);
     if (checkPath !== null && !(await exists(checkPath))) {
-      throw new Error(`rule ${plugin.meta.slug}: checkEntry not found: ${plugin.checkEntry}`);
+      throw new Error(
+        `rule ${plugin.meta.slug}: checkEntry not found: ${plugin.checkEntry}`,
+      );
     }
     out.push({ ...plugin, checkPath });
   }
@@ -100,7 +116,9 @@ export async function loadPlugins(
  */
 export function assertRulePlugin(value: unknown, slug: string): RulePlugin {
   if (typeof value !== "object" || value === null) {
-    throw new Error(`rule ${slug}: plugin.mjs must default-export a RulePlugin object`);
+    throw new Error(
+      `rule ${slug}: plugin.mjs must default-export a RulePlugin object`,
+    );
   }
   const plugin = value as Record<string, unknown>;
   const meta = plugin.meta;
@@ -109,7 +127,9 @@ export function assertRulePlugin(value: unknown, slug: string): RulePlugin {
   }
   const m = meta as Record<string, unknown>;
   if (m.slug !== slug) {
-    throw new Error(`rule ${slug}: meta.slug is ${JSON.stringify(m.slug)}, must match the directory name`);
+    throw new Error(
+      `rule ${slug}: meta.slug is ${JSON.stringify(m.slug)}, must match the directory name`,
+    );
   }
   if (!Array.isArray(m.stages)) {
     throw new Error(`rule ${slug}: meta.stages must be an array`);
@@ -124,7 +144,10 @@ export function assertRulePlugin(value: unknown, slug: string): RulePlugin {
   return plugin as unknown as RulePlugin;
 }
 
-function assertControl(control: unknown, slug: string): asserts control is ControlSpec {
+function assertControl(
+  control: unknown,
+  slug: string,
+): asserts control is ControlSpec {
   if (typeof control !== "object" || control === null) {
     throw new Error(`rule ${slug}: control must be an object`);
   }
@@ -141,5 +164,7 @@ function assertControl(control: unknown, slug: string): asserts control is Contr
     }
     return;
   }
-  throw new Error(`rule ${slug}: control.kind must be "declarative" or "custom"`);
+  throw new Error(
+    `rule ${slug}: control.kind must be "declarative" or "custom"`,
+  );
 }

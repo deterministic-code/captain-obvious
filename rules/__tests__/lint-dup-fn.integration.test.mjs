@@ -135,9 +135,7 @@ describe("lint-dup-fn / main dispatch (in-process)", () => {
     // Stage both new files without committing so --cached sees them as added.
     await gitIn(repo, ["add", "-A"]);
 
-    await expect(main(["node", "s", "--staged"])).rejects.toThrow(
-      /__exit__:1/,
-    );
+    await expect(main(["node", "s", "--staged"])).rejects.toThrow(/__exit__:1/);
     expect(io.text(io.stderrSpy)).toContain("newly-introduced duplicate");
   });
 
@@ -232,7 +230,9 @@ describe("lint-dup-fn / main dispatch (in-process)", () => {
       delete process.env.CO_JSON;
     }
     expect(io.exitSpy).not.toHaveBeenCalled();
-    expect(JSON.parse(io.text(io.stdoutSpy).trim())).toEqual({ violations: [] });
+    expect(JSON.parse(io.text(io.stdoutSpy).trim())).toEqual({
+      violations: [],
+    });
   });
 
   // .test./.spec. files, __tests__/ dirs, and templates/ are excluded candidates:

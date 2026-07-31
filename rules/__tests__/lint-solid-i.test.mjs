@@ -98,7 +98,8 @@ describe("solid-i-metrics / classifyMethod", () => {
     expect(classifyMethod(firstMethod(wrap("  x = 1;")))).toBe("ok");
   });
   test("a method-signature without a body (overload/abstract) is 'ok'", () => {
-    const src = "export abstract class C implements IThing {\n  abstract a(): void;\n}";
+    const src =
+      "export abstract class C implements IThing {\n  abstract a(): void;\n}";
     const sf = parseSourceFile("f.ts", src);
     const cls = sf.statements.find((s) => s.name?.text === "C");
     expect(classifyMethod(cls.members[0])).toBe("ok");
@@ -110,7 +111,9 @@ describe("solid-i-metrics / classifyMethod", () => {
   });
   test("a `new` throw whose name and message are both non-refusal is a stub", () => {
     expect(
-      classifyMethod(firstMethod(wrap('  a() { throw new RangeError("bad arg"); }'))),
+      classifyMethod(
+        firstMethod(wrap('  a() { throw new RangeError("bad arg"); }')),
+      ),
     ).toBe("stub");
   });
   test("a `new` throw with a non-string argument is a stub (no message to inspect)", () => {

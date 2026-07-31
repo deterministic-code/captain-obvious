@@ -38,7 +38,8 @@ function tempRepo(config?: unknown): string {
 afterEach(() => {
   restore(MODE, origMode);
   restore(XDG, origXdg);
-  while (dirs.length) rmSync(dirs.pop() as string, { recursive: true, force: true });
+  while (dirs.length)
+    rmSync(dirs.pop() as string, { recursive: true, force: true });
 });
 
 it("findRepoRoot returns the dir holding the config", () => {
@@ -74,7 +75,9 @@ it("resolveMode reads the mode from the config when no env is set", () => {
 
 it("resolveMode throws on an invalid config mode", () => {
   delete process.env[MODE];
-  expect(() => resolveMode(tempRepo({ mode: "nope" }))).toThrow(/invalid "mode"/);
+  expect(() => resolveMode(tempRepo({ mode: "nope" }))).toThrow(
+    /invalid "mode"/,
+  );
 });
 
 it("resolveMode defaults to local when the config omits mode", () => {
@@ -116,7 +119,10 @@ it("resolveModeLocation returns the global dir in global mode", () => {
   process.env[MODE] = "global";
   process.env[XDG] = "/xdg/base";
   const loc = resolveModeLocation(tempRepo({}));
-  expect(loc).toEqual({ mode: "global", dir: join("/xdg/base", "captain-obvious") });
+  expect(loc).toEqual({
+    mode: "global",
+    dir: join("/xdg/base", "captain-obvious"),
+  });
 });
 
 it("resolveModeLocation ties local mode to <repoRoot>/.captain-obvious", () => {

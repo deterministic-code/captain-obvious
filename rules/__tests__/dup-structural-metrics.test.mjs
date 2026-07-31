@@ -107,14 +107,24 @@ describe("cloneClusters — Detector B", () => {
         path: "a.mjs",
         subtrees: [
           { fp: sharedFp, start: 1, end: 5, nodeCount: 25 },
-          { fp: "(ObjectLiteralExpression tiny)", start: 7, end: 8, nodeCount: 4 },
+          {
+            fp: "(ObjectLiteralExpression tiny)",
+            start: 7,
+            end: 8,
+            nodeCount: 4,
+          },
         ],
       },
       {
         path: "b.mjs",
         subtrees: [
           { fp: sharedFp, start: 10, end: 14, nodeCount: 25 },
-          { fp: "(ObjectLiteralExpression tiny)", start: 20, end: 21, nodeCount: 4 },
+          {
+            fp: "(ObjectLiteralExpression tiny)",
+            start: 20,
+            end: 21,
+            nodeCount: 4,
+          },
         ],
       },
     ];

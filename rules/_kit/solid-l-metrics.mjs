@@ -68,7 +68,8 @@ function locOf(sf, node) {
 
 function instanceofViolation(sf, path, node) {
   if (node.operatorToken.kind !== ts.SyntaxKind.InstanceOfKeyword) return null;
-  if (!ts.isIdentifier(node.right) || !isDomainCtor(node.right.text)) return null;
+  if (!ts.isIdentifier(node.right) || !isDomainCtor(node.right.text))
+    return null;
   return {
     path,
     ...locOf(sf, node),

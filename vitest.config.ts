@@ -17,7 +17,12 @@ export default defineConfig({
       // Only the code we own and can exercise in-process. Thin shims are
       // excluded below: their logic lives in the helpers they call, which we
       // test directly.
-      include: ["core/src/**", "core/hooks/**", "core/lib/**", "rules/**/*.mjs"],
+      include: [
+        "core/src/**",
+        "core/hooks/**",
+        "core/lib/**",
+        "rules/**/*.mjs",
+      ],
       exclude: [
         "**/__tests__/**",
         "**/*.d.{ts,mts,cts}",

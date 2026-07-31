@@ -6,9 +6,8 @@ import type { Db } from "./open.js";
 import type { RuleRow } from "./types.js";
 
 function idBySlug(db: Db, table: string, slug: string): number | undefined {
-  const row = db
-    .prepare(`SELECT id FROM ${table} WHERE slug = ?`)
-    .get(slug) as { id: number } | undefined;
+  const row = db.prepare(`SELECT id FROM ${table} WHERE slug = ?`).get(slug) as
+    { id: number } | undefined;
   return row?.id;
 }
 
@@ -32,8 +31,7 @@ export function requireEnvironmentId(db: Db, slug: string): number {
 
 export function requireRule(db: Db, slug: string): RuleRow {
   const row = db.prepare("SELECT * FROM rules WHERE slug = ?").get(slug) as
-    | RuleRow
-    | undefined;
+    RuleRow | undefined;
   if (row === undefined) throw new Error(`unknown rule: ${slug}`);
   return row;
 }

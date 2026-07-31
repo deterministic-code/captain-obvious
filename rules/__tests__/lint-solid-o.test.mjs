@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { analyzeOcp, isAnalyzable, runSolidOHook } from "../_kit/solid-o-metrics.mjs";
+import {
+  analyzeOcp,
+  isAnalyzable,
+  runSolidOHook,
+} from "../_kit/solid-o-metrics.mjs";
 import { main } from "../lint-solid-o/check.mjs";
 import { cleanupTmp, mockProcessIo } from "./test-helpers.mjs";
 
@@ -41,7 +45,9 @@ describe("solid-o-metrics / switch dispatch", () => {
   });
   test("numeric case labels are not string dispatch", () => {
     expect(
-      analyze(`switch(n){case 1: return 1; case 2: return 2; case 3: return 3;}`),
+      analyze(
+        `switch(n){case 1: return 1; case 2: return 2; case 3: return 3;}`,
+      ),
     ).toEqual([]);
   });
   test("a default clause and numeric cases are not counted among the string arms", () => {
@@ -92,7 +98,7 @@ describe("solid-o-metrics / if-else-if chain dispatch", () => {
 });
 
 describe("solid-o-metrics / if-else-if operand shapes", () => {
-  test("the reversed form (\"a\" === t) is still recognized as one operand", () => {
+  test('the reversed form ("a" === t) is still recognized as one operand', () => {
     const v = analyze(
       `function f(t){if("a"===t)return 1; else if("b"===t)return 2; else if("c"===t)return 3;}`,
     );
@@ -106,12 +112,16 @@ describe("solid-o-metrics / if-else-if operand shapes", () => {
   });
   test("a two-arm chain closed by an else block stays under the floor", () => {
     expect(
-      analyze(`function f(t){if(t==="a")return 1; else if(t==="b")return 2; else { return 0; }}`),
+      analyze(
+        `function f(t){if(t==="a")return 1; else if(t==="b")return 2; else { return 0; }}`,
+      ),
     ).toEqual([]);
   });
   test("an equality against a non-literal on both sides breaks the chain", () => {
     expect(
-      analyze(`function f(t,u){if(t===u)return 1; else if(t==="b")return 2; else if(t==="c")return 3;}`),
+      analyze(
+        `function f(t,u){if(t===u)return 1; else if(t==="b")return 2; else if(t==="c")return 3;}`,
+      ),
     ).toEqual([]);
   });
   test("a loose == string equality is still string dispatch", () => {

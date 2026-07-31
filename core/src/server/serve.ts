@@ -3,10 +3,21 @@
  * bundle calls and serves that bundle as a single-page app. Uses only Node's
  * built-in http/fs — no web framework dependency.
  */
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import { readFile } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
-import { basename, dirname, extname, join, normalize, resolve } from "node:path";
+import {
+  basename,
+  dirname,
+  extname,
+  join,
+  normalize,
+  resolve,
+} from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { openDb, resolveDbPath } from "../db/open.js";
@@ -28,7 +39,13 @@ import {
 } from "./registry.js";
 import { profilingMeta, profilingReport } from "./profiling.js";
 import { activityFeed, activitySummary } from "./activity.js";
-import { browse, readSource, runMeta, runRules, type RunRequest } from "./run.js";
+import {
+  browse,
+  readSource,
+  runMeta,
+  runRules,
+  type RunRequest,
+} from "./run.js";
 import {
   aiApplyFix,
   aiProposeAllFixes,
@@ -100,12 +117,22 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
   return JSON.parse(raw);
 }
 
-async function serveStatic(res: ServerResponse, pathname: string): Promise<void> {
+async function serveStatic(
+  res: ServerResponse,
+  pathname: string,
+): Promise<void> {
   // Resolve within WEB_DIR only; anything that escapes falls back to the SPA
   // entry so client-side routes still load index.html.
-  const rel = normalize(decodeURIComponent(pathname)).replace(/^(\.\.[/\\])+/, "");
+  const rel = normalize(decodeURIComponent(pathname)).replace(
+    /^(\.\.[/\\])+/,
+    "",
+  );
   let filePath = join(WEB_DIR, rel);
-  if (!filePath.startsWith(WEB_DIR) || pathname === "/" || !existsSync(filePath)) {
+  if (
+    !filePath.startsWith(WEB_DIR) ||
+    pathname === "/" ||
+    !existsSync(filePath)
+  ) {
     filePath = join(WEB_DIR, "index.html");
   }
   try {
@@ -182,11 +209,15 @@ async function handle(
   const method = req.method ?? "GET";
 
   if (!pathname.startsWith("/api/")) {
-    if (method !== "GET") return sendJson(res, 405, { error: "method not allowed" });
+    if (method !== "GET")
+      return sendJson(res, 405, { error: "method not allowed" });
     if (pathname === "/panel-ext.js") {
       // The injected panel script has a fixed URL and no content hash, so a
       // stale copy would stick in the browser's disk cache — force revalidation.
-      res.writeHead(200, { "content-type": MIME[".js"], "cache-control": "no-cache" });
+      res.writeHead(200, {
+        "content-type": MIME[".js"],
+        "cache-control": "no-cache",
+      });
       res.end(PANEL_EXT);
       return;
     }
@@ -233,7 +264,9 @@ async function handle(
     if (ruleMatch && method === "PATCH") {
       const id = Number(decodeURIComponent(ruleMatch[1]));
       const slug = decodeURIComponent(ruleMatch[2]);
-      const body = (await readBody(req)) as Parameters<typeof patchProjectRule>[3];
+      const body = (await readBody(req)) as Parameters<
+        typeof patchProjectRule
+      >[3];
       return sendJson(res, 200, patchProjectRule(db, id, slug, body));
     }
     if (rest.endsWith("/rules") && method === "GET") {
@@ -252,10 +285,18 @@ async function handle(
     return sendJson(res, 200, await runMeta());
   }
   if (pathname === "/api/run/browse" && method === "GET") {
-    return sendJson(res, 200, await browse(url.searchParams.get("path") ?? undefined));
+    return sendJson(
+      res,
+      200,
+      await browse(url.searchParams.get("path") ?? undefined),
+    );
   }
   if (pathname === "/api/run/file" && method === "GET") {
-    return sendJson(res, 200, await readSource(url.searchParams.get("path") ?? undefined));
+    return sendJson(
+      res,
+      200,
+      await readSource(url.searchParams.get("path") ?? undefined),
+    );
   }
   if (pathname === "/api/run" && method === "POST") {
     const body = (await readBody(req)) as RunRequest;
@@ -316,34 +357,42 @@ async function handle(
         groups: [],
       });
     }
-    return sendJson(res, 200, profilingReport(PROFILE_DB, {
-      last: url.searchParams.get("last") ?? undefined,
-      group: url.searchParams.get("group") ?? undefined,
-    }));
+    return sendJson(
+      res,
+      200,
+      profilingReport(PROFILE_DB, {
+        last: url.searchParams.get("last") ?? undefined,
+        group: url.searchParams.get("group") ?? undefined,
+      }),
+    );
   }
 
   // --- activity (profiling "hooker" runs + dispatch runs + audit-log changes) ---
   if (pathname === "/api/activity/summary" && method === "GET") {
-    return sendJson(res, 200, activitySummary(
-      existsSync(PROFILE_DB) ? PROFILE_DB : undefined,
-      auditDb,
-      {
-        last: url.searchParams.get("last") ?? undefined,
-        rules: url.searchParams.get("rules") ?? undefined,
-      },
-    ));
+    return sendJson(
+      res,
+      200,
+      activitySummary(
+        existsSync(PROFILE_DB) ? PROFILE_DB : undefined,
+        auditDb,
+        {
+          last: url.searchParams.get("last") ?? undefined,
+          rules: url.searchParams.get("rules") ?? undefined,
+        },
+      ),
+    );
   }
   if (pathname === "/api/activity/feed" && method === "GET") {
     const limit = url.searchParams.get("limit");
-    return sendJson(res, 200, activityFeed(
-      existsSync(PROFILE_DB) ? PROFILE_DB : undefined,
-      auditDb,
-      {
+    return sendJson(
+      res,
+      200,
+      activityFeed(existsSync(PROFILE_DB) ? PROFILE_DB : undefined, auditDb, {
         last: url.searchParams.get("last") ?? undefined,
         rules: url.searchParams.get("rules") ?? undefined,
         limit: limit ? Number(limit) : undefined,
-      },
-    ));
+      }),
+    );
   }
 
   return sendJson(res, 404, { error: `no route: ${method} ${pathname}` });

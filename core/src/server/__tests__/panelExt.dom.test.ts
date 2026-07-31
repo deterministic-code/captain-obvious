@@ -30,7 +30,16 @@ const RULES = [
     actions: [{ kind: "script", scriptBody: "prettier --write" }],
   },
   // No category/stage and language-independent: the filters can't exclude it, so it always shows.
-  { slug: "lint-c", name: "C", order: 2, categories: [], stages: [], languages: [], languageIndependent: true, actions: [] },
+  {
+    slug: "lint-c",
+    name: "C",
+    order: 2,
+    categories: [],
+    stages: [],
+    languages: [],
+    languageIndependent: true,
+    actions: [],
+  },
 ];
 const META = {
   languages: [
@@ -71,7 +80,10 @@ interface ProjectView {
 
 // lint-a is disabled in project 2 only, so switching projects flips its toggle.
 function projectRules(id: number) {
-  return RULES.map((r) => ({ ...r, enabled: !(id === 2 && r.slug === "lint-a") }));
+  return RULES.map((r) => ({
+    ...r,
+    enabled: !(id === 2 && r.slug === "lint-a"),
+  }));
 }
 
 let projectList: ProjectView[];
@@ -105,14 +117,24 @@ const RUN_RESULT = [
 const FILE_TEXT = "const a = 1\nconst bad = 2\nconst c = 3\n";
 
 function jsonRes(obj: unknown) {
-  return { ok: true, status: 200, json: async () => obj } as unknown as Response;
+  return {
+    ok: true,
+    status: 200,
+    json: async () => obj,
+  } as unknown as Response;
 }
 
 function row(slug: string, name: string, category: string): string {
   return (
-    '<tr class="row"><td><div class="font-medium">' + name + "</div>" +
-    '<div class="font-mono">' + slug + "</div></td>" +
-    "<td><span>" + category + "</span></td>" +
+    '<tr class="row"><td><div class="font-medium">' +
+    name +
+    "</div>" +
+    '<div class="font-mono">' +
+    slug +
+    "</div></td>" +
+    "<td><span>" +
+    category +
+    "</span></td>" +
     '<td>pre-commit</td><td class="text-center">on</td>' +
     '<td class="native-action"><select class="rounded-md border border-slate-300 px-2 py-1 text-sm">' +
     "<option>— none —</option></select></td></tr>"
@@ -150,8 +172,24 @@ async function runInjected() {
 
 beforeEach(() => {
   projectList = [
-    { id: 1, slug: "repo", name: "Repo", description: null, files: [], directories: ["/proj"], isDefault: true },
-    { id: 2, slug: "web", name: "Web", description: null, files: [], directories: ["/proj/src"], isDefault: false },
+    {
+      id: 1,
+      slug: "repo",
+      name: "Repo",
+      description: null,
+      files: [],
+      directories: ["/proj"],
+      isDefault: true,
+    },
+    {
+      id: 2,
+      slug: "web",
+      name: "Web",
+      description: null,
+      files: [],
+      directories: ["/proj/src"],
+      isDefault: false,
+    },
   ];
   projectCreateCalls = [];
   patchCalls = [];
@@ -162,7 +200,10 @@ beforeEach(() => {
   runResult = RUN_RESULT;
   analyzeCalls = [];
   analyzeFails = false;
-  analyzeStatusResult = { analyzed: true, lastAnalyzed: "2026-01-01T00:00:00Z" };
+  analyzeStatusResult = {
+    analyzed: true,
+    lastAnalyzed: "2026-01-01T00:00:00Z",
+  };
   activityCalls = [];
   activityFeedCalls = [];
   activitySummaryResult = {
@@ -171,11 +212,28 @@ beforeEach(() => {
       { key: "lint:naming", runs: 5, failures: 2 },
       { key: "lint:dup", runs: 3, failures: 0 },
     ],
-    series: { bucketMs: 1000, buckets: [{ t: 1, runs: 2, failures: 1 }, { t: 2, runs: 3, failures: 0 }] },
+    series: {
+      bucketMs: 1000,
+      buckets: [
+        { t: 1, runs: 2, failures: 1 },
+        { t: 2, runs: 3, failures: 0 },
+      ],
+    },
   };
   activityFeedResult = [
-    { timeMs: 2000, source: "hook", key: "lint:naming", status: "failure", detail: "npm lint:naming" },
-    { timeMs: 1000, source: "log", key: "rule.enabled", detail: "enabled lint-naming" },
+    {
+      timeMs: 2000,
+      source: "hook",
+      key: "lint:naming",
+      status: "failure",
+      detail: "npm lint:naming",
+    },
+    {
+      timeMs: 1000,
+      source: "log",
+      key: "rule.enabled",
+      detail: "enabled lint-naming",
+    },
   ];
   // This happy-dom build ships no Storage, so stub localStorage the way the panel
   // uses it (get/set), Map-backed and fresh per test.
@@ -207,7 +265,11 @@ beforeEach(() => {
     if (url === "/api/rules") return jsonRes(RULES);
     if (url === "/api/meta") return jsonRes(META);
     if (url === "/api/mode") {
-      return jsonRes({ mode: "local", dbPath: "/proj/.captain-obvious/captain-obvious.db", auditDbPath: "/proj/.captain-obvious/audit-log.db" });
+      return jsonRes({
+        mode: "local",
+        dbPath: "/proj/.captain-obvious/captain-obvious.db",
+        auditDbPath: "/proj/.captain-obvious/audit-log.db",
+      });
     }
     if (url === "/api/run/meta") {
       return jsonRes({ root: "/proj", runnableSlugs: ["lint-a", "lint-b"] });
@@ -244,13 +306,20 @@ beforeEach(() => {
     }
     if (url === "/api/run/fix/plan/all") {
       planAllCalls.push(JSON.parse(opts?.body as string));
-      return jsonRes({ prompt: "PLAN", file: "/proj/.claude/tmp/co-fix-all.md" });
+      return jsonRes({
+        prompt: "PLAN",
+        file: "/proj/.claude/tmp/co-fix-all.md",
+      });
     }
     if (url === "/api/analyze/status") return jsonRes(analyzeStatusResult);
     if (url === "/api/analyze") {
       analyzeCalls.push(JSON.parse((opts?.body as string) || "{}"));
       if (analyzeFails) {
-        return { ok: false, status: 400, json: async () => ({ error: "scan failed" }) } as unknown as Response;
+        return {
+          ok: false,
+          status: 400,
+          json: async () => ({ error: "scan failed" }),
+        } as unknown as Response;
       }
       return jsonRes({
         root: "/proj",
@@ -262,7 +331,11 @@ beforeEach(() => {
     if (typeof url === "string" && url.startsWith("/api/run/file")) {
       const p = new URL(url, "http://x").searchParams.get("path")!;
       if (p === "boom.ts") {
-        return { ok: false, status: 400, json: async () => ({ error: "read failed" }) } as unknown as Response;
+        return {
+          ok: false,
+          status: 400,
+          json: async () => ({ error: "read failed" }),
+        } as unknown as Response;
       }
       return jsonRes({ path: "/proj/" + p, text: FILE_TEXT });
     }
@@ -283,8 +356,11 @@ beforeEach(() => {
   vi.stubGlobal("alert", () => {});
   // The panel lazy-loads highlight.js from a CDN <script>; happy-dom can't fetch
   // it, so treat the disabled load as a no-op instead of logging a load error.
-  (window as unknown as { happyDOM: { settings: { handleDisabledFileLoadingAsSuccess: boolean } } })
-    .happyDOM.settings.handleDisabledFileLoadingAsSuccess = true;
+  (
+    window as unknown as {
+      happyDOM: { settings: { handleDisabledFileLoadingAsSuccess: boolean } };
+    }
+  ).happyDOM.settings.handleDisabledFileLoadingAsSuccess = true;
   buildPanelDom();
 });
 
@@ -296,8 +372,8 @@ afterEach(() => {
 describe("panelExt injected script", () => {
   it("adds a Languages column right after Category, and Fix at the end", async () => {
     await runInjected();
-    const heads = [...document.querySelectorAll("thead th")].map((t) =>
-      t.textContent,
+    const heads = [...document.querySelectorAll("thead th")].map(
+      (t) => t.textContent,
     );
     // Native: Rule, Category, Stage, Enabled, Action. The injected Action column
     // (co-binding-th) is the per-row default-binding selector, distinct from the
@@ -424,9 +500,9 @@ describe("panelExt injected script", () => {
     expect(cat.querySelector(".co-dd-close")).not.toBeNull();
     // The All toggle is the first item, ahead of the options.
     const firstItem = cat.querySelector(".co-dd-list .co-dd-item input");
-    expect((firstItem as HTMLInputElement).classList.contains("co-dd-all")).toBe(
-      true,
-    );
+    expect(
+      (firstItem as HTMLInputElement).classList.contains("co-dd-all"),
+    ).toBe(true);
   });
 
   it("search hides options whose label doesn't match", async () => {
@@ -436,7 +512,8 @@ describe("panelExt injected script", () => {
       [...cat.querySelectorAll<HTMLInputElement>(".co-dd-opt")].find(
         (i) => i.value === v,
       )!;
-    const labelOf = (i: HTMLInputElement) => i.closest(".co-dd-item") as HTMLElement;
+    const labelOf = (i: HTMLInputElement) =>
+      i.closest(".co-dd-item") as HTMLElement;
     const search = cat.querySelector<HTMLInputElement>(".co-dd-search")!;
     search.value = "nam";
     search.dispatchEvent(new Event("input", { bubbles: true }));
@@ -483,7 +560,8 @@ describe("panelExt injected script", () => {
 
   it("Close button collapses the dropdown", async () => {
     await runInjected();
-    const details = document.querySelector<HTMLDetailsElement>(".co-filter-cats")!;
+    const details =
+      document.querySelector<HTMLDetailsElement>(".co-filter-cats")!;
     details.open = true;
     details.querySelector<HTMLButtonElement>(".co-dd-close")!.click();
     expect(details.open).toBe(false);
@@ -491,7 +569,8 @@ describe("panelExt injected script", () => {
 
   it("a click outside an open dropdown collapses it", async () => {
     await runInjected();
-    const details = document.querySelector<HTMLDetailsElement>(".co-filter-cats")!;
+    const details =
+      document.querySelector<HTMLDetailsElement>(".co-filter-cats")!;
     details.open = true;
     document.body.click();
     expect(details.open).toBe(false);
@@ -499,7 +578,8 @@ describe("panelExt injected script", () => {
 
   it("a click inside an open dropdown leaves it open", async () => {
     await runInjected();
-    const details = document.querySelector<HTMLDetailsElement>(".co-filter-cats")!;
+    const details =
+      document.querySelector<HTMLDetailsElement>(".co-filter-cats")!;
     details.open = true;
     details.querySelector<HTMLInputElement>(".co-dd-search")!.click();
     expect(details.open).toBe(true);
@@ -508,9 +588,9 @@ describe("panelExt injected script", () => {
   it("PATCHes the new language set when a row checkbox is toggled", async () => {
     await runInjected();
     const cell = document.querySelector(".co-lang-td")!; // lint-a
-    const jsBox = [...cell.querySelectorAll<HTMLInputElement>(".co-dd-opt")].find(
-      (i) => i.value === "javascript",
-    )!;
+    const jsBox = [
+      ...cell.querySelectorAll<HTMLInputElement>(".co-dd-opt"),
+    ].find((i) => i.value === "javascript")!;
     jsBox.checked = true;
     jsBox.dispatchEvent(new Event("change", { bubbles: true }));
     for (let i = 0; i < 3; i++) await flush();
@@ -526,7 +606,9 @@ describe("panelExt injected script", () => {
   it("renders editable category pills and PATCHes the global rule on toggle", async () => {
     await runInjected();
     const cell = document.querySelector(".co-cat-td")!; // lint-a has ["size"]
-    const pills = [...cell.querySelectorAll(".co-pill")].map((p) => p.textContent);
+    const pills = [...cell.querySelectorAll(".co-pill")].map(
+      (p) => p.textContent,
+    );
     expect(pills.some((t) => t!.startsWith("size"))).toBe(true);
     const box = [...cell.querySelectorAll<HTMLInputElement>(".co-dd-opt")].find(
       (i) => i.value === "naming",
@@ -567,7 +649,9 @@ describe("panelExt injected script", () => {
   it("renders editable stage pills and PATCHes the global rule on toggle", async () => {
     await runInjected();
     const cell = document.querySelector(".co-stage-td")!; // lint-a has ["pre-commit"]
-    const pills = [...cell.querySelectorAll(".co-pill")].map((p) => p.textContent);
+    const pills = [...cell.querySelectorAll(".co-pill")].map(
+      (p) => p.textContent,
+    );
     expect(pills.some((t) => t!.startsWith("Pre-commit"))).toBe(true);
     const box = [...cell.querySelectorAll<HTMLInputElement>(".co-dd-opt")].find(
       (i) => i.value === "pre-push",
@@ -590,14 +674,21 @@ describe("panelExt injected script", () => {
     const opts = [...cell.querySelectorAll<HTMLInputElement>(".co-dd-opt")].map(
       (i) => i.value,
     );
-    expect(opts.sort()).toEqual(["claude-tool", "pre-commit", "pre-push", "server"]);
+    expect(opts.sort()).toEqual([
+      "claude-tool",
+      "pre-commit",
+      "pre-push",
+      "server",
+    ]);
   });
 
   it("narrows rows by the Stage filter", async () => {
     await runInjected();
     for (const v of ["pre-commit", "claude-tool", "server"]) {
       const b = [
-        ...document.querySelectorAll<HTMLInputElement>(".co-filter-stages .co-dd-opt"),
+        ...document.querySelectorAll<HTMLInputElement>(
+          ".co-filter-stages .co-dd-opt",
+        ),
       ].find((i) => i.value === v)!;
       b.checked = false;
       b.dispatchEvent(new Event("change", { bubbles: true }));
@@ -618,7 +709,9 @@ describe("panelExt injected script", () => {
   it("narrows rows when a category is unchecked; metadata-less rows still show", async () => {
     await runInjected();
     const sizeBox = [
-      ...document.querySelectorAll<HTMLInputElement>(".co-filter-cats .co-dd-opt"),
+      ...document.querySelectorAll<HTMLInputElement>(
+        ".co-filter-cats .co-dd-opt",
+      ),
     ].find((i) => i.value === "size")!;
     sizeBox.checked = false; // leaves only "naming" selected
     sizeBox.dispatchEvent(new Event("change", { bubbles: true }));
@@ -635,15 +728,19 @@ describe("panelExt injected script", () => {
     const tab = document.querySelector(".co-run-tab")!;
     expect(tab.textContent).toBe("Run");
     // Positioned immediately after the Rules tab (not appended at the end).
-    const labels = [...document.querySelectorAll("nav button")].map((b) => b.textContent);
+    const labels = [...document.querySelectorAll("nav button")].map(
+      (b) => b.textContent,
+    );
     expect(labels).toEqual(["Rules", "Run", "Activity", "Profiling"]);
     const overlay = document.querySelector<HTMLElement>("#co-run-overlay")!;
     expect(overlay.style.display).toBe("none");
     // Picker prefills the folder and lists only the runnable slugs (lint-a, lint-b).
-    expect(document.querySelector<HTMLInputElement>("#co-run-path")!.value).toBe("/proj");
-    const opts = [...overlay.querySelectorAll<HTMLInputElement>(".co-run-opt")].map(
-      (i) => i.value,
-    );
+    expect(
+      document.querySelector<HTMLInputElement>("#co-run-path")!.value,
+    ).toBe("/proj");
+    const opts = [
+      ...overlay.querySelectorAll<HTMLInputElement>(".co-run-opt"),
+    ].map((i) => i.value);
     expect(opts.sort()).toEqual(["lint-a", "lint-b"]);
   });
 
@@ -656,7 +753,9 @@ describe("panelExt injected script", () => {
     expect(root.style.display).toBe("none");
     // The overlay wears the panel's branded header; its Rules tab closes the
     // overlay and routes back into the panel.
-    (overlay.querySelector('.co-run-nav-tab[data-nav="Rules"]') as HTMLElement).click();
+    (
+      overlay.querySelector('.co-run-nav-tab[data-nav="Rules"]') as HTMLElement
+    ).click();
     expect(overlay.style.display).toBe("none");
     expect(root.style.display).toBe("");
   });
@@ -674,13 +773,24 @@ describe("panelExt injected script", () => {
     await runInjected();
     const runOverlay = document.querySelector<HTMLElement>("#co-run-overlay")!;
     (document.querySelector(".co-run-tab") as HTMLElement).click();
-    expect(runOverlay.querySelector(".co-run-brand-name")!.textContent).toBe("Captain Obvious");
-    expect(runOverlay.querySelector(".co-run-nav-active")!.textContent).toBe("Run");
+    expect(runOverlay.querySelector(".co-run-brand-name")!.textContent).toBe(
+      "Captain Obvious",
+    );
+    expect(runOverlay.querySelector(".co-run-nav-active")!.textContent).toBe(
+      "Run",
+    );
     // The Activity tab in the Run overlay's nav swaps to the Activity overlay.
-    (runOverlay.querySelector('.co-run-nav-tab[data-nav="Activity"]') as HTMLElement).click();
+    (
+      runOverlay.querySelector(
+        '.co-run-nav-tab[data-nav="Activity"]',
+      ) as HTMLElement
+    ).click();
     for (let i = 0; i < 3; i++) await flush();
     expect(runOverlay.style.display).toBe("none");
-    expect(document.querySelector<HTMLElement>("#co-activity-overlay")!.style.display).toBe("flex");
+    expect(
+      document.querySelector<HTMLElement>("#co-activity-overlay")!.style
+        .display,
+    ).toBe("flex");
   });
 
   it("wraps the rules table so it scrolls instead of clipping columns", async () => {
@@ -707,15 +817,22 @@ describe("panelExt injected script", () => {
     for (let i = 0; i < 3; i++) await flush();
     expect(browser.style.display).toBe("block");
     // Root listing shows the dir and file entries.
-    expect([...browser.querySelectorAll(".co-run-entry")].map((e) => e.textContent)).toEqual(
-      expect.arrayContaining([expect.stringContaining("src"), expect.stringContaining("index.ts")]),
+    expect(
+      [...browser.querySelectorAll(".co-run-entry")].map((e) => e.textContent),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("src"),
+        expect.stringContaining("index.ts"),
+      ]),
     );
 
     // Navigate into src/ …
     browser.querySelector<HTMLElement>('[data-dir="/proj/src"]')!.click();
     for (let i = 0; i < 3; i++) await flush();
     // … then pick a file → target set, browser closes.
-    browser.querySelector<HTMLElement>('[data-file="/proj/src/app.ts"]')!.click();
+    browser
+      .querySelector<HTMLElement>('[data-file="/proj/src/app.ts"]')!
+      .click();
     expect(pathInput.value).toBe("/proj/src/app.ts");
     expect(browser.style.display).toBe("none");
   });
@@ -727,7 +844,9 @@ describe("panelExt injected script", () => {
     overlay.querySelector<HTMLButtonElement>(".co-run-browse-btn")!.click();
     for (let i = 0; i < 3; i++) await flush();
     browser.querySelector<HTMLButtonElement>(".co-run-use")!.click();
-    expect(overlay.querySelector<HTMLInputElement>("#co-run-path")!.value).toBe("/proj");
+    expect(overlay.querySelector<HTMLInputElement>("#co-run-path")!.value).toBe(
+      "/proj",
+    );
   });
 
   it("gates Run on a selection, then POSTs the chosen slugs and renders grouped results", async () => {
@@ -736,9 +855,9 @@ describe("panelExt injected script", () => {
     const btn = overlay.querySelector<HTMLButtonElement>("#co-run-btn")!;
     expect(btn.disabled).toBe(true); // no selection yet
 
-    const box = [...overlay.querySelectorAll<HTMLInputElement>(".co-run-opt")].find(
-      (i) => i.value === "lint-a",
-    )!;
+    const box = [
+      ...overlay.querySelectorAll<HTMLInputElement>(".co-run-opt"),
+    ].find((i) => i.value === "lint-a")!;
     box.checked = true;
     box.dispatchEvent(new Event("change", { bubbles: true }));
     expect(btn.disabled).toBe(false);
@@ -759,9 +878,9 @@ describe("panelExt injected script", () => {
   async function runAndSelect(): Promise<HTMLElement> {
     await runInjected();
     const overlay = document.querySelector<HTMLElement>("#co-run-overlay")!;
-    const box = [...overlay.querySelectorAll<HTMLInputElement>(".co-run-opt")].find(
-      (i) => i.value === "lint-a",
-    )!;
+    const box = [
+      ...overlay.querySelectorAll<HTMLInputElement>(".co-run-opt"),
+    ].find((i) => i.value === "lint-a")!;
     box.checked = true;
     box.dispatchEvent(new Event("change", { bubbles: true }));
     overlay.querySelector<HTMLButtonElement>("#co-run-btn")!.click();
@@ -779,7 +898,11 @@ describe("panelExt injected script", () => {
   }
 
   function visibleRunSlugs(overlay: HTMLElement): (string | null)[] {
-    return [...overlay.querySelectorAll<HTMLElement>("#co-run-results-list .co-run-rule")]
+    return [
+      ...overlay.querySelectorAll<HTMLElement>(
+        "#co-run-results-list .co-run-rule",
+      ),
+    ]
       .filter((b) => b.style.display !== "none")
       .map((b) => b.getAttribute("data-slug"));
   }
@@ -792,16 +915,20 @@ describe("panelExt injected script", () => {
 
   it("shows the output toolbar at all times, even before a run", async () => {
     await runInjected();
-    expect(document.querySelector<HTMLElement>("#co-run-results-bar")!.style.display).toBe("flex");
+    expect(
+      document.querySelector<HTMLElement>("#co-run-results-bar")!.style.display,
+    ).toBe("flex");
     const overlay = await runAndSelect();
-    expect(overlay.querySelector<HTMLElement>("#co-run-results-bar")!.style.display).toBe("flex");
+    expect(
+      overlay.querySelector<HTMLElement>("#co-run-results-bar")!.style.display,
+    ).toBe("flex");
   });
 
   it("offers exactly All / Violations / Successes / Errors in the Show filter", async () => {
     const overlay = await runAndSelect();
-    const labels = [...overlay.querySelectorAll<HTMLOptionElement>("#co-run-show option")].map(
-      (o) => o.textContent,
-    );
+    const labels = [
+      ...overlay.querySelectorAll<HTMLOptionElement>("#co-run-show option"),
+    ].map((o) => o.textContent);
     expect(labels).toEqual(["All", "Violations", "Successes", "Errors"]);
   });
 
@@ -820,9 +947,11 @@ describe("panelExt injected script", () => {
 
   it("lists All rules plus each run rule and narrows to one, ANDed with Show", async () => {
     const overlay = await runAndSelect();
-    const labels = [...overlay.querySelectorAll<HTMLOptionElement>("#co-run-rulefilter option")].map(
-      (o) => o.textContent,
-    );
+    const labels = [
+      ...overlay.querySelectorAll<HTMLOptionElement>(
+        "#co-run-rulefilter option",
+      ),
+    ].map((o) => o.textContent);
     expect(labels).toEqual(["All rules", "lint-a", "lint-b", "lint-c"]);
     setRunFilter(overlay, "co-run-rulefilter", "lint-b");
     expect(visibleRunSlugs(overlay)).toEqual(["lint-b"]);
@@ -838,37 +967,64 @@ describe("panelExt injected script", () => {
     runResult = [{ slug: "lint-b", ok: true, violations: [] }];
     overlay.querySelector<HTMLButtonElement>("#co-run-btn")!.click();
     for (let i = 0; i < 4; i++) await flush();
-    expect(overlay.querySelector<HTMLSelectElement>("#co-run-rulefilter")!.value).toBe("all");
+    expect(
+      overlay.querySelector<HTMLSelectElement>("#co-run-rulefilter")!.value,
+    ).toBe("all");
     expect(visibleRunSlugs(overlay)).toEqual(["lint-b"]);
   });
 
   const TWO_GROUP_RESULT = [
-    { slug: "lint-a", ok: true, violations: [{ path: "x.ts", line: 1, col: 1, kind: "size", detail: "big" }] },
-    { slug: "lint-b", ok: true, violations: [{ path: "y.ts", line: 2, col: 1, kind: "naming", detail: "bad" }] },
+    {
+      slug: "lint-a",
+      ok: true,
+      violations: [
+        { path: "x.ts", line: 1, col: 1, kind: "size", detail: "big" },
+      ],
+    },
+    {
+      slug: "lint-b",
+      ok: true,
+      violations: [
+        { path: "y.ts", line: 2, col: 1, kind: "naming", detail: "bad" },
+      ],
+    },
     { slug: "lint-c", ok: false, violations: [], error: "boom" },
   ];
   const groupMembers = (g: HTMLElement) =>
-    [...g.querySelectorAll(".co-run-rule")].map((b) => b.getAttribute("data-slug"));
+    [...g.querySelectorAll(".co-run-rule")].map((b) =>
+      b.getAttribute("data-slug"),
+    );
 
   it("groups violated rules by fix kind, with a scoped fix-all in each header", async () => {
     runResult = TWO_GROUP_RESULT;
     const overlay = await runAndSelect();
-    const groups = [...overlay.querySelectorAll<HTMLElement>("#co-run-results-list .co-run-group")];
-    expect(groups.map((g) => g.querySelector(".co-run-group-title")!.textContent)).toEqual([
-      "Deterministic fixes",
-      "AI fixes only",
-    ]);
+    const groups = [
+      ...overlay.querySelectorAll<HTMLElement>(
+        "#co-run-results-list .co-run-group",
+      ),
+    ];
+    expect(
+      groups.map((g) => g.querySelector(".co-run-group-title")!.textContent),
+    ).toEqual(["Deterministic fixes", "AI fixes only"]);
     // lint-b declares a script action (deterministic); lint-a is AI-only.
     expect(groupMembers(groups[0])).toEqual(["lint-b"]);
     expect(groupMembers(groups[1])).toEqual(["lint-a"]);
-    expect(groups[0].querySelector(".co-run-group-fix")!.textContent).toBe("Fix all deterministic");
-    expect(groups[0].querySelector(".co-run-group-count")!.textContent).toBe("1 rule");
-    expect(groups[1].querySelector(".co-run-group-fix")!.textContent).toBe("Fix all with AI");
+    expect(groups[0].querySelector(".co-run-group-fix")!.textContent).toBe(
+      "Fix all deterministic",
+    );
+    expect(groups[0].querySelector(".co-run-group-count")!.textContent).toBe(
+      "1 rule",
+    );
+    expect(groups[1].querySelector(".co-run-group-fix")!.textContent).toBe(
+      "Fix all with AI",
+    );
     // The errored rule (no fix) renders ungrouped after the two sections.
     expect(
-      [...overlay.querySelectorAll<HTMLElement>("#co-run-results-list > .co-run-rule")].map((b) =>
-        b.getAttribute("data-slug"),
-      ),
+      [
+        ...overlay.querySelectorAll<HTMLElement>(
+          "#co-run-results-list > .co-run-rule",
+        ),
+      ].map((b) => b.getAttribute("data-slug")),
     ).toEqual(["lint-c"]);
   });
 
@@ -876,7 +1032,11 @@ describe("panelExt injected script", () => {
     runResult = TWO_GROUP_RESULT;
     const overlay = await runAndSelect();
     const before = runCalls.length;
-    overlay.querySelector<HTMLButtonElement>(".co-run-group-fix[data-fixall='script']")!.click();
+    overlay
+      .querySelector<HTMLButtonElement>(
+        ".co-run-group-fix[data-fixall='script']",
+      )!
+      .click();
     for (let i = 0; i < 4; i++) await flush();
     expect(fixAllCalls).toEqual([{ slugs: ["lint-b"], path: "/proj" }]);
     expect(runCalls.length).toBe(before + 1);
@@ -885,7 +1045,9 @@ describe("panelExt injected script", () => {
   it("Fix all with AI defaults to AI-only rules and can fold in deterministic ones", async () => {
     runResult = TWO_GROUP_RESULT;
     const overlay = await runAndSelect();
-    overlay.querySelector<HTMLButtonElement>(".co-run-group-fix[data-fixall='ai']")!.click();
+    overlay
+      .querySelector<HTMLButtonElement>(".co-run-group-fix[data-fixall='ai']")!
+      .click();
     for (let i = 0; i < 4; i++) await flush();
     expect(aiAllCalls[0]).toEqual({ slugs: ["lint-a"], path: "/proj" });
     const inc = document.querySelector<HTMLInputElement>("#co-fix-incdet")!;
@@ -893,7 +1055,10 @@ describe("panelExt injected script", () => {
     inc.checked = true;
     inc.dispatchEvent(new Event("change", { bubbles: true }));
     for (let i = 0; i < 4; i++) await flush();
-    expect(aiAllCalls[1]).toEqual({ slugs: ["lint-a", "lint-b"], path: "/proj" });
+    expect(aiAllCalls[1]).toEqual({
+      slugs: ["lint-a", "lint-b"],
+      path: "/proj",
+    });
   });
 
   it("Generate fix plan covers every violated rule and shows the prompt", async () => {
@@ -901,8 +1066,13 @@ describe("panelExt injected script", () => {
     const overlay = await runAndSelect();
     overlay.querySelector<HTMLButtonElement>("#co-run-fixall button")!.click();
     for (let i = 0; i < 4; i++) await flush();
-    expect(planAllCalls[0]).toEqual({ slugs: ["lint-a", "lint-b"], path: "/proj" });
-    expect(document.querySelector("#co-fix-mbody .co-fix-pre")!.textContent).toBe("PLAN");
+    expect(planAllCalls[0]).toEqual({
+      slugs: ["lint-a", "lint-b"],
+      path: "/proj",
+    });
+    expect(
+      document.querySelector("#co-fix-mbody .co-fix-pre")!.textContent,
+    ).toBe("PLAN");
   });
 
   it("the plan dialog can filter out deterministically-fixable rules", async () => {
@@ -920,7 +1090,13 @@ describe("panelExt injected script", () => {
 
   it("the plan dialog offers no exclude toggle when nothing is deterministically fixable", async () => {
     runResult = [
-      { slug: "lint-a", ok: true, violations: [{ path: "x.ts", line: 1, col: 1, kind: "size", detail: "big" }] },
+      {
+        slug: "lint-a",
+        ok: true,
+        violations: [
+          { path: "x.ts", line: 1, col: 1, kind: "size", detail: "big" },
+        ],
+      },
     ];
     const overlay = await runAndSelect();
     overlay.querySelector<HTMLButtonElement>("#co-run-fixall button")!.click();
@@ -931,7 +1107,9 @@ describe("panelExt injected script", () => {
 
   it("shows an editor placeholder until a result is opened", async () => {
     await runInjected();
-    expect(document.querySelector("#co-run-editor .co-ed-empty")).not.toBeNull();
+    expect(
+      document.querySelector("#co-run-editor .co-ed-empty"),
+    ).not.toBeNull();
   });
 
   it("ignores clicks on the results background", async () => {
@@ -943,7 +1121,9 @@ describe("panelExt injected script", () => {
 
   it("clicking a violation opens the file with a caret at the offending column", async () => {
     const overlay = await runAndSelect();
-    overlay.querySelector<HTMLElement>('.co-run-vio[data-path="x.ts"]')!.click();
+    overlay
+      .querySelector<HTMLElement>('.co-run-vio[data-path="x.ts"]')!
+      .click();
     for (let i = 0; i < 4; i++) await flush();
     const editor = overlay.querySelector("#co-run-editor")!;
     expect(editor.querySelector(".co-ed-head")!.textContent).toBe("/proj/x.ts");
@@ -957,38 +1137,58 @@ describe("panelExt injected script", () => {
   });
 
   it("colours code with highlight.js when it is loaded", async () => {
-    const highlight = vi.fn((code: string) => ({ value: '<em class="tok">' + code + "</em>" }));
-    (window as unknown as { hljs: unknown }).hljs = { getLanguage: () => ({}), highlight };
+    const highlight = vi.fn((code: string) => ({
+      value: '<em class="tok">' + code + "</em>",
+    }));
+    (window as unknown as { hljs: unknown }).hljs = {
+      getLanguage: () => ({}),
+      highlight,
+    };
     const overlay = await runAndSelect();
-    overlay.querySelector<HTMLElement>('.co-run-vio[data-path="x.ts"]')!.click();
+    overlay
+      .querySelector<HTMLElement>('.co-run-vio[data-path="x.ts"]')!
+      .click();
     for (let i = 0; i < 4; i++) await flush();
-    expect(overlay.querySelector("#co-run-editor .co-line .tok")).not.toBeNull();
+    expect(
+      overlay.querySelector("#co-run-editor .co-line .tok"),
+    ).not.toBeNull();
     expect(highlight).toHaveBeenCalled();
   });
 
   it("falls back to plain escaped text when highlight.js lacks the language", async () => {
     const highlight = vi.fn();
-    (window as unknown as { hljs: unknown }).hljs = { getLanguage: () => null, highlight };
+    (window as unknown as { hljs: unknown }).hljs = {
+      getLanguage: () => null,
+      highlight,
+    };
     const overlay = await runAndSelect();
-    overlay.querySelector<HTMLElement>('.co-run-vio[data-path="x.ts"]')!.click();
+    overlay
+      .querySelector<HTMLElement>('.co-run-vio[data-path="x.ts"]')!
+      .click();
     for (let i = 0; i < 4; i++) await flush();
     expect(highlight).not.toHaveBeenCalled();
-    expect(overlay.querySelector("#co-run-editor")!.textContent).toContain("const bad = 2");
+    expect(overlay.querySelector("#co-run-editor")!.textContent).toContain(
+      "const bad = 2",
+    );
   });
 
   it("shows an error in the editor when the file can't be read", async () => {
     const overlay = await runAndSelect();
     synthVio(overlay.querySelector("#co-run-results")!, "boom.ts", "1").click();
     for (let i = 0; i < 4; i++) await flush();
-    expect(overlay.querySelector("#co-run-editor .co-run-error")!.textContent).toBe(
-      "read failed",
-    );
+    expect(
+      overlay.querySelector("#co-run-editor .co-run-error")!.textContent,
+    ).toBe("read failed");
   });
 
   it("opens a file with no recorded violations and no active line", async () => {
     const overlay = await runAndSelect();
     // A marker line past EOF leaves no active row and no caret rows.
-    synthVio(overlay.querySelector("#co-run-results")!, "other.ts", "99").click();
+    synthVio(
+      overlay.querySelector("#co-run-results")!,
+      "other.ts",
+      "99",
+    ).click();
     for (let i = 0; i < 4; i++) await flush();
     const editor = overlay.querySelector("#co-run-editor")!;
     expect(editor.querySelector(".co-code")).not.toBeNull();
@@ -1044,7 +1244,9 @@ describe("panelExt injected script", () => {
     analyzeStatusResult = { analyzed: false, lastAnalyzed: null };
     analyzeFails = true;
     await runInjected();
-    const runBtn = document.querySelector(".co-analyze-run") as HTMLButtonElement;
+    const runBtn = document.querySelector(
+      ".co-analyze-run",
+    ) as HTMLButtonElement;
     runBtn.click();
     for (let i = 0; i < 3; i++) await flush();
 
@@ -1057,23 +1259,35 @@ describe("panelExt injected script", () => {
     const tr = [...document.querySelectorAll("tbody tr")].find(
       (r) => r.querySelector(".font-mono")?.textContent === slug,
     )!;
-    return tr.querySelector<HTMLInputElement>(".co-enabled-td .co-enabled-box")!;
+    return tr.querySelector<HTMLInputElement>(
+      ".co-enabled-td .co-enabled-box",
+    )!;
   };
 
   const themeBtn = (t: string) =>
-    document.querySelector<HTMLButtonElement>('.co-theme-seg .co-theme-btn[data-theme="' + t + '"]')!;
+    document.querySelector<HTMLButtonElement>(
+      '.co-theme-seg .co-theme-btn[data-theme="' + t + '"]',
+    )!;
 
   it("renders a titleless icon theme control defaulting to System (resolved to light)", async () => {
     await runInjected();
     const seg = document.querySelector(".co-theme-seg")!;
     const btns = [...seg.querySelectorAll(".co-theme-btn")];
-    expect(btns.map((b) => b.getAttribute("data-theme"))).toEqual(["auto", "light", "dark"]);
+    expect(btns.map((b) => b.getAttribute("data-theme"))).toEqual([
+      "auto",
+      "light",
+      "dark",
+    ]);
     // Icons only — no visible text label anywhere in the control.
     expect(seg.textContent).toBe("");
     expect(btns.every((b) => b.querySelector("svg") !== null)).toBe(true);
     // System is the active preference; with no OS dark signal it resolves to light.
-    expect(themeBtn("auto").classList.contains("co-theme-btn-active")).toBe(true);
-    expect(document.documentElement.getAttribute("data-co-theme")).toBe("light");
+    expect(themeBtn("auto").classList.contains("co-theme-btn-active")).toBe(
+      true,
+    );
+    expect(document.documentElement.getAttribute("data-co-theme")).toBe(
+      "light",
+    );
   });
 
   it("clicking the Dark icon flips the theme, persists it, and marks the button active", async () => {
@@ -1081,20 +1295,27 @@ describe("panelExt injected script", () => {
     themeBtn("dark").click();
     expect(document.documentElement.getAttribute("data-co-theme")).toBe("dark");
     expect(lsStore.get("co-theme")).toBe("dark");
-    expect(themeBtn("dark").classList.contains("co-theme-btn-active")).toBe(true);
-    expect(themeBtn("auto").classList.contains("co-theme-btn-active")).toBe(false);
+    expect(themeBtn("dark").classList.contains("co-theme-btn-active")).toBe(
+      true,
+    );
+    expect(themeBtn("auto").classList.contains("co-theme-btn-active")).toBe(
+      false,
+    );
   });
 
   it("restores the stored theme on load", async () => {
     lsStore.set("co-theme", "dark");
     await runInjected();
-    expect(themeBtn("dark").classList.contains("co-theme-btn-active")).toBe(true);
+    expect(themeBtn("dark").classList.contains("co-theme-btn-active")).toBe(
+      true,
+    );
     expect(document.documentElement.getAttribute("data-co-theme")).toBe("dark");
   });
 
   it("renders a header project selector defaulting to the installed project", async () => {
     await runInjected();
-    const sel = document.querySelector<HTMLSelectElement>(".co-project-select")!;
+    const sel =
+      document.querySelector<HTMLSelectElement>(".co-project-select")!;
     const opts = [...sel.options].map((o) => o.textContent);
     expect(opts).toEqual(["Repo (default)", "Web", "＋ New project…"]);
     expect(sel.value).toBe("1");
@@ -1104,7 +1325,9 @@ describe("panelExt injected script", () => {
     await runInjected();
     const tr = document.querySelector("tbody tr")!; // lint-a
     // Native enabled cell hidden; our project toggle rendered and checked.
-    expect(tr.querySelector<HTMLElement>("td.text-center")!.style.display).toBe("none");
+    expect(tr.querySelector<HTMLElement>("td.text-center")!.style.display).toBe(
+      "none",
+    );
     const box = enabledBox("lint-a");
     expect(box.checked).toBe(true);
 
@@ -1119,7 +1342,8 @@ describe("panelExt injected script", () => {
   it("switching projects reloads the table with that project's config", async () => {
     await runInjected();
     expect(enabledBox("lint-a").checked).toBe(true);
-    const sel = document.querySelector<HTMLSelectElement>(".co-project-select")!;
+    const sel =
+      document.querySelector<HTMLSelectElement>(".co-project-select")!;
     sel.value = "2";
     sel.dispatchEvent(new Event("change", { bubbles: true }));
     for (let i = 0; i < 4; i++) await flush();
@@ -1131,13 +1355,16 @@ describe("panelExt injected script", () => {
   it("restores the last-selected project from localStorage", async () => {
     lsStore.set("co-project", "2");
     await runInjected();
-    expect(document.querySelector<HTMLSelectElement>(".co-project-select")!.value).toBe("2");
+    expect(
+      document.querySelector<HTMLSelectElement>(".co-project-select")!.value,
+    ).toBe("2");
     expect(enabledBox("lint-a").checked).toBe(false);
   });
 
   it("creates a project from the modal, then selects it", async () => {
     await runInjected();
-    const sel = document.querySelector<HTMLSelectElement>(".co-project-select")!;
+    const sel =
+      document.querySelector<HTMLSelectElement>(".co-project-select")!;
     sel.value = "__new__";
     sel.dispatchEvent(new Event("change", { bubbles: true }));
     for (let i = 0; i < 3; i++) await flush();
@@ -1145,22 +1372,30 @@ describe("panelExt injected script", () => {
     const modal = document.getElementById("co-project-modal")!;
     expect(modal).not.toBeNull();
     // The folder browser loaded the run root's listing.
-    expect(modal.querySelector(".co-modal-browser-path")!.textContent).toBe("/proj");
+    expect(modal.querySelector(".co-modal-browser-path")!.textContent).toBe(
+      "/proj",
+    );
     modal.querySelector<HTMLButtonElement>(".co-modal-use")!.click();
 
-    (modal.querySelector<HTMLInputElement>(".co-modal-name")!).value = "Gamma";
+    modal.querySelector<HTMLInputElement>(".co-modal-name")!.value = "Gamma";
     modal.querySelector<HTMLButtonElement>(".co-modal-create")!.click();
     for (let i = 0; i < 4; i++) await flush();
 
     expect(projectCreateCalls).toHaveLength(1);
-    expect(projectCreateCalls[0]).toMatchObject({ name: "Gamma", directories: ["/proj"] });
+    expect(projectCreateCalls[0]).toMatchObject({
+      name: "Gamma",
+      directories: ["/proj"],
+    });
     expect(document.getElementById("co-project-modal")).toBeNull();
-    expect(document.querySelector<HTMLSelectElement>(".co-project-select")!.value).toBe("3");
+    expect(
+      document.querySelector<HTMLSelectElement>(".co-project-select")!.value,
+    ).toBe("3");
   });
 
   it("does not rebuild the project dropdown on unrelated re-render ticks", async () => {
     await runInjected();
-    const sel = document.querySelector<HTMLSelectElement>(".co-project-select")!;
+    const sel =
+      document.querySelector<HTMLSelectElement>(".co-project-select")!;
     const firstOption = sel.options[0];
     // Fire several observer ticks the way the panel's React re-renders would.
     for (let i = 0; i < 3; i++) {
@@ -1182,7 +1417,9 @@ describe("panelExt injected script", () => {
     const tr = [...document.querySelectorAll("tbody tr")].find(
       (r) => r.querySelector(".font-mono")?.textContent === slug,
     )!;
-    return tr.querySelector<HTMLButtonElement>('.co-act-td .co-act-btn[data-act="' + act + '"]')!;
+    return tr.querySelector<HTMLButtonElement>(
+      '.co-act-td .co-act-btn[data-act="' + act + '"]',
+    )!;
   };
 
   it("adds a trailing actions column with Run/Activity/Settings icon buttons per row", async () => {
@@ -1202,15 +1439,18 @@ describe("panelExt injected script", () => {
       (r) => r.querySelector(".font-mono")?.textContent === slug,
     )!;
   const selectRow = (slug: string) =>
-    rowFor(slug).querySelector(".font-mono")!.dispatchEvent(
-      new Event("click", { bubbles: true }),
-    );
+    rowFor(slug)
+      .querySelector(".font-mono")!
+      .dispatchEvent(new Event("click", { bubbles: true }));
   const orderBar = () => document.getElementById("co-order-bar")!;
   const orderBtn = (dir: "up" | "down") =>
     orderBar().querySelector<HTMLButtonElement>(".co-order-" + dir)!;
 
-  const toasts = () => [...document.querySelectorAll("#co-toast-region .co-toast")];
-  const toastText = (el: Element) => el.querySelector(".co-toast-msg")?.textContent;
+  const toasts = () => [
+    ...document.querySelectorAll("#co-toast-region .co-toast"),
+  ];
+  const toastText = (el: Element) =>
+    el.querySelector(".co-toast-msg")?.textContent;
 
   it("toasts when a rule is enabled/disabled", async () => {
     await runInjected();
@@ -1238,7 +1478,9 @@ describe("panelExt injected script", () => {
     selectRow("lint-b");
     await flush();
     expect(rowFor("lint-b").classList.contains("co-row-selected")).toBe(true);
-    expect(orderBar().querySelector(".co-order-label")!.textContent).toBe("Reorder: lint-b");
+    expect(orderBar().querySelector(".co-order-label")!.textContent).toBe(
+      "Reorder: lint-b",
+    );
     expect(orderBtn("up").disabled).toBe(false);
     expect(orderBtn("down").disabled).toBe(false);
     // First row: up disabled. Selecting a new row moves the highlight.
@@ -1267,7 +1509,11 @@ describe("panelExt injected script", () => {
     for (let i = 0; i < 3; i++) await flush();
     // The move edits the global order, so it hits /api/rules/:slug (not the
     // project-scoped route) with a { move } body.
-    expect(patchCalls.some((c) => c.url === "/api/rules/lint-b" && c.body.move === "up")).toBe(true);
+    expect(
+      patchCalls.some(
+        (c) => c.url === "/api/rules/lint-b" && c.body.move === "up",
+      ),
+    ).toBe(true);
     expect(toasts().map(toastText)).toContain("Moved lint-b up");
   });
 
@@ -1298,11 +1544,15 @@ describe("panelExt injected script", () => {
     actBtn("lint-a", "run").click();
     await flush();
     expect(overlay.style.display).toBe("flex");
-    const checked = [...overlay.querySelectorAll<HTMLInputElement>(".co-run-opt")]
+    const checked = [
+      ...overlay.querySelectorAll<HTMLInputElement>(".co-run-opt"),
+    ]
       .filter((b) => b.checked)
       .map((b) => b.value);
     expect(checked).toEqual(["lint-a"]);
-    expect(overlay.querySelector<HTMLButtonElement>("#co-run-btn")!.disabled).toBe(false);
+    expect(
+      overlay.querySelector<HTMLButtonElement>("#co-run-btn")!.disabled,
+    ).toBe(false);
   });
 
   const openActivityTab = async () => {
@@ -1326,12 +1576,14 @@ describe("panelExt injected script", () => {
     expect(overlay.style.display).toBe("flex");
     expect(document.getElementById("root")!.style.display).toBe("none");
     // Top-rules list, ranked, with the busiest first.
-    const rows = [...overlay.querySelectorAll(".co-act-toprow")].map((r) =>
-      r.querySelector(".co-act-toprow-key")!.textContent,
+    const rows = [...overlay.querySelectorAll(".co-act-toprow")].map(
+      (r) => r.querySelector(".co-act-toprow-key")!.textContent,
     );
     expect(rows).toEqual(["lint:naming", "lint:dup"]);
     // SVG chart drew a bar per bucket.
-    expect(overlay.querySelectorAll(".co-act-chart svg rect.co-act-bar").length).toBe(2);
+    expect(
+      overlay.querySelectorAll(".co-act-chart svg rect.co-act-bar").length,
+    ).toBe(2);
     // Feed shows both a hook run (with a failure pill) and a config log entry.
     const feed = overlay.querySelector("#co-act-feed")!;
     expect(feed.querySelectorAll(".co-act-row")).toHaveLength(2);
@@ -1344,11 +1596,15 @@ describe("panelExt injected script", () => {
     await runInjected();
     actBtn("lint-a", "activity").click();
     for (let i = 0; i < 3; i++) await flush();
-    const overlay = document.querySelector<HTMLElement>("#co-activity-overlay")!;
+    const overlay = document.querySelector<HTMLElement>(
+      "#co-activity-overlay",
+    )!;
     expect(overlay.style.display).toBe("flex");
     // Both summary and feed were fetched scoped to the mapped key lint:a.
     expect(activityCalls.some((u) => u.includes("rules=lint%3Aa"))).toBe(true);
-    expect(activityFeedCalls.some((u) => u.includes("rules=lint%3Aa"))).toBe(true);
+    expect(activityFeedCalls.some((u) => u.includes("rules=lint%3Aa"))).toBe(
+      true,
+    );
   });
 
   it("the rule multiselect re-fetches the feed scoped to the chosen keys", async () => {
@@ -1358,7 +1614,9 @@ describe("panelExt injected script", () => {
     // Narrow to a strict subset (uncheck two of the three keys).
     const dd = overlay.querySelector(".co-act-filter")!;
     const opt = (v: string) =>
-      [...dd.querySelectorAll<HTMLInputElement>(".co-dd-opt")].find((i) => i.value === v)!;
+      [...dd.querySelectorAll<HTMLInputElement>(".co-dd-opt")].find(
+        (i) => i.value === v,
+      )!;
     opt("commit").checked = false;
     opt("commit").dispatchEvent(new Event("change", { bubbles: true }));
     opt("lint:dup").checked = false;
@@ -1371,7 +1629,9 @@ describe("panelExt injected script", () => {
     await runInjected();
     const overlay = await openActivityTab();
     activityCalls.length = 0;
-    (overlay.querySelector('.co-act-win[data-win="1h"]') as HTMLElement).click();
+    (
+      overlay.querySelector('.co-act-win[data-win="1h"]') as HTMLElement
+    ).click();
     for (let i = 0; i < 3; i++) await flush();
     expect(overlay.querySelector(".co-act-win-active")!.textContent).toBe("1h");
     expect(activityCalls.at(-1)).toContain("last=1h");
@@ -1383,20 +1643,35 @@ describe("panelExt injected script", () => {
     await flush();
     const modal = document.getElementById("co-set-modal")!;
     expect(modal).not.toBeNull();
-    expect(modal.querySelector(".co-modal-title")!.textContent).toBe("Settings — lint-a");
-    expect(modal.querySelector(".co-set-sub")!.textContent).toBe("Project: Repo");
+    expect(modal.querySelector(".co-modal-title")!.textContent).toBe(
+      "Settings — lint-a",
+    );
+    expect(modal.querySelector(".co-set-sub")!.textContent).toBe(
+      "Project: Repo",
+    );
     // Enabled prefilled.
-    expect(modal.querySelector<HTMLInputElement>(".co-set-enabled .co-set-check")!.checked).toBe(true);
+    expect(
+      modal.querySelector<HTMLInputElement>(".co-set-enabled .co-set-check")!
+        .checked,
+    ).toBe(true);
     // Action: default = halt, claude override = warn.
-    const selects = [...modal.querySelectorAll<HTMLSelectElement>(".co-set-select")];
+    const selects = [
+      ...modal.querySelectorAll<HTMLSelectElement>(".co-set-select"),
+    ];
     expect(selects[0].value).toBe("halt");
     const claudeRow = [...modal.querySelectorAll(".co-set-row")].find(
       (r) => r.querySelector(".co-set-label")?.textContent === "Claude Code",
     )!;
-    expect(claudeRow.querySelector<HTMLSelectElement>(".co-set-select")!.value).toBe("warn");
+    expect(
+      claudeRow.querySelector<HTMLSelectElement>(".co-set-select")!.value,
+    ).toBe("warn");
     // Config: a number field (maxLines) and an exclude list editor with a chip.
-    expect(modal.querySelector<HTMLInputElement>(".co-set-num")!.value).toBe("300");
-    expect(modal.querySelector(".co-set-chip")!.textContent).toContain("dist/**");
+    expect(modal.querySelector<HTMLInputElement>(".co-set-num")!.value).toBe(
+      "300",
+    );
+    expect(modal.querySelector(".co-set-chip")!.textContent).toContain(
+      "dist/**",
+    );
   });
 
   it("hides the fix actions for a rule with no installed fix, shows them when it has one", async () => {
@@ -1404,7 +1679,9 @@ describe("panelExt injected script", () => {
     // lint-a declares no actions -> the fix bindings are absent from every select.
     actBtn("lint-a", "settings").click();
     await flush();
-    let sel = document.querySelector<HTMLSelectElement>("#co-set-modal .co-set-select")!;
+    let sel = document.querySelector<HTMLSelectElement>(
+      "#co-set-modal .co-set-select",
+    )!;
     let slugs = [...sel.options].map((o) => o.value);
     expect(slugs).toEqual(["", "warn", "halt", "delay_halt"]);
     document.getElementById("co-set-modal")!.remove();
@@ -1412,7 +1689,9 @@ describe("panelExt injected script", () => {
     // lint-b declares a script fix -> the three fix bindings are offered.
     actBtn("lint-b", "settings").click();
     await flush();
-    sel = document.querySelector<HTMLSelectElement>("#co-set-modal .co-set-select")!;
+    sel = document.querySelector<HTMLSelectElement>(
+      "#co-set-modal .co-set-select",
+    )!;
     slugs = [...sel.options].map((o) => o.value);
     expect(slugs).toContain("fix");
     expect(slugs).toContain("fix_and_warn");
@@ -1423,17 +1702,27 @@ describe("panelExt injected script", () => {
     const tr = [...document.querySelectorAll("tbody tr")].find(
       (r) => r.querySelector(".font-mono")?.textContent === slug,
     )!;
-    return tr.querySelector<HTMLSelectElement>(".co-binding-td .co-binding-select")!;
+    return tr.querySelector<HTMLSelectElement>(
+      ".co-binding-td .co-binding-select",
+    )!;
   };
 
   it("shows an inline Action selector per row, prefilled from the default binding", async () => {
     await runInjected();
     // Every row gets the column; lint-a's default binding is halt.
-    expect([...document.querySelectorAll("tbody tr .co-binding-td .co-binding-select")]).toHaveLength(3);
+    expect([
+      ...document.querySelectorAll(
+        "tbody tr .co-binding-td .co-binding-select",
+      ),
+    ]).toHaveLength(3);
     expect(sevSelectFor("lint-a").value).toBe("halt");
     // lint-a has no fix -> the fix actions are omitted; lint-b has one -> present.
-    expect([...sevSelectFor("lint-a").options].map((o) => o.value)).not.toContain("fix");
-    expect([...sevSelectFor("lint-b").options].map((o) => o.value)).toContain("fix_and_halt");
+    expect(
+      [...sevSelectFor("lint-a").options].map((o) => o.value),
+    ).not.toContain("fix");
+    expect([...sevSelectFor("lint-b").options].map((o) => o.value)).toContain(
+      "fix_and_halt",
+    );
   });
 
   it("PATCHes the default binding when the inline Action selector changes", async () => {
@@ -1459,7 +1748,9 @@ describe("panelExt injected script", () => {
   it("hides the prebuilt Action column (header + per-row select) in favour of ours", async () => {
     await runInjected();
     const nativeHeads = [...document.querySelectorAll("thead th")].filter(
-      (t) => t.textContent!.trim() === "Action" && !t.classList.contains("co-binding-th"),
+      (t) =>
+        t.textContent!.trim() === "Action" &&
+        !t.classList.contains("co-binding-th"),
     );
     expect(nativeHeads).toHaveLength(1);
     expect((nativeHeads[0] as HTMLElement).style.display).toBe("none");
@@ -1475,9 +1766,12 @@ describe("panelExt injected script", () => {
     const modal = document.getElementById("co-set-modal")!;
 
     // Disable, bump maxLines, add an exclude entry.
-    modal.querySelector<HTMLInputElement>(".co-set-enabled .co-set-check")!.checked = false;
+    modal.querySelector<HTMLInputElement>(
+      ".co-set-enabled .co-set-check",
+    )!.checked = false;
     modal.querySelector<HTMLInputElement>(".co-set-num")!.value = "120";
-    const listInput = modal.querySelector<HTMLInputElement>(".co-set-add-input")!;
+    const listInput =
+      modal.querySelector<HTMLInputElement>(".co-set-add-input")!;
     listInput.value = "build/**";
     modal.querySelector<HTMLButtonElement>(".co-set-add")!.click();
 
@@ -1494,7 +1788,11 @@ describe("panelExt injected script", () => {
     });
     // Shown action is re-materialised as project bindings (default halt + claude warn).
     const setActions = patchCalls
-      .map((c) => c.body.setAction as { type: string; environment?: string } | undefined)
+      .map(
+        (c) =>
+          c.body.setAction as
+            { type: string; environment?: string } | undefined,
+      )
       .filter(Boolean);
     expect(setActions).toEqual([
       { type: "halt", delayMs: null },

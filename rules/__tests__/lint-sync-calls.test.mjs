@@ -61,9 +61,9 @@ describe("isDevopsAllowlisted and isLintable", () => {
   });
 
   test("a nested repo prefix on an allowlisted path still matches by suffix", () => {
-    expect(
-      isDevopsAllowlisted("pkg/scripts/hooks/install-git-hooks.mjs"),
-    ).toBe(true);
+    expect(isDevopsAllowlisted("pkg/scripts/hooks/install-git-hooks.mjs")).toBe(
+      true,
+    );
   });
 
   test("a leading ./ is normalized before matching the allowlist", () => {
@@ -185,9 +185,9 @@ describe("main", () => {
   test("--files with a sync call writes violations and exits 1", async () => {
     const bad = join(tmpRoot, "bad.ts");
     await writeFile(bad, `existsSync("p");\n`, "utf8");
-    await expect(
-      main(["node", "script.mjs", "--files", bad]),
-    ).rejects.toThrow(/__exit__:1/);
+    await expect(main(["node", "script.mjs", "--files", bad])).rejects.toThrow(
+      /__exit__:1/,
+    );
     expect(exitSpy).toHaveBeenCalledWith(1);
     expect(stderrText()).toContain("sync call");
     expect(stderrText()).toMatch(/1 violation\(s\)/);

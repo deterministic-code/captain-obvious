@@ -35,7 +35,9 @@ export function keyToSlug(key: string): string {
 }
 
 function windowSeconds(last?: string): number {
-  return WINDOW_SECONDS[last ?? DEFAULT_WINDOW] ?? WINDOW_SECONDS[DEFAULT_WINDOW];
+  return (
+    WINDOW_SECONDS[last ?? DEFAULT_WINDOW] ?? WINDOW_SECONDS[DEFAULT_WINDOW]
+  );
 }
 
 function parseRules(rules?: string): Set<string> {
@@ -64,7 +66,7 @@ function readHookRuns(dbPath: string, sinceUs: number): HookRun[] {
   try {
     return db
       .prepare(
-        'SELECT command, subcommand, status, start FROM event WHERE start >= ? ORDER BY start DESC',
+        "SELECT command, subcommand, status, start FROM event WHERE start >= ? ORDER BY start DESC",
       )
       .all(sinceUs)
       .map((raw) => {
@@ -75,7 +77,9 @@ function readHookRuns(dbPath: string, sinceUs: number): HookRun[] {
           start: number;
         };
         const key = (r.subcommand && String(r.subcommand)) || String(r.command);
-        const detail = r.subcommand ? `${r.command} ${r.subcommand}` : String(r.command);
+        const detail = r.subcommand
+          ? `${r.command} ${r.subcommand}`
+          : String(r.command);
         return {
           key,
           startMs: Number(r.start) / US_PER_MS,
@@ -223,7 +227,8 @@ export function activityFeed(
 
   const selectedSlugs = [...selected].map(keyToSlug);
   for (const row of listLogs(auditDb, { sinceMs: startMs, limit })) {
-    if (selected.size && !selectedSlugs.some((s) => row.message.includes(s))) continue;
+    if (selected.size && !selectedSlugs.some((s) => row.message.includes(s)))
+      continue;
     events.push({
       timeMs: Date.parse(`${row.created.replace(" ", "T")}Z`),
       source: "log",

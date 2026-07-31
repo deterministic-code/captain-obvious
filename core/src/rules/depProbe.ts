@@ -15,7 +15,8 @@ export function probeDependency(dep: RuleDependency): boolean {
       require.resolve(dep.name);
       return true;
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === "MODULE_NOT_FOUND") return false;
+      if ((err as NodeJS.ErrnoException).code === "MODULE_NOT_FOUND")
+        return false;
       throw err;
     }
   }

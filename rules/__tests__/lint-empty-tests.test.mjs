@@ -23,9 +23,13 @@ describe("findEmptyTests", () => {
   });
 
   test("passes a test that asserts (expect / node:assert / toThrow)", () => {
-    expect(findEmptyTests(`it("a", () => { expect(1).toBe(1); });\n`)).toEqual([]);
+    expect(findEmptyTests(`it("a", () => { expect(1).toBe(1); });\n`)).toEqual(
+      [],
+    );
     expect(findEmptyTests(`test("b", () => { assert(ok); });\n`)).toEqual([]);
-    expect(findEmptyTests(`it("c", () => { expect(fn).toThrow(); });\n`)).toEqual([]);
+    expect(
+      findEmptyTests(`it("c", () => { expect(fn).toThrow(); });\n`),
+    ).toEqual([]);
   });
 
   test("tolerates an unbalanced call without crashing", () => {
@@ -59,7 +63,9 @@ describe("lint-empty-tests / main", () => {
 
   test("--files flags an assertion-free test and exits 1", async () => {
     const bad = await file("a.test.ts", `it("x", () => {});\n`);
-    await expect(main(["node", "s", "--files", bad])).rejects.toThrow(/__exit__:1/);
+    await expect(main(["node", "s", "--files", bad])).rejects.toThrow(
+      /__exit__:1/,
+    );
     expect(io.text(io.stderrSpy)).toContain("test-no-assertion");
   });
 

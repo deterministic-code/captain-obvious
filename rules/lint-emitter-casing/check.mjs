@@ -224,7 +224,6 @@ export function findViolations(src) {
 
 export const lintFile = (path, cwd) => lintFileWith(path, cwd, findViolations);
 
-
 function usage() {
   process.stderr.write(
     "Usage:\n  node scripts/hooks/lint-emitter-casing.mjs --staged [--warn]\n  node scripts/hooks/lint-emitter-casing.mjs --all [--warn]\n  node scripts/hooks/lint-emitter-casing.mjs --files <path> [...] [--warn]\n",

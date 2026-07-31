@@ -60,7 +60,8 @@ function parseActionBinding(raw: string): ActionBinding {
 
 function parseIntStrict(value: string, label: string): number {
   const n = Number(value);
-  if (!Number.isInteger(n)) throw new Error(`${label} must be an integer: ${value}`);
+  if (!Number.isInteger(n))
+    throw new Error(`${label} must be an integer: ${value}`);
   return n;
 }
 
@@ -74,7 +75,9 @@ function withDb(args: ParsedArgs, fn: (db: Db) => void): void {
 }
 
 function done(label: string, row: unknown): void {
-  process.stdout.write(`captain-obvious: ${label}\n${JSON.stringify(row, null, 2)}\n`);
+  process.stdout.write(
+    `captain-obvious: ${label}\n${JSON.stringify(row, null, 2)}\n`,
+  );
 }
 
 function runAddLanguage(args: ParsedArgs): void {
@@ -120,7 +123,8 @@ function runConfigureRule(args: ParsedArgs): void {
   let setOrder: number | undefined;
   if (orderArg !== undefined) {
     setOrder = Number(orderArg);
-    if (!Number.isInteger(setOrder)) fail(`--order must be an integer, got ${orderArg}`);
+    if (!Number.isInteger(setOrder))
+      fail(`--order must be an integer, got ${orderArg}`);
   }
   withDb(args, (db) => {
     const row = configureRule(db, slug, {
@@ -206,7 +210,9 @@ function runPruneLogs(args: ParsedArgs): void {
   if (days < 1 || days > MAX_PRUNE_DAYS) {
     fail(`--days must be between 1 and ${MAX_PRUNE_DAYS}`);
   }
-  const db = openAuditDb(resolveAuditDbPath({ db: args.values.get("audit-db") }));
+  const db = openAuditDb(
+    resolveAuditDbPath({ db: args.values.get("audit-db") }),
+  );
   try {
     const info = db
       .prepare("DELETE FROM logs WHERE created < datetime('now', ?)")

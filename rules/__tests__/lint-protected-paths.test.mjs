@@ -75,7 +75,11 @@ describe("lint-protected-paths main", () => {
 
   test("--all over a repo containing a protected path exits 1", async () => {
     const repo = await makeTempGitRepo("lpp-all-");
-    await writeFile(join(repo, "schema.sql"), "CREATE TABLE x (id INTEGER);\n", "utf8");
+    await writeFile(
+      join(repo, "schema.sql"),
+      "CREATE TABLE x (id INTEGER);\n",
+      "utf8",
+    );
     await commitAllIn(repo, "seed");
     process.chdir(repo);
     await expect(main(["node", "s.mjs", "--all"], load)).rejects.toThrow(
@@ -87,7 +91,11 @@ describe("lint-protected-paths main", () => {
 
   test("--all with CO_JSON emits one JSON line and never exits", async () => {
     const repo = await makeTempGitRepo("lpp-json-");
-    await writeFile(join(repo, "schema.sql"), "CREATE TABLE x (id INTEGER);\n", "utf8");
+    await writeFile(
+      join(repo, "schema.sql"),
+      "CREATE TABLE x (id INTEGER);\n",
+      "utf8",
+    );
     await commitAllIn(repo, "seed");
     process.chdir(repo);
     process.env.CO_JSON = "1";

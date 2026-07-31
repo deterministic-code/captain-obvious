@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { analyzeLsp, isAnalyzable, runSolidLHook } from "../_kit/solid-l-metrics.mjs";
+import {
+  analyzeLsp,
+  isAnalyzable,
+  runSolidLHook,
+} from "../_kit/solid-l-metrics.mjs";
 import { main } from "../lint-solid-l/check.mjs";
 import { cleanupTmp, mockProcessIo } from "./test-helpers.mjs";
 
@@ -36,9 +40,9 @@ describe("solid-l-metrics / refusing override", () => {
     expect(v[0].detail).toContain('base "ICrudRepository"');
   });
   test("a plain override that honors the contract is fine", () => {
-    expect(
-      analyze(`class Sub extends Base { run() { return 1; } }`),
-    ).toEqual([]);
+    expect(analyze(`class Sub extends Base { run() { return 1; } }`)).toEqual(
+      [],
+    );
   });
   test("subclassing an Error base is not an LSP concern", () => {
     expect(
@@ -89,9 +93,9 @@ describe("solid-l-metrics / base-class shapes", () => {
     ).toEqual([]);
   });
   test("an override that honors the base contract is not a refusal", () => {
-    expect(
-      analyze(`class Sub extends Base { run() { return 1; } }`),
-    ).toEqual([]);
+    expect(analyze(`class Sub extends Base { run() { return 1; } }`)).toEqual(
+      [],
+    );
   });
   test("a class expression extending a base is analyzed for refusals", () => {
     const v = analyze(
@@ -114,7 +118,9 @@ describe("solid-l-metrics / isAnalyzable", () => {
 describe("solid-l-metrics / allow marker", () => {
   test("a solid-l-allow marker suppresses the file", () => {
     expect(
-      analyze(`// solid-l-allow: sentinel\nif (x instanceof SkipStep) return 1;`),
+      analyze(
+        `// solid-l-allow: sentinel\nif (x instanceof SkipStep) return 1;`,
+      ),
     ).toEqual([]);
   });
 });
@@ -150,7 +156,11 @@ describe("solid-l-metrics / fileLspViolations + runner", () => {
 
   test("runSolidLHook --files on an instanceof offender exits 1 with an lsp report", async () => {
     const p = join(root, "bad.ts");
-    await writeFile(p, "function f(x){ if (x instanceof SkipStep) return 1; }\n", "utf8");
+    await writeFile(
+      p,
+      "function f(x){ if (x instanceof SkipStep) return 1; }\n",
+      "utf8",
+    );
     await expect(
       runSolidLHook(["node", "l.mjs", "--files", p]),
     ).rejects.toThrow(/__exit__:1/);
@@ -159,7 +169,11 @@ describe("solid-l-metrics / fileLspViolations + runner", () => {
 
   test("runSolidLHook --files skips a non-analyzable path (.txt)", async () => {
     const p = join(root, "notes.txt");
-    await writeFile(p, "function f(x){ if (x instanceof SkipStep) return 1; }\n", "utf8");
+    await writeFile(
+      p,
+      "function f(x){ if (x instanceof SkipStep) return 1; }\n",
+      "utf8",
+    );
     await runSolidLHook(["node", "l.mjs", "--files", p]);
     expect(io.exitSpy).not.toHaveBeenCalled();
   });

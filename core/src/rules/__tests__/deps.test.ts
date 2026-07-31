@@ -25,7 +25,10 @@ describe("verifyDependencies", () => {
     const plugins = [
       plugin("a", [{ kind: "npm", name: "prettier" }]),
       plugin("b", []),
-      plugin("c", [{ kind: "bin", name: "gh" }, { kind: "npm", name: "knip" }]),
+      plugin("c", [
+        { kind: "bin", name: "gh" },
+        { kind: "npm", name: "knip" },
+      ]),
     ];
     const present = new Set(["prettier", "gh"]);
     const statuses = verifyDependencies(plugins, (d) => present.has(d.name));

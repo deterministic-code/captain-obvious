@@ -211,7 +211,15 @@ describe("profilingReport", () => {
     db.prepare(
       `INSERT INTO event (tier, hook, command, subcommand, status, start, "end")
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    ).run("git", null, "lint", "all", "success", startUs, startUs + 5 * US_PER_MS);
+    ).run(
+      "git",
+      null,
+      "lint",
+      "all",
+      "success",
+      startUs,
+      startUs + 5 * US_PER_MS,
+    );
     db.close();
     const report = profilingReport(dbPath, { group: "hook" });
     expect(report.groups[0].hook).toBe("—");

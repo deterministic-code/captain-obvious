@@ -36,7 +36,11 @@ export function selectMode(args) {
   const rest = args.filter((a) => a !== "--fix" && a !== "--warn");
   let selector = rest[0];
   if (selector === undefined && op === "fix") selector = "--staged";
-  if (selector !== "--staged" && selector !== "--all" && selector !== "--files") {
+  if (
+    selector !== "--staged" &&
+    selector !== "--all" &&
+    selector !== "--files"
+  ) {
     return null;
   }
   const files = selector === "--files" ? rest.slice(1) : [];
@@ -97,7 +101,9 @@ async function runCheck(bin, targets, repoRoot, warn) {
     stdout = err.stdout ?? "";
     stderr = err.stderr ?? "";
     if (typeof err.code !== "number" || looksLikeToolError(stdout + stderr)) {
-      throw new Error(`prettier failed: ${(stderr || stdout || err.message).trim()}`);
+      throw new Error(
+        `prettier failed: ${(stderr || stdout || err.message).trim()}`,
+      );
     }
   }
   const violations = parsePrettierCheckOutput(stdout + stderr);
@@ -120,12 +126,16 @@ async function runCheck(bin, targets, repoRoot, warn) {
 }
 
 async function runFix(bin, targets, repoRoot) {
-  await execFileAsync(process.execPath, [bin, "--write", "--no-color", ...targets], {
-    cwd: repoRoot,
-    encoding: "utf8",
-    env: sanitizedGitEnv(),
-    maxBuffer: 64 * 1024 * 1024,
-  });
+  await execFileAsync(
+    process.execPath,
+    [bin, "--write", "--no-color", ...targets],
+    {
+      cwd: repoRoot,
+      encoding: "utf8",
+      env: sanitizedGitEnv(),
+      maxBuffer: 64 * 1024 * 1024,
+    },
+  );
   process.stdout.write(
     `lint-prettier: formatted ${targets.length} file(s) with prettier --write. Re-stage them with \`git add\`.\n`,
   );

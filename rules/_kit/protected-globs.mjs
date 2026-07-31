@@ -5,8 +5,7 @@
  * logic it forwards to lives in the core's src/rules/protectedPaths.ts, tested there.
  */
 export async function loadProtected() {
-  const { readProtectedGlobs, matchProtected } = await import(
-    "@deterministic-code/captain-obvious/runtime/protected-paths"
-  );
+  const { readProtectedGlobs, matchProtected } =
+    await import("@deterministic-code/captain-obvious/runtime/protected-paths");
   return { globs: readProtectedGlobs(), match: matchProtected };
 }

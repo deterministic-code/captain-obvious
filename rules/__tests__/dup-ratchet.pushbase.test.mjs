@@ -15,7 +15,7 @@ vi.mock("node:child_process", () => ({
 const { pushRatchetInputs } = await import("../_kit/dup-ratchet.mjs");
 
 describe("dup-ratchet / pushBase coalesces a stderr-less error", () => {
-  test("rethrows an error whose stderr is undefined (?? \"\" fallback)", async () => {
+  test('rethrows an error whose stderr is undefined (?? "" fallback)', async () => {
     await expect(pushRatchetInputs("/repo", "t")).rejects.toThrow(
       /boom-no-stderr/,
     );

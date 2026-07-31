@@ -75,7 +75,12 @@ export function openDb(dbPath: string): Db {
 
 // `CREATE TABLE IF NOT EXISTS` won't add columns to a table that predates them,
 // so a DB created before a column keeps the old shape — add it in place.
-function migrateColumn(db: Db, table: string, column: string, decl: string): void {
+function migrateColumn(
+  db: Db,
+  table: string,
+  column: string,
+  decl: string,
+): void {
   const cols = db.prepare(`PRAGMA table_info(${table})`).all() as {
     name: string;
   }[];

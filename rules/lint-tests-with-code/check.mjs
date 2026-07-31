@@ -27,7 +27,9 @@ export function isTestFile(path) {
 
 export function isProdSource(path) {
   const p = norm(path);
-  return SCOPE_RE.test(p) && isLintable(p) && !isTestFile(p) && !NON_LOGIC_RE.test(p);
+  return (
+    SCOPE_RE.test(p) && isLintable(p) && !isTestFile(p) && !NON_LOGIC_RE.test(p)
+  );
 }
 
 /** What a file is "about": strip the test/tier suffix, or the plain extension. */
@@ -92,7 +94,9 @@ export async function main(argv, opts = {}) {
   }
   for (const u of untested) {
     const why =
-      u.status === "A" ? "new file has no test" : "changed without touching its test";
+      u.status === "A"
+        ? "new file has no test"
+        : "changed without touching its test";
     process.stderr.write(
       `${u.path}: ${why} (expected a ${subjectOf(u.path)}.test.* change in this commit)\n`,
     );

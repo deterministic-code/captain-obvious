@@ -18,7 +18,11 @@ vi.mock("node:child_process", async () => {
     return actual.execFile(...args);
   }
   execFile[promisify.custom] = (cmd, args, opts) => {
-    if (prettierExecOverride && Array.isArray(args) && args.includes("--check")) {
+    if (
+      prettierExecOverride &&
+      Array.isArray(args) &&
+      args.includes("--check")
+    ) {
       return Promise.reject(prettierExecOverride());
     }
     return realPromisified(cmd, args, opts);
@@ -26,12 +30,10 @@ vi.mock("node:child_process", async () => {
   return { ...actual, execFile };
 });
 
-const { main, parsePrettierCheckOutput, selectMode } = await import(
-  "../lint-prettier/check.mjs"
-);
-const { cleanupTmp, commitAllIn, makeTempGitRepo } = await import(
-  "./test-helpers.mjs"
-);
+const { main, parsePrettierCheckOutput, selectMode } =
+  await import("../lint-prettier/check.mjs");
+const { cleanupTmp, commitAllIn, makeTempGitRepo } =
+  await import("./test-helpers.mjs");
 
 const FORMATTED = "const x = 1;\n";
 const UNFORMATTED = "const x=1\n";
@@ -48,7 +50,10 @@ describe("lint-prettier / selectMode", () => {
   });
 
   test("--all is a check over all files", () => {
-    expect(selectMode(["--all"])).toMatchObject({ op: "check", selector: "--all" });
+    expect(selectMode(["--all"])).toMatchObject({
+      op: "check",
+      selector: "--all",
+    });
   });
 
   test("--files keeps the trailing paths", () => {
@@ -68,7 +73,10 @@ describe("lint-prettier / selectMode", () => {
   });
 
   test("--fix alone defaults to the staged selection", () => {
-    expect(selectMode(["--fix"])).toMatchObject({ op: "fix", selector: "--staged" });
+    expect(selectMode(["--fix"])).toMatchObject({
+      op: "fix",
+      selector: "--staged",
+    });
   });
 
   test("--fix combines with a selector", () => {
@@ -105,13 +113,14 @@ describe("lint-prettier / parsePrettierCheckOutput", () => {
   });
 
   test("clean output yields no violations", () => {
-    expect(parsePrettierCheckOutput("All matched files use Prettier code style!\n")).toEqual(
-      [],
-    );
+    expect(
+      parsePrettierCheckOutput("All matched files use Prettier code style!\n"),
+    ).toEqual([]);
   });
 
   test("the summary [warn] line is not mistaken for a file", () => {
-    const out = "[warn] src/a.ts\n[warn] Code style issues found in the above file. Run Prettier with --write to fix.\n";
+    const out =
+      "[warn] src/a.ts\n[warn] Code style issues found in the above file. Run Prettier with --write to fix.\n";
     const v = parsePrettierCheckOutput(out);
     expect(v).toHaveLength(1);
     expect(v[0].path).toBe("src/a.ts");
@@ -234,7 +243,11 @@ describe("lint-prettier / main (real prettier)", () => {
     await writeFile(join(repo, "clean.ts"), FORMATTED, "utf8");
     await commitAllIn(repo, "seed");
     // Stage a formatted change so the staged diff is non-empty.
-    await writeFile(join(repo, "clean.ts"), FORMATTED + "const y = 2;\n", "utf8");
+    await writeFile(
+      join(repo, "clean.ts"),
+      FORMATTED + "const y = 2;\n",
+      "utf8",
+    );
     const { execFile } = await import("node:child_process");
     const { promisify } = await import("node:util");
     await promisify(execFile)("git", ["add", "-A"], { cwd: repo });

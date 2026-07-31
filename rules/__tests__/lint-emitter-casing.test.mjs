@@ -10,11 +10,7 @@ import {
   scannableSource,
   FORBIDDEN,
 } from "../lint-emitter-casing/check.mjs";
-import {
-  cleanupTmp,
-  commitAllIn,
-  makeTempGitRepo,
-} from "./test-helpers.mjs";
+import { cleanupTmp, commitAllIn, makeTempGitRepo } from "./test-helpers.mjs";
 
 const imp = (names) =>
   `import { ${names} } from "@deterministic-code/emitter-sdk/case";\n`;
@@ -163,8 +159,11 @@ describe("findViolations", () => {
   test("a string literal spanning a raw newline is blanked and does not hide a later call", () => {
     // The unterminated-on-line-1 quote runs into a newline (quoted() returns on
     // \n); the toCase(...) that follows is still detected.
-    const src = imp("toCase") + 'const s = "open\ntoCase(n)";\nconst z = toCase(n);\n';
-    expect(findViolations(src).some((x) => x.kind.includes("toCase"))).toBe(true);
+    const src =
+      imp("toCase") + 'const s = "open\ntoCase(n)";\nconst z = toCase(n);\n';
+    expect(findViolations(src).some((x) => x.kind.includes("toCase"))).toBe(
+      true,
+    );
   });
 
   test("a terminated block comment mentioning a helper is ignored", () => {
@@ -179,7 +178,9 @@ describe("findViolations", () => {
     // bookkeeping; the toCase(...) sibling is still detected.
     const src =
       imp("toCase") + "const r = `${ (() => { return toCase(n); })() }`;\n";
-    expect(findViolations(src).some((x) => x.kind.includes("toCase"))).toBe(true);
+    expect(findViolations(src).some((x) => x.kind.includes("toCase"))).toBe(
+      true,
+    );
   });
 });
 

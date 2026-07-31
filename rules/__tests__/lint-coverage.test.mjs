@@ -23,9 +23,17 @@ function nums(pct) {
 
 describe("findRegressions", () => {
   test("flags every total metric that dropped below baseline", () => {
-    const r = findRegressions({ total: nums(90) }, { total: nums(85), files: {} });
+    const r = findRegressions(
+      { total: nums(90) },
+      { total: nums(85), files: {} },
+    );
     expect(r).toHaveLength(METRICS.length);
-    expect(r[0]).toMatchObject({ scope: "total", metric: "lines", baseline: 90, current: 85 });
+    expect(r[0]).toMatchObject({
+      scope: "total",
+      metric: "lines",
+      baseline: 90,
+      current: 85,
+    });
   });
 
   test("flags a per-file drop and skips a baselined file absent from the run", () => {
@@ -39,9 +47,15 @@ describe("findRegressions", () => {
   });
 
   test("no regression when coverage holds, improves, or dips within epsilon", () => {
-    expect(findRegressions({ total: nums(90) }, { total: nums(90), files: {} })).toEqual([]);
-    expect(findRegressions({ total: nums(90) }, { total: nums(95), files: {} })).toEqual([]);
-    expect(findRegressions({ total: nums(90) }, { total: nums(89.995), files: {} })).toEqual([]);
+    expect(
+      findRegressions({ total: nums(90) }, { total: nums(90), files: {} }),
+    ).toEqual([]);
+    expect(
+      findRegressions({ total: nums(90) }, { total: nums(95), files: {} }),
+    ).toEqual([]);
+    expect(
+      findRegressions({ total: nums(90) }, { total: nums(89.995), files: {} }),
+    ).toEqual([]);
   });
 });
 
@@ -83,7 +97,10 @@ describe("lint-coverage / main", () => {
   });
 
   test("--update writes the baseline from the current summary", async () => {
-    await writeSummary({ total: entry(90), [join(root, "src/a.ts")]: entry(80) });
+    await writeSummary({
+      total: entry(90),
+      [join(root, "src/a.ts")]: entry(80),
+    });
     await main(["node", "s", "--update"]);
     const written = JSON.parse(
       await readFile(join(repo, "coverage-baseline.json"), "utf8"),
@@ -100,7 +117,10 @@ describe("lint-coverage / main", () => {
   });
 
   test("passes when coverage holds against the baseline", async () => {
-    await writeSummary({ total: entry(90), [join(root, "src/a.ts")]: entry(80) });
+    await writeSummary({
+      total: entry(90),
+      [join(root, "src/a.ts")]: entry(80),
+    });
     await main(["node", "s", "--update"]);
     io.stdoutSpy.mockClear();
     await main(["node", "s", "--push"]);

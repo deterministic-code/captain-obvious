@@ -17,8 +17,9 @@ afterEach(() => {
 });
 
 function count(table: string): number {
-  return (db.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number })
-    .n;
+  return (
+    db.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }
+  ).n;
 }
 
 // Total language links = sum over rules of their language count. Governance
@@ -54,7 +55,9 @@ describe("seedRules", () => {
 
   it("preserves a user-disabled rule across re-seed", () => {
     seedRules(db, RULES);
-    db.prepare("UPDATE rules SET enabled = 0 WHERE slug = ?").run("lint-naming");
+    db.prepare("UPDATE rules SET enabled = 0 WHERE slug = ?").run(
+      "lint-naming",
+    );
     seedRules(db, RULES);
     const row = db
       .prepare("SELECT enabled FROM rules WHERE slug = ?")
@@ -127,7 +130,9 @@ describe("seedRules", () => {
       },
       control: {
         kind: "declarative",
-        fields: [{ key: "maxLines", label: "Max lines", type: "number", min: 1 }],
+        fields: [
+          { key: "maxLines", label: "Max lines", type: "number", min: 1 },
+        ],
       },
       dependencies: [{ kind: "bin", name: "gh" }],
       checkEntry: "rules/fixture-with-deps/check.mjs",
@@ -158,17 +163,26 @@ describe("seedRules", () => {
   });
 
   const sortIndex = (slug: string): number =>
-    (db.prepare("SELECT sort_index AS i FROM rules WHERE slug = ?").get(slug) as { i: number }).i;
+    (
+      db
+        .prepare("SELECT sort_index AS i FROM rules WHERE slug = ?")
+        .get(slug) as { i: number }
+    ).i;
 
   it("seeds sort_index from meta.order, defaulting to 100 when absent", () => {
-    seedRules(db, [orderFixture("fixture-early", 5), orderFixture("fixture-default")]);
+    seedRules(db, [
+      orderFixture("fixture-early", 5),
+      orderFixture("fixture-default"),
+    ]);
     expect(sortIndex("fixture-early")).toBe(5);
     expect(sortIndex("fixture-default")).toBe(100);
   });
 
   it("preserves a user-set order across re-seed (like enabled)", () => {
     seedRules(db, [orderFixture("fixture-order", 5)]);
-    db.prepare("UPDATE rules SET sort_index = 7 WHERE slug = ?").run("fixture-order");
+    db.prepare("UPDATE rules SET sort_index = 7 WHERE slug = ?").run(
+      "fixture-order",
+    );
     seedRules(db, [orderFixture("fixture-order", 5)]);
     expect(sortIndex("fixture-order")).toBe(7);
   });

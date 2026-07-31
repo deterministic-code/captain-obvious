@@ -7,12 +7,14 @@ import type { Db } from "../db/open.js";
  * the git hooks, which run outside the server and must tolerate an un-provisioned
  * registry — a missing rule or project reads as {}.
  */
-export function ruleConfigFromDb(db: Db, slug: string): Record<string, unknown> {
+export function ruleConfigFromDb(
+  db: Db,
+  slug: string,
+): Record<string, unknown> {
   const global = parseConfig(
     (
       db.prepare("SELECT config_json FROM rules WHERE slug = ?").get(slug) as
-        | { config_json: string | null }
-        | undefined
+        { config_json: string | null } | undefined
     )?.config_json,
   );
   const overlay = parseConfig(

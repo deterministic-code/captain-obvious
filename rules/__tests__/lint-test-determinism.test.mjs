@@ -26,10 +26,11 @@ describe("findViolations", () => {
   });
 
   test("orders two hits on the same line by column", () => {
-    expect(findViolations("const x = Math.random() + Date.now();\n").map((v) => v.kind)).toEqual([
-      "math-random",
-      "date-now",
-    ]);
+    expect(
+      findViolations("const x = Math.random() + Date.now();\n").map(
+        (v) => v.kind,
+      ),
+    ).toEqual(["math-random", "date-now"]);
   });
 
   test("does not flag deterministic date construction or timers", () => {
@@ -38,7 +39,9 @@ describe("findViolations", () => {
   });
 
   test("ignores matches inside strings and comments", () => {
-    expect(findViolations(`// Date.now() here\nconst s = "Math.random()";\n`)).toEqual([]);
+    expect(
+      findViolations(`// Date.now() here\nconst s = "Math.random()";\n`),
+    ).toEqual([]);
   });
 });
 
@@ -67,16 +70,26 @@ describe("lint-test-determinism / main", () => {
   });
 
   test("--files flags a nondeterministic test and exits 1", async () => {
-    const bad = await file("a.test.ts", `it("x", () => { expect(Date.now()).toBeGreaterThan(0); });\n`);
-    await expect(main(["node", "s", "--files", bad])).rejects.toThrow(/__exit__:1/);
+    const bad = await file(
+      "a.test.ts",
+      `it("x", () => { expect(Date.now()).toBeGreaterThan(0); });\n`,
+    );
+    await expect(main(["node", "s", "--files", bad])).rejects.toThrow(
+      /__exit__:1/,
+    );
     expect(io.text(io.stderrSpy)).toContain("date-now");
   });
 
   test("--files ignores non-test files", async () => {
-    const notTest = await file("a.ts", `export const now = () => Date.now();\n`);
+    const notTest = await file(
+      "a.ts",
+      `export const now = () => Date.now();\n`,
+    );
     await main(["node", "s", "--files", notTest]);
     expect(io.exitSpy).not.toHaveBeenCalled();
-    expect(io.text(io.stdoutSpy)).toMatch(/no nondeterministic sources in tests/);
+    expect(io.text(io.stdoutSpy)).toMatch(
+      /no nondeterministic sources in tests/,
+    );
   });
 
   test("--warn downgrades to advisory (no exit)", async () => {
