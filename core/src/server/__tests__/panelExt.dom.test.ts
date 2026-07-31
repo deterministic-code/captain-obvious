@@ -465,16 +465,14 @@ describe("panelExt injected script", () => {
     expect(summaryOf(rows[1])).toBe("—");
   });
 
-  it("renders a fixed 'Language independent' cell for language-independent rules", async () => {
+  it("renders a static closed pill (no dropdown) for language-independent rules", async () => {
     await runInjected();
     const cell = document.querySelectorAll(".co-lang-td")[2]; // lint-c
-    const dd = cell.querySelector(".co-lang-dd")!;
-    expect(dd.classList.contains("co-lang-independent")).toBe(true);
-    expect(dd.querySelector(".co-dd-summary")?.textContent).toBe(
-      "Language independent",
-    );
-    // Nothing to narrow: no editable checkboxes, and the filter can't exclude it.
-    expect(dd.querySelector(".co-dd-opt")).toBeNull();
+    const pill = cell.querySelector(".co-lang-pill")!;
+    expect(pill.textContent).toBe("Language independent");
+    // A read-only pill: not a dropdown, so no summary/caret and no editable checkboxes.
+    expect(cell.querySelector(".co-dd-summary")).toBeNull();
+    expect(cell.querySelector(".co-dd-opt")).toBeNull();
     expect(cell.getAttribute("data-langs")).toBe("");
   });
 

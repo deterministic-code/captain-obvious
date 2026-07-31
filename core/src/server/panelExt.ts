@@ -333,34 +333,27 @@ export const PANEL_EXT = `(() => {
     await patchProjectRule(slug, { languages });
   }
 
-  function fixedLangDropdown(label) {
-    const details = document.createElement("details");
-    details.className = "co-dd co-lang-dd co-lang-independent";
-    const summary = document.createElement("summary");
-    summary.className = "co-dd-summary";
-    summary.textContent = label;
-    details.appendChild(summary);
-    const panel = document.createElement("div");
-    panel.className = "co-dd-panel";
-    const item = document.createElement("div");
-    item.className = "co-dd-item co-lang-independent-item";
-    item.textContent = label;
-    panel.appendChild(item);
-    details.appendChild(panel);
-    return details;
+  // A read-only language cell (fixed set or language-independent) renders as a
+  // static closed pill — no caret, not expandable — so it reads as locked next to
+  // the editable dropdown other rules get.
+  function fixedLangPill(label) {
+    const span = document.createElement("span");
+    span.className = "co-lang-pill";
+    span.textContent = label;
+    return span;
   }
 
   function buildLangCell(cell, slug) {
     if (langIndependentBySlug[slug]) {
       cell.innerHTML = "";
-      cell.appendChild(fixedLangDropdown("Language independent"));
+      cell.appendChild(fixedLangPill("Language independent"));
       cell.setAttribute("data-langs", "");
       return;
     }
     const current = langsBySlug[slug] || [];
     if (langFixedBySlug[slug]) {
       cell.innerHTML = "";
-      cell.appendChild(fixedLangDropdown(langLabel(current)));
+      cell.appendChild(fixedLangPill(langLabel(current)));
       cell.setAttribute("data-langs", current.slice().sort().join(","));
       return;
     }
@@ -1055,6 +1048,7 @@ export const PANEL_EXT = `(() => {
       ".co-dd-summary{cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:6px;max-width:16rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid #cbd5e1;border-radius:6px;padding:4px 10px;font-size:13px;color:#334155;background:#fff}" +
       ".co-dd-summary::-webkit-details-marker{display:none}" +
       '.co-dd-summary::after{content:"▾";font-size:10px;color:#94a3b8;margin-left:auto}' +
+      ".co-lang-pill{display:inline-flex;align-items:center;max-width:16rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid #e2e8f0;border-radius:6px;padding:4px 10px;font-size:13px;color:#64748b;background:#f8fafc}" +
       ".co-dd-panel{position:absolute;z-index:30;margin-top:4px;min-width:190px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 8px 24px rgba(15,23,42,.12);padding:6px}" +
       ".co-dd-search{width:100%;box-sizing:border-box;margin-bottom:6px;padding:5px 8px;font-size:13px;border:1px solid #cbd5e1;border-radius:6px;outline:none}" +
       ".co-dd-search:focus{border-color:#94a3b8}" +
@@ -1357,6 +1351,7 @@ export const PANEL_EXT = `(() => {
       D + ".co-theme-btn + .co-theme-btn{border-left-color:#475569}" +
       D + ".co-theme-btn-active,.co-theme-btn-active:hover{background:#475569;color:#fff}" +
       D + ":is(.co-fix-summary,.co-dd-summary,.co-dd-foot button,.co-run-browse-btn,.co-modal-btn,.co-analyze-ignore){background:#1e293b;border-color:#475569;color:#cbd5e1}" +
+      D + ".co-lang-pill{background:#0f172a;border-color:#334155;color:#94a3b8}" +
       // Primary (accent) buttons and the active nav pill.
       D + ":is(.co-dd-close,.co-run-use,.co-run-btn,.co-run-nav-active,.co-modal-use,.co-modal-btn-primary,.co-analyze-run){background:#475569;border-color:#475569;color:#fff}" +
       D + ":is(.co-dd-close,.co-run-use,.co-run-btn,.co-modal-use,.co-modal-btn-primary,.co-analyze-run):hover{background:#334155}" +
