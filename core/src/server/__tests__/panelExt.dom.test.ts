@@ -75,6 +75,7 @@ let patchCalls: { url: string; body: Record<string, unknown> }[];
 let runCalls: { slugs: string[]; path: string }[];
 let fixAllCalls: { slugs: string[]; path: string }[];
 let aiAllCalls: { slugs: string[]; path: string }[];
+let planAllCalls: { slugs: string[]; path: string }[];
 let runResult: unknown;
 let analyzeCalls: unknown[];
 let analyzeFails: boolean;
@@ -150,6 +151,7 @@ beforeEach(() => {
   runCalls = [];
   fixAllCalls = [];
   aiAllCalls = [];
+  planAllCalls = [];
   runResult = RUN_RESULT;
   analyzeCalls = [];
   analyzeFails = false;
@@ -232,6 +234,10 @@ beforeEach(() => {
     if (url === "/api/run/fix/ai/all") {
       aiAllCalls.push(JSON.parse(opts?.body as string));
       return jsonRes({ proposals: [], skipped: [] });
+    }
+    if (url === "/api/run/fix/plan/all") {
+      planAllCalls.push(JSON.parse(opts?.body as string));
+      return jsonRes({ prompt: "PLAN", file: "/proj/.claude/tmp/co-fix-all.md" });
     }
     if (url === "/api/analyze/status") return jsonRes(analyzeStatusResult);
     if (url === "/api/analyze") {
@@ -878,6 +884,39 @@ describe("panelExt injected script", () => {
     inc.dispatchEvent(new Event("change", { bubbles: true }));
     for (let i = 0; i < 4; i++) await flush();
     expect(aiAllCalls[1]).toEqual({ slugs: ["lint-a", "lint-b"], path: "/proj" });
+  });
+
+  it("Generate fix plan covers every violated rule and shows the prompt", async () => {
+    runResult = TWO_GROUP_RESULT;
+    const overlay = await runAndSelect();
+    overlay.querySelector<HTMLButtonElement>("#co-run-fixall button")!.click();
+    for (let i = 0; i < 4; i++) await flush();
+    expect(planAllCalls[0]).toEqual({ slugs: ["lint-a", "lint-b"], path: "/proj" });
+    expect(document.querySelector("#co-fix-mbody .co-fix-pre")!.textContent).toBe("PLAN");
+  });
+
+  it("the plan dialog can filter out deterministically-fixable rules", async () => {
+    runResult = TWO_GROUP_RESULT;
+    const overlay = await runAndSelect();
+    overlay.querySelector<HTMLButtonElement>("#co-run-fixall button")!.click();
+    for (let i = 0; i < 4; i++) await flush();
+    const exc = document.querySelector<HTMLInputElement>("#co-fix-excdet")!;
+    expect(exc).not.toBeNull();
+    exc.checked = true;
+    exc.dispatchEvent(new Event("change", { bubbles: true }));
+    for (let i = 0; i < 4; i++) await flush();
+    expect(planAllCalls[1]).toEqual({ slugs: ["lint-a"], path: "/proj" });
+  });
+
+  it("the plan dialog offers no exclude toggle when nothing is deterministically fixable", async () => {
+    runResult = [
+      { slug: "lint-a", ok: true, violations: [{ path: "x.ts", line: 1, col: 1, kind: "size", detail: "big" }] },
+    ];
+    const overlay = await runAndSelect();
+    overlay.querySelector<HTMLButtonElement>("#co-run-fixall button")!.click();
+    for (let i = 0; i < 4; i++) await flush();
+    expect(document.querySelector("#co-fix-excdet")).toBeNull();
+    expect(planAllCalls[0]).toEqual({ slugs: ["lint-a"], path: "/proj" });
   });
 
   it("shows an editor placeholder until a result is opened", async () => {

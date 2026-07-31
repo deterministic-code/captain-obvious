@@ -50,6 +50,9 @@ export const PANEL_EXT = `(() => {
   // "Fix all with AI" default excludes deterministically-fixable rules; the modal's
   // toggle flips this for the session so a re-open remembers the choice.
   let aiIncludeDet = false;
+  // "Generate fix plan" covers every violation by default; its toggle drops the
+  // deterministically-fixable rules (handled better by the sweep) for the session.
+  let planExcludeDet = false;
   // Activity overlay: a global (not project-scoped) view of hook runs + config
   // changes. activityKeys drives the rule multiselect; activitySelectedRules is
   // the current filter; activityWindow is the time span.
@@ -2124,9 +2127,11 @@ export const PANEL_EXT = `(() => {
   }
 
   // Render a fix prompt with a Copy button into the modal body. Shared by the
-  // per-file plan and the whole-run plan — both return { prompt, file }.
-  function renderCopyPrompt(body, data) {
+  // per-file plan and the whole-run plan — both return { prompt, file }. The
+  // whole-run plan passes a prefix (the exclude-deterministic toggle).
+  function renderCopyPrompt(body, data, prefix) {
     body.innerHTML =
+      (prefix || "") +
       '<p class="co-fix-mnote">Paste this into Claude Code (also written to ' +
       esc(data.file) + "):</p>" +
       '<pre class="co-fix-pre">' + esc(data.prompt) + "</pre>" +
@@ -2192,17 +2197,58 @@ export const PANEL_EXT = `(() => {
     });
   }
 
-  // Run-level: one prompt covering every violation in the last run, for Claude Code.
-  async function doPlanAll() {
-    openFixModalShell("Generate fix plan", "Every violation in the last run");
-    const body = document.getElementById("co-fix-mbody");
-    if (body) body.innerHTML = '<p class="co-fix-mnote">Building plan…</p>';
-    try {
-      const data = await postFix("/api/run/fix/plan/all", lastRun);
-      if (body) renderCopyPrompt(body, data);
-    } catch (err) {
-      if (body) body.innerHTML = '<p class="co-fix-merr">' + esc(err.message) + "</p>";
+  // The rules the plan covers: every violated rule by default, AI-only when the
+  // toggle drops the deterministically-fixable ones. (Clean rules add no
+  // violations, so scoping to the violated split matches "every violation".)
+  function planSlugs() {
+    return planExcludeDet ? lastRunSplit.ai.slice() : lastRunSplit.ai.concat(lastRunSplit.det);
+  }
+
+  // Offered only when the run has deterministically-fixable rules, letting the
+  // plan skip them (they're handled by the deterministic sweep instead).
+  function excludeDetToggleHtml() {
+    if (lastRunSplit.det.length === 0) return "";
+    return '<label class="co-fix-toggle"><input type="checkbox" id="co-fix-excdet"' +
+      (planExcludeDet ? " checked" : "") + "> Exclude deterministic-fixable rules (" +
+      lastRunSplit.det.length + ")</label>";
+  }
+
+  function wireExcludeDetToggle(body) {
+    const exc = body.querySelector("#co-fix-excdet");
+    if (exc) {
+      exc.addEventListener("change", () => {
+        planExcludeDet = exc.checked;
+        loadPlanAll();
+      });
     }
+  }
+
+  // Run-level: one prompt covering the run's violations, for Claude Code.
+  function doPlanAll() {
+    openFixModalShell("Generate fix plan", "Every violation in the last run");
+    loadPlanAll();
+  }
+
+  async function loadPlanAll() {
+    const body = document.getElementById("co-fix-mbody");
+    if (!body) return;
+    const slugs = planSlugs();
+    if (slugs.length === 0) {
+      const note = planExcludeDet
+        ? "All violations are deterministically fixable — run Fix all deterministic instead."
+        : "No violations to plan.";
+      body.innerHTML = excludeDetToggleHtml() + '<p class="co-fix-mnote">' + note + "</p>";
+      wireExcludeDetToggle(body);
+      return;
+    }
+    body.innerHTML = '<p class="co-fix-mnote">Building plan…</p>';
+    try {
+      const data = await postFix("/api/run/fix/plan/all", { slugs: slugs, path: lastRun.path });
+      renderCopyPrompt(body, data, excludeDetToggleHtml());
+    } catch (err) {
+      body.innerHTML = excludeDetToggleHtml() + '<p class="co-fix-merr">' + esc(err.message) + "</p>";
+    }
+    wireExcludeDetToggle(body);
   }
 
   function skippedHtml(skipped) {
