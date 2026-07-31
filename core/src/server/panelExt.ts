@@ -37,6 +37,11 @@ export const PANEL_EXT = `(() => {
   // The single rule the reorder bar acts on (click a row to select). Separate
   // from selectedSlugs, which is the Run overlay's multi-select.
   let orderSelectedSlug = null;
+  // Drag-to-reorder: dragSlug is the rule whose grip is being dragged;
+  // dropBeforeSlug is the slug the drop would land in front of (null = to the
+  // end). Both reset on dragend.
+  let dragSlug = null;
+  let dropBeforeSlug = null;
   let runActive = false;
   let running = false;
   let browsePath = "";
@@ -98,6 +103,13 @@ export const PANEL_EXT = `(() => {
   );
   const ICON_UP = svgIcon('<path d="m18 15-6-6-6 6"/>');
   const ICON_DOWN = svgIcon('<path d="m6 9 6 6 6-6"/>');
+  const ICON_GRIP = svgIcon(
+    '<circle cx="9" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="18" r="1"/>' +
+    '<circle cx="15" cy="6" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="18" r="1"/>',
+  );
+  const DRAG_HANDLE_HTML =
+    '<span class="co-drag-handle" draggable="true" title="Drag to reorder"' +
+    ' aria-label="Drag to reorder">' + ICON_GRIP + "</span>";
   const ICON_THEME_AUTO = svgIcon(
     '<rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>',
   );
@@ -108,6 +120,7 @@ export const PANEL_EXT = `(() => {
   const THEME_ICONS = { auto: ICON_THEME_AUTO, light: ICON_THEME_LIGHT, dark: ICON_THEME_DARK };
   const THEME_TITLES = { auto: "System theme", light: "Light theme", dark: "Dark theme" };
   const ACTIONS_HTML =
+    DRAG_HANDLE_HTML +
     '<button type="button" class="co-act-btn" data-act="run" title="Run this rule" aria-label="Run this rule">' + ICON_RUN + "</button>" +
     '<button type="button" class="co-act-btn" data-act="activity" title="Open activity" aria-label="Open activity">' + ICON_ACTIVITY + "</button>" +
     '<button type="button" class="co-act-btn" data-act="settings" title="Project settings" aria-label="Project settings">' + ICON_SETTINGS + "</button>";
@@ -932,7 +945,7 @@ export const PANEL_EXT = `(() => {
   // buttons) so selecting never eats one of those.
   function onRowSelectClick(e) {
     if (!e.target.closest) return;
-    if (e.target.closest("input,select,button,a,label,summary,details,.co-dd")) return;
+    if (e.target.closest("input,select,button,a,label,summary,details,.co-dd,.co-drag-handle")) return;
     const table = document.querySelector("table");
     const tr = e.target.closest("tbody tr");
     if (!tr || !table || !table.contains(tr)) return;
@@ -1012,6 +1025,104 @@ export const PANEL_EXT = `(() => {
     applyRowSelection();
     updateOrderBar();
     toast("Moved " + slug + " " + direction);
+  }
+
+  // Drop the dragged rule immediately before beforeSlug (null = to the end). Like
+  // moveRule, this edits the global order, so it hits /api/rules/:slug even under
+  // a project; refetch then reorder the DOM from the fresh order values.
+  async function moveRuleBefore(slug, beforeSlug) {
+    try {
+      await patchGlobalRule(slug, { moveBefore: beforeSlug });
+      await loadData();
+    } catch (err) {
+      toast("Couldn't move " + slug + ": " + err.message, "error");
+      return;
+    }
+    reorderByOrder();
+    applyRowSelection();
+    updateOrderBar();
+    toast("Moved " + slug);
+  }
+
+  // A drop is a no-op when the rule already sits where it would land: before
+  // itself, before the rule that already follows it, or at the end when it's last.
+  function dropIsNoop(slug, beforeSlug) {
+    if (beforeSlug === slug) return true;
+    const ordered = orderedSlugs();
+    const from = ordered.indexOf(slug);
+    if (beforeSlug === null) return from === ordered.length - 1;
+    return ordered.indexOf(beforeSlug) === from + 1;
+  }
+
+  function clearDropIndicators() {
+    const table = document.querySelector("table");
+    if (table) {
+      for (const tr of table.querySelectorAll(
+        "tbody tr.co-drop-before, tbody tr.co-drop-after",
+      )) {
+        tr.classList.remove("co-drop-before", "co-drop-after");
+      }
+    }
+    dropBeforeSlug = null;
+  }
+
+  // The grip is the only draggable element, so a dragstart that isn't from one is
+  // some other drag (text, a link) — ignore it.
+  function onDragStart(e) {
+    const handle = e.target.closest && e.target.closest(".co-drag-handle");
+    if (!handle) return;
+    const tr = handle.closest("tbody tr");
+    const slug = tr ? rowSlug(tr) : null;
+    if (!slug) return;
+    dragSlug = slug;
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", slug);
+    }
+    tr.classList.add("co-dragging");
+  }
+
+  // The hovered row's half picks the insertion point: the top half drops before
+  // that row, the bottom half before the next rule in global order (null past the
+  // last one). The chosen edge is drawn as a line on the hovered row.
+  function onDragOver(e) {
+    if (!dragSlug) return;
+    const table = document.querySelector("table");
+    const tr = e.target.closest && e.target.closest("tbody tr");
+    if (!tr || !table || !table.contains(tr)) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+    const rect = tr.getBoundingClientRect();
+    const after = e.clientY - rect.top > rect.height / 2;
+    const targetSlug = rowSlug(tr);
+    if (after) {
+      const ordered = orderedSlugs();
+      const idx = ordered.indexOf(targetSlug);
+      dropBeforeSlug = idx >= 0 && idx + 1 < ordered.length ? ordered[idx + 1] : null;
+    } else {
+      dropBeforeSlug = targetSlug;
+    }
+    for (const row of table.querySelectorAll("tbody tr")) {
+      row.classList.toggle("co-drop-before", row === tr && !after);
+      row.classList.toggle("co-drop-after", row === tr && after);
+    }
+  }
+
+  function onDrop(e) {
+    if (!dragSlug) return;
+    e.preventDefault();
+    const slug = dragSlug;
+    const before = dropBeforeSlug;
+    clearDropIndicators();
+    if (!dropIsNoop(slug, before)) moveRuleBefore(slug, before);
+  }
+
+  function onDragEnd() {
+    const table = document.querySelector("table");
+    const dragging = table && table.querySelector("tbody tr.co-dragging");
+    if (dragging) dragging.classList.remove("co-dragging");
+    clearDropIndicators();
+    dragSlug = null;
   }
 
   function injectStyle() {
@@ -1242,6 +1353,16 @@ export const PANEL_EXT = `(() => {
       ".co-order-btn svg{width:16px;height:16px}" +
       ".co-order-btn:hover:not(:disabled){background:#f1f5f9}" +
       ".co-order-btn:disabled{opacity:.45;cursor:not-allowed}" +
+      // Drag-to-reorder: the grip is the only draggable element (rows stay
+      // clickable/selectable); the dragged row dims and the hovered row shows a
+      // solid line on the edge the drop will insert at.
+      ".co-drag-handle{cursor:grab;display:inline-flex;align-items:center;color:#94a3b8;touch-action:none}" +
+      ".co-drag-handle:hover{color:#0f172a}" +
+      ".co-drag-handle:active{cursor:grabbing}" +
+      ".co-drag-handle svg{width:16px;height:16px}" +
+      ".co-dragging>td{opacity:.4}" +
+      ".co-drop-before>td{box-shadow:inset 0 2px 0 0 #3b82f6}" +
+      ".co-drop-after>td{box-shadow:inset 0 -2px 0 0 #3b82f6}" +
       // Project settings dialog.
       ".co-set-card{gap:14px;max-height:calc(100vh - 48px);overflow:auto}" +
       ".co-set-sub{margin-top:-6px}" +
@@ -1339,6 +1460,8 @@ export const PANEL_EXT = `(() => {
       D + ".co-order-label{color:#cbd5e1}" +
       D + ".co-order-btn{background:#1e293b;border-color:#475569;color:#cbd5e1}" +
       D + ".co-order-btn:hover:not(:disabled){background:#334155}" +
+      D + ".co-drag-handle{color:#64748b}" +
+      D + ".co-drag-handle:hover{color:#e2e8f0}" +
       D + ":is(#co-run-overlay,#co-activity-overlay){background:#0b1220}" +
       D + ".co-run-editor{background:#0f172a}" +
       D + ".co-modal{background:rgba(0,0,0,.6)}" +
@@ -3911,6 +4034,10 @@ export const PANEL_EXT = `(() => {
     document.addEventListener("click", onRowSelectClick);
     document.addEventListener("click", onHeaderClick);
     document.addEventListener("click", onOutsideDropdownClick);
+    document.addEventListener("dragstart", onDragStart);
+    document.addEventListener("dragover", onDragOver);
+    document.addEventListener("drop", onDrop);
+    document.addEventListener("dragend", onDragEnd);
     decorate();
     await maybeShowAnalyzeBanner();
   }
