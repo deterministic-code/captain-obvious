@@ -36,11 +36,26 @@ the reference wiring so you never hand-edit it:
 - merges the configured Claude hooks into `.claude/settings.json` (idempotently — it
   only ever rewrites entries it previously added, tagged `_captainObvious`), and
 - rewrites the `lint:*` scripts in your `package.json` to run through the package's
-  `captain-obvious-lint` bin, tracking the keys it owns under `captainObvious.managedScripts`
-  so re-runs stay idempotent and dropped hooks get pruned.
+  `captain-obvious-lint` bin (plus a `panel` alias, below), tracking the keys it owns under
+  `captainObvious.managedScripts` so re-runs stay idempotent and dropped hooks get pruned.
 
 Run any hook directly with the bin: `captain-obvious-lint <name> --staged` (e.g.
 `captain-obvious-lint comments --staged` runs `hooks/git/lint-comments.mjs`).
+
+## Control panel
+
+Configure rules (enable/disable, thresholds, advisory-vs-blocking, order) and view Activity
+from the web panel. Install wires a managed `panel` script, so:
+
+```sh
+npm run panel                 # → captain-obvious serve, then open http://127.0.0.1:4317
+```
+
+or invoke the bin directly, e.g. on another port: `npx captain-obvious serve --port 5000`.
+The panel edits and reads the same registry + audit DBs the git hooks use, so changes take
+effect on the next hook run with no reinstall; its top-right badge shows the active `mode`
+(where those DBs live). Rename the alias with `npmScripts.panelScript: "co:panel"` if `panel`
+collides with one of yours, or drop it with `npmScripts.panelScript: false`.
 
 ## Config
 
@@ -81,6 +96,8 @@ Run any hook directly with the bin: `captain-obvious-lint <name> --staged` (e.g.
   aliases for the odd modes — e.g. `"lint:dead-code": "dead-code --all"` or
   `"lint:frozen-interfaces:add": "frozen-interfaces --add"`. Set `npmScripts.enabled:
   false` to skip package.json rewriting entirely.
+- **`npmScripts.panelScript`** (optional) renames the managed control-panel alias (default
+  `panel` → `captain-obvious serve`); set it to `false` to skip that alias.
 
 ## What's in the box
 

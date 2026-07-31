@@ -6,6 +6,22 @@ function shortName(stem) {
   return stem.replace(/^lint-/, "");
 }
 
+/** The one always-on convenience alias: launch the web control panel + /api. */
+const PANEL_COMMAND = "captain-obvious serve";
+
+/**
+ * The package.json key the panel alias lands on. Defaults to `panel`; a consumer with
+ * their own `panel` script can rename it via `npmScripts.panelScript: "co:panel"`, or
+ * drop it entirely with `npmScripts.panelScript: false`.
+ */
+function panelKey(npmScripts) {
+  const configured = npmScripts?.panelScript;
+  if (configured === false) {
+    return null;
+  }
+  return typeof configured === "string" ? configured : "panel";
+}
+
 /**
  * Derive the managed `lint:*` alias set from the git-hook config. Each lint hook gets
  * `lint:<name>` (--staged) and `lint:<name>:all`; hooks that run with --push also get
@@ -62,6 +78,10 @@ export async function installNpmScripts({ target, gitHooks, npmScripts }) {
     gitHooks ?? {},
     npmScripts?.extraScripts ?? {},
   );
+  const key = panelKey(npmScripts);
+  if (key) {
+    generated[key] = PANEL_COMMAND;
+  }
   const managed = Object.keys(generated).sort();
   const next = { ...pkg.scripts };
   for (const key of managed) {
