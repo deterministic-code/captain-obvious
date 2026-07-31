@@ -12,7 +12,7 @@ export default {
     ratchetable: false,
     modes: ["staged", "all", "files", "warn"],
     stages: ["pre-commit"],
-    order: 7,
+    order: 3,
     actions: [],
   },
   dependencies: [],
