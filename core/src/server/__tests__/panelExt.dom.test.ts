@@ -304,6 +304,7 @@ describe("panelExt injected script", () => {
       "Enabled",
       "Action",
       "Fix",
+      "Severity",
       "",
     ]);
     // The native Category/Stage cells are hidden and replaced in place by
@@ -1349,6 +1350,43 @@ describe("panelExt injected script", () => {
     expect(slugs).toContain("fix");
     expect(slugs).toContain("fix_and_warn");
     expect(slugs).toContain("fix_and_halt");
+  });
+
+  const sevSelectFor = (slug: string) => {
+    const tr = [...document.querySelectorAll("tbody tr")].find(
+      (r) => r.querySelector(".font-mono")?.textContent === slug,
+    )!;
+    return tr.querySelector<HTMLSelectElement>(".co-sev-td .co-sev-select")!;
+  };
+
+  it("shows an inline Action selector per row, prefilled from the default binding", async () => {
+    await runInjected();
+    // Every row gets the column; lint-a's default binding is halt.
+    expect([...document.querySelectorAll("tbody tr .co-sev-td .co-sev-select")]).toHaveLength(3);
+    expect(sevSelectFor("lint-a").value).toBe("halt");
+    // lint-a has no fix -> the fix actions are omitted; lint-b has one -> present.
+    expect([...sevSelectFor("lint-a").options].map((o) => o.value)).not.toContain("fix");
+    expect([...sevSelectFor("lint-b").options].map((o) => o.value)).toContain("fix_and_halt");
+  });
+
+  it("PATCHes the default binding when the inline Action selector changes", async () => {
+    await runInjected();
+    const sel = sevSelectFor("lint-a");
+    sel.value = "warn";
+    sel.dispatchEvent(new Event("change"));
+    await flush();
+    expect(patchCalls.at(-1)).toEqual({
+      url: "/api/projects/1/rules/lint-a",
+      body: { setAction: { type: "warn", delayMs: null } },
+    });
+
+    sel.value = "";
+    sel.dispatchEvent(new Event("change"));
+    await flush();
+    expect(patchCalls.at(-1)).toEqual({
+      url: "/api/projects/1/rules/lint-a",
+      body: { removeAction: "default" },
+    });
   });
 
   it("Settings Save PATCHes enabled, config, and materialised severity bindings", async () => {

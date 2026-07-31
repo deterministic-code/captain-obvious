@@ -737,6 +737,7 @@ export const PANEL_EXT = `(() => {
       addHeader(headRow, "co-fix-th", "Fix");
       // Languages sits right after the native Category column (index 1).
       addHeader(headRow, "co-lang-th", "Languages", headRow.children[1]);
+      addHeader(headRow, "co-sev-th", "Severity");
       addHeader(headRow, "co-act-th", "");
       updateSortIndicators();
     }
@@ -804,6 +805,21 @@ export const PANEL_EXT = `(() => {
       }
       const ensig = slug ? (enabledBySlug[slug] ? "1" : "0") : "";
       if (slug && encell.getAttribute("data-en") !== ensig) buildEnabledCell(encell, slug);
+
+      let sevcell = tr.querySelector(".co-sev-td");
+      if (!sevcell) {
+        sevcell = document.createElement("td");
+        sevcell.className = "px-4 py-3 co-sev-td";
+        tr.appendChild(sevcell);
+      }
+      const fixSig = ((slug ? fixesBySlug[slug] : null) || []).some((a) => a.kind === "script")
+        ? "1"
+        : "0";
+      const curAct = slug && ruleBySlug[slug] && ruleBySlug[slug].defaultAction
+        ? ruleBySlug[slug].defaultAction.type
+        : "";
+      const sevSig = curAct + "|" + fixSig;
+      if (slug && sevcell.getAttribute("data-sev") !== sevSig) buildActionCell(sevcell, slug);
 
       let acell = tr.querySelector(".co-act-td");
       if (!acell) {
@@ -2914,6 +2930,40 @@ export const PANEL_EXT = `(() => {
     }
     sel.value = current || "";
     return sel;
+  }
+
+  // Inline Action column: the rule's default (all-environment) binding, editable
+  // straight from the main list. Writes just the default binding (setAction with
+  // no environment), so per-environment overrides set in Settings are untouched.
+  function buildActionCell(cell, slug) {
+    const rule = ruleBySlug[slug];
+    const current = rule && rule.defaultAction ? rule.defaultAction.type : "";
+    const hasScriptFix = ((fixesBySlug[slug]) || []).some((a) => a.kind === "script");
+    const sel = severitySelect(current, "No action", hasScriptFix);
+    sel.classList.add("co-sev-select");
+    sel.addEventListener("change", async () => {
+      const v = sel.value;
+      const delayMs =
+        v === "delay_halt"
+          ? rule && rule.defaultAction && rule.defaultAction.delayMs != null
+            ? rule.defaultAction.delayMs
+            : 0
+          : null;
+      const patch = v ? { setAction: { type: v, delayMs } } : { removeAction: "default" };
+      try {
+        await patchProjectRule(slug, patch);
+      } catch (err) {
+        toast("Couldn't set action for " + slug + ": " + err.message, "error");
+        buildActionCell(cell, slug);
+        return;
+      }
+      if (rule) rule.defaultAction = v ? { type: v, delayMs } : null;
+      cell.setAttribute("data-sev", v + "|" + (hasScriptFix ? "1" : "0"));
+      toast(v ? "Set " + slug + " action to " + v : "Cleared " + slug + " action");
+    });
+    cell.innerHTML = "";
+    cell.appendChild(sel);
+    cell.setAttribute("data-sev", current + "|" + (hasScriptFix ? "1" : "0"));
   }
 
   // Project-scoped rule settings: enabled, languages, severity, and the rule's
