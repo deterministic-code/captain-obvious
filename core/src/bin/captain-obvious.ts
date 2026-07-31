@@ -22,7 +22,8 @@ commands:
   configure-rule   <rule-slug> [--set-config <json>] [--enable | --disable]
                    [--add-lang <csv>] [--remove-lang <csv>]
                    [--add-category <csv>] [--remove-category <csv>] [--set-stages <csv>]
-                   [--set-action <type>[:<env>][:<delayMs>]] [--remove-action <env|default|all>]
+                   [--order <n>] [--set-action <type>[:<env>][:<delayMs>]]
+                   [--remove-action <env|default|all>]
   configure-action <type-slug> [--add] [--name <n>]
   seed-rules       [--only <slug>]   populate the registry from the bundled rule set
   check-deps       report any missing external tools a rule's check needs (warn-only)
@@ -115,6 +116,12 @@ function runConfigureRule(args: ParsedArgs): void {
       ? false
       : undefined;
   const setAction = args.values.get("set-action");
+  const orderArg = args.values.get("order");
+  let setOrder: number | undefined;
+  if (orderArg !== undefined) {
+    setOrder = Number(orderArg);
+    if (!Number.isInteger(setOrder)) fail(`--order must be an integer, got ${orderArg}`);
+  }
   withDb(args, (db) => {
     const row = configureRule(db, slug, {
       setConfig: args.values.get("set-config"),
@@ -126,6 +133,7 @@ function runConfigureRule(args: ParsedArgs): void {
       setStages: args.values.has("set-stages")
         ? csv(args.values.get("set-stages"))
         : undefined,
+      setOrder,
       setAction: setAction ? parseActionBinding(setAction) : undefined,
       removeAction: args.values.get("remove-action"),
     });

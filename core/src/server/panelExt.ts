@@ -92,6 +92,8 @@ export const PANEL_EXT = `(() => {
   const ICON_SETTINGS = svgIcon(
     '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
   );
+  const ICON_UP = svgIcon('<path d="m18 15-6-6-6 6"/>');
+  const ICON_DOWN = svgIcon('<path d="m6 9 6 6 6-6"/>');
   const ICON_THEME_AUTO = svgIcon(
     '<rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>',
   );
@@ -102,6 +104,8 @@ export const PANEL_EXT = `(() => {
   const THEME_ICONS = { auto: ICON_THEME_AUTO, light: ICON_THEME_LIGHT, dark: ICON_THEME_DARK };
   const THEME_TITLES = { auto: "System theme", light: "Light theme", dark: "Dark theme" };
   const ACTIONS_HTML =
+    '<button type="button" class="co-act-btn" data-act="up" title="Move earlier (runs sooner)" aria-label="Move rule earlier">' + ICON_UP + "</button>" +
+    '<button type="button" class="co-act-btn" data-act="down" title="Move later (runs later)" aria-label="Move rule later">' + ICON_DOWN + "</button>" +
     '<button type="button" class="co-act-btn" data-act="run" title="Run this rule" aria-label="Run this rule">' + ICON_RUN + "</button>" +
     '<button type="button" class="co-act-btn" data-act="activity" title="Open activity" aria-label="Open activity">' + ICON_ACTIVITY + "</button>" +
     '<button type="button" class="co-act-btn" data-act="settings" title="Project settings" aria-label="Project settings">' + ICON_SETTINGS + "</button>";
@@ -882,6 +886,39 @@ export const PANEL_EXT = `(() => {
     if (act === "run") openRunForRule(slug);
     else if (act === "activity") openActivityForRule(slug);
     else if (act === "settings") openRuleSettingsModal(slug);
+    else if (act === "up" || act === "down") moveRule(slug, act);
+  }
+
+  // Reorder the tbody to match rules.sort_index (the fresh order field), reusing
+  // applySort's idempotent, focus-safe append pattern. Ties break by slug.
+  function reorderByOrder() {
+    const table = document.querySelector("table");
+    const tbody = table && table.querySelector("tbody");
+    if (!tbody) return;
+    const current = [...tbody.querySelectorAll("tr")];
+    const orderOf = (tr) => ((ruleBySlug[rowSlug(tr)] || {}).order ?? 100);
+    const rows = current.slice().sort((a, b) => {
+      const d = orderOf(a) - orderOf(b);
+      return d !== 0 ? d : String(rowSlug(a)).localeCompare(String(rowSlug(b)));
+    });
+    if (rows.every((tr, i) => tr === current[i])) return;
+    for (const tr of rows) tbody.appendChild(tr);
+  }
+
+  // The reorder edits the global rule order (rules.sort_index), so it always hits
+  // /api/rules/:slug even under a project — the panel's per-project overlay does
+  // not carry order. Refetch so every row's order reflects the renumber, then
+  // reorder the DOM to show it without a page reload.
+  async function moveRule(slug, direction) {
+    try {
+      await patchGlobalRule(slug, { move: direction });
+      await loadData();
+    } catch (err) {
+      toast("Couldn't move " + slug + ": " + err.message, "error");
+      return;
+    }
+    reorderByOrder();
+    toast("Moved " + slug + " " + direction);
   }
 
   function injectStyle() {

@@ -328,6 +328,20 @@ describe("patchRule", () => {
     expect(v.stage).toBe("pre-push");
   });
 
+  it("moves a rule in the global order via move, exposing the new order", () => {
+    addRule(db, { slug: "lint-pm-a", name: "PMA" });
+    addRule(db, { slug: "lint-pm-b", name: "PMB" });
+    // Both seed to 100, so they order by slug: a before b. Moving b up leads.
+    const v = patchRule(db, "lint-pm-b", { move: "up" });
+    expect(v.order).toBeLessThan(
+      listRules(db).find((r) => r.slug === "lint-pm-a")!.order,
+    );
+    expect(listRules(db).map((r) => r.slug).slice(0, 2)).toEqual([
+      "lint-pm-b",
+      "lint-pm-a",
+    ]);
+  });
+
   it("throws for an unknown rule when the patch is a no-op", () => {
     // With no mutation op, configureRule is never called; the missing view on the
     // final read is what surfaces the unknown rule.

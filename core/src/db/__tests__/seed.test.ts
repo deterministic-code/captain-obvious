@@ -139,4 +139,37 @@ describe("seedRules", () => {
     expect(JSON.parse(row.control_json)).toEqual(plugin.control);
     expect(JSON.parse(row.deps_json)).toEqual([{ kind: "bin", name: "gh" }]);
   });
+
+  const orderFixture = (slug: string, order?: number): RulePlugin => ({
+    meta: {
+      slug,
+      name: slug,
+      category: "governance",
+      description: "order fixture",
+      languages: [],
+      config: null,
+      ratchetable: false,
+      modes: ["staged"],
+      stages: ["pre-commit"],
+      order,
+      actions: [],
+    },
+    checkEntry: "rules/" + slug + "/check.mjs",
+  });
+
+  const sortIndex = (slug: string): number =>
+    (db.prepare("SELECT sort_index AS i FROM rules WHERE slug = ?").get(slug) as { i: number }).i;
+
+  it("seeds sort_index from meta.order, defaulting to 100 when absent", () => {
+    seedRules(db, [orderFixture("fixture-early", 5), orderFixture("fixture-default")]);
+    expect(sortIndex("fixture-early")).toBe(5);
+    expect(sortIndex("fixture-default")).toBe(100);
+  });
+
+  it("preserves a user-set order across re-seed (like enabled)", () => {
+    seedRules(db, [orderFixture("fixture-order", 5)]);
+    db.prepare("UPDATE rules SET sort_index = 7 WHERE slug = ?").run("fixture-order");
+    seedRules(db, [orderFixture("fixture-order", 5)]);
+    expect(sortIndex("fixture-order")).toBe(7);
+  });
 });

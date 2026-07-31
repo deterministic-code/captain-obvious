@@ -1183,14 +1183,14 @@ describe("panelExt injected script", () => {
     return tr.querySelector<HTMLButtonElement>('.co-act-td .co-act-btn[data-act="' + act + '"]')!;
   };
 
-  it("adds a trailing actions column with Run/Activity/Settings icon buttons per row", async () => {
+  it("adds a trailing actions column with reorder/Run/Activity/Settings icon buttons per row", async () => {
     await runInjected();
     const cells = document.querySelectorAll(".co-act-td");
     expect(cells).toHaveLength(3);
     const acts = [...cells[0].querySelectorAll(".co-act-btn")].map((b) =>
       b.getAttribute("data-act"),
     );
-    expect(acts).toEqual(["run", "activity", "settings"]);
+    expect(acts).toEqual(["up", "down", "run", "activity", "settings"]);
     // Icons are inline Lucide SVGs, not emoji or text.
     expect(cells[0].querySelector(".co-act-btn svg")).not.toBeNull();
   });
@@ -1206,6 +1206,16 @@ describe("panelExt injected script", () => {
     for (let i = 0; i < 3; i++) await flush();
     expect(toasts().map(toastText)).toContain("Disabled lint-a");
     expect(toasts()[0].classList.contains("co-toast-success")).toBe(true);
+  });
+
+  it("reorder arrow PATCHes the global rule order and toasts", async () => {
+    await runInjected();
+    actBtn("lint-b", "up").click();
+    for (let i = 0; i < 3; i++) await flush();
+    // The move edits the global order, so it hits /api/rules/:slug (not the
+    // project-scoped route) with a { move } body.
+    expect(patchCalls.some((c) => c.url === "/api/rules/lint-b" && c.body.move === "up")).toBe(true);
+    expect(toasts().map(toastText)).toContain("Moved lint-b up");
   });
 
   it("toasts after saving rule settings", async () => {
