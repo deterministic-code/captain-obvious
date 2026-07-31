@@ -140,7 +140,7 @@ CREATE TABLE IF NOT EXISTS project_rule_languages (
   PRIMARY KEY (project_id, rule_id, language_id)
 ) STRICT;
 
--- Per-project severity bindings for a rule (mirrors rule_actions, scoped to a
+-- Per-project action bindings for a rule (mirrors rule_actions, scoped to a
 -- project). A rule with zero rows here inherits the global bindings; any row
 -- means the project's bindings fully replace the global set for that rule.
 -- environment_id NULL = default binding for all envs.

@@ -246,7 +246,7 @@ describe("setProjectRule", () => {
     expect(projectConfig(id, "lint-r")).toBeNull();
   });
 
-  it("upserts default and per-env severity bindings, with delay", () => {
+  it("upserts default and per-env action bindings, with delay", () => {
     setProjectRule(db, id, "lint-r", {
       setAction: { type: "delay_halt", environment: null, delayMs: 500 },
     });

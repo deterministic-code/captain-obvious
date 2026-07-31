@@ -72,8 +72,8 @@ export const PANEL_EXT = `(() => {
   // every decorate() tick so a React re-render can't drop it.
   let sortKey = null;
   let sortDir = 1;
-  // The full project-scoped rule view per slug (config, severity, languages) —
-  // the source the Settings dialog reads. Severity selects pull env/action lists.
+  // The full project-scoped rule view per slug (config, action, languages) —
+  // the source the Settings dialog reads. Action selects pull env/action lists.
   let ruleBySlug = {};
   let environments = [];
   let actionTypes = [];
@@ -737,8 +737,15 @@ export const PANEL_EXT = `(() => {
       addHeader(headRow, "co-fix-th", "Fix");
       // Languages sits right after the native Category column (index 1).
       addHeader(headRow, "co-lang-th", "Languages", headRow.children[1]);
-      addHeader(headRow, "co-sev-th", "Action");
+      addHeader(headRow, "co-binding-th", "Action");
       addHeader(headRow, "co-act-th", "");
+      // Hide the prebuilt Action header; our binding column replaces it (its
+      // dropdown adds the fix actions and gates them per rule).
+      for (const th of headRow.querySelectorAll("th")) {
+        if (th.textContent.trim() === "Action" && !th.classList.contains("co-binding-th")) {
+          th.style.display = "none";
+        }
+      }
       updateSortIndicators();
     }
     for (const tr of table.querySelectorAll("tbody tr")) {
@@ -806,11 +813,18 @@ export const PANEL_EXT = `(() => {
       const ensig = slug ? (enabledBySlug[slug] ? "1" : "0") : "";
       if (slug && encell.getAttribute("data-en") !== ensig) buildEnabledCell(encell, slug);
 
-      let sevcell = tr.querySelector(".co-sev-td");
-      if (!sevcell) {
-        sevcell = document.createElement("td");
-        sevcell.className = "px-4 py-3 co-sev-td";
-        tr.appendChild(sevcell);
+      // Hide the prebuilt Action cell (its <select>); the binding cell below
+      // replaces it with the fix-aware, per-rule-gated dropdown.
+      const nativeAct = tr.querySelector("td select.border-slate-300");
+      if (nativeAct) {
+        const nativeActTd = nativeAct.closest("td");
+        if (nativeActTd) nativeActTd.style.display = "none";
+      }
+      let bindingCell = tr.querySelector(".co-binding-td");
+      if (!bindingCell) {
+        bindingCell = document.createElement("td");
+        bindingCell.className = "px-4 py-3 co-binding-td";
+        tr.appendChild(bindingCell);
       }
       const fixSig = ((slug ? fixesBySlug[slug] : null) || []).some((a) => a.kind === "script")
         ? "1"
@@ -818,8 +832,8 @@ export const PANEL_EXT = `(() => {
       const curAct = slug && ruleBySlug[slug] && ruleBySlug[slug].defaultAction
         ? ruleBySlug[slug].defaultAction.type
         : "";
-      const sevSig = curAct + "|" + fixSig;
-      if (slug && sevcell.getAttribute("data-sev") !== sevSig) buildActionCell(sevcell, slug);
+      const bindingSig = curAct + "|" + fixSig;
+      if (slug && bindingCell.getAttribute("data-binding") !== bindingSig) buildActionCell(bindingCell, slug);
 
       let acell = tr.querySelector(".co-act-td");
       if (!acell) {
@@ -2914,7 +2928,7 @@ export const PANEL_EXT = `(() => {
   // The fix actions (requiresFix) only make sense for a rule that declares a
   // deterministic script fix; omit them for a rule that has none, unless one is
   // already the saved value (so an existing binding stays selectable).
-  function severitySelect(current, inheritLabel, hasScriptFix) {
+  function actionSelect(current, inheritLabel, hasScriptFix) {
     const sel = document.createElement("select");
     sel.className = "co-set-select";
     const none = document.createElement("option");
@@ -2939,8 +2953,8 @@ export const PANEL_EXT = `(() => {
     const rule = ruleBySlug[slug];
     const current = rule && rule.defaultAction ? rule.defaultAction.type : "";
     const hasScriptFix = ((fixesBySlug[slug]) || []).some((a) => a.kind === "script");
-    const sel = severitySelect(current, "No action", hasScriptFix);
-    sel.classList.add("co-sev-select");
+    const sel = actionSelect(current, "No action", hasScriptFix);
+    sel.classList.add("co-binding-select");
     sel.addEventListener("change", async () => {
       const v = sel.value;
       const delayMs =
@@ -2958,16 +2972,16 @@ export const PANEL_EXT = `(() => {
         return;
       }
       if (rule) rule.defaultAction = v ? { type: v, delayMs } : null;
-      cell.setAttribute("data-sev", v + "|" + (hasScriptFix ? "1" : "0"));
+      cell.setAttribute("data-binding", v + "|" + (hasScriptFix ? "1" : "0"));
       toast(v ? "Set " + slug + " action to " + v : "Cleared " + slug + " action");
     });
     cell.innerHTML = "";
     cell.appendChild(sel);
-    cell.setAttribute("data-sev", current + "|" + (hasScriptFix ? "1" : "0"));
+    cell.setAttribute("data-binding", current + "|" + (hasScriptFix ? "1" : "0"));
   }
 
-  // Project-scoped rule settings: enabled, languages, severity, and the rule's
-  // own config knobs. Saving materialises the shown severity as project bindings
+  // Project-scoped rule settings: enabled, languages, action, and the rule's
+  // own config knobs. Saving materialises the shown action as project bindings
   // (any project binding fully replaces the global set), so the dialog is WYSIWYG.
   // Reusable settings controls keyed by a rule's settingsControls (datasource): build(ctx) appends a section to the default dialog and returns { save }, run after the default save; unknown keys ignored.
   const CUSTOM_CONTROLS = {
@@ -3089,19 +3103,19 @@ export const PANEL_EXT = `(() => {
       readLanguages = () => boxes.filter((b) => b.checked).map((b) => b.value);
     }
 
-    const sevSection = document.createElement("div");
-    sevSection.className = "co-set-section";
-    const sevHeading = document.createElement("div");
-    sevHeading.className = "co-set-heading";
-    sevHeading.textContent = "Severity";
-    sevSection.appendChild(sevHeading);
+    const actionSection = document.createElement("div");
+    actionSection.className = "co-set-section";
+    const actionHeading = document.createElement("div");
+    actionHeading.className = "co-set-heading";
+    actionHeading.textContent = "Action";
+    actionSection.appendChild(actionHeading);
     const defRow = document.createElement("div");
     defRow.className = "co-set-row";
     const defLabel = document.createElement("label");
     defLabel.className = "co-set-label";
     defLabel.textContent = "Default";
     const hasScriptFix = (rule.actions || []).some((a) => a.kind === "script");
-    const defSel = severitySelect(
+    const defSel = actionSelect(
       rule.defaultAction ? rule.defaultAction.type : "",
       "No default binding",
       hasScriptFix,
@@ -3122,7 +3136,7 @@ export const PANEL_EXT = `(() => {
     defRow.appendChild(defLabel);
     defRow.appendChild(defSel);
     defRow.appendChild(delayInput);
-    sevSection.appendChild(defRow);
+    actionSection.appendChild(defRow);
     const envSels = {};
     const envByName = {};
     for (const a of rule.envActions || []) envByName[a.environment] = a.type;
@@ -3132,13 +3146,13 @@ export const PANEL_EXT = `(() => {
       const label = document.createElement("label");
       label.className = "co-set-label";
       label.textContent = env.name;
-      const sel = severitySelect(envByName[env.slug] || "", "Inherit default", hasScriptFix);
+      const sel = actionSelect(envByName[env.slug] || "", "Inherit default", hasScriptFix);
       row.appendChild(label);
       row.appendChild(sel);
-      sevSection.appendChild(row);
+      actionSection.appendChild(row);
       envSels[env.slug] = sel;
     }
-    card.appendChild(sevSection);
+    card.appendChild(actionSection);
 
     const configFields = [];
     const config = rule.config && typeof rule.config === "object" ? rule.config : {};

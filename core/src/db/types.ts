@@ -141,14 +141,14 @@ export interface ConfigureProjectOpts {
   protected?: string[];
 }
 
-/** Project-scoped edit of a rule's enabled flag, languages, config, and severity. */
+/** Project-scoped edit of a rule's enabled flag, languages, config, and action. */
 export interface SetProjectRuleOpts {
   enabled?: boolean;
   /** The rule's full desired language set for this project; each slug must exist. */
   languages?: string[];
   /** Raw JSON string for this project's config override, or null to clear it (inherit global). */
   config?: string | null;
-  /** Upsert one project-scoped severity binding (default when environment is null). */
+  /** Upsert one project-scoped action binding (default when environment is null). */
   setAction?: ActionBinding;
   /** Environment slug to remove, "default" for the all-env binding, or "all" to clear every binding. */
   removeAction?: string;

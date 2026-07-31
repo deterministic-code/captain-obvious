@@ -79,7 +79,7 @@ export interface RuleMeta {
   actions?: RuleActionMeta[];
   /**
    * Keys of custom panel controls appended to this rule's settings dialog, on
-   * top of the default controls (Enabled / Languages / Severity / config). The
+   * top of the default controls (Enabled / Languages / Action / config). The
    * panel resolves each key against its control registry; unknown keys are
    * ignored. Omit for the default dialog only.
    */

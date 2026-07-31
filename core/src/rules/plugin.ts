@@ -84,7 +84,7 @@ export interface RulePluginMeta {
 /** The whole plugin: metadata, settings control, dependencies, and the check entry. */
 export interface RulePlugin {
   meta: RulePluginMeta;
-  /** Settings dialog spec; omit for the default dialog (enabled/languages/severity/config). */
+  /** Settings dialog spec; omit for the default dialog (enabled/languages/action/config). */
   control?: ControlSpec;
   dependencies?: RuleDependency[];
   /**

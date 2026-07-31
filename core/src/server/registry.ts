@@ -533,7 +533,7 @@ export function listProjectRules(db: Db, projectId: number): RuleView[] {
     configBySlug.set(row.slug, row.configJson);
   }
 
-  // Project severity bindings: a rule with any row here fully replaces the
+  // Project action bindings: a rule with any row here fully replaces the
   // global bindings; a rule with none inherits them.
   const actionsBySlug = new Map<
     string,
