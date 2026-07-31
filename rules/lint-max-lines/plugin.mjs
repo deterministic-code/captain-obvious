@@ -6,6 +6,7 @@ export default {
     category: "size",
     description: "Flags functions longer than the line limit.",
     languages: ["typescript", "javascript"],
+    languagesFixed: true,
     config: {
       maxLines: 60,
     },

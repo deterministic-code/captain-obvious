@@ -7,6 +7,7 @@ export default {
     description:
       "Blocks staging a production source change (or new file) with no matching test change in the same commit — the deterministic TDD proxy.",
     languages: ["typescript", "javascript"],
+    languagesFixed: true,
     config: null,
     ratchetable: true,
     modes: ["staged", "warn"],

@@ -18,7 +18,8 @@ const USAGE = `usage: captain-obvious <command> [flags]
 commands:
   add-language     --slug <s> --name <n> [--ext <csv>]
   add-rule         --slug <s> --name <n> [--category <c>] [--categories <csv>]
-                   [--description <d>] [--lang <csv>] [--config <json>] [--stages <csv>]
+                   [--description <d>] [--lang <csv>] [--languages-fixed]
+                   [--config <json>] [--stages <csv>]
   configure-rule   <rule-slug> [--set-config <json>] [--enable | --disable]
                    [--add-lang <csv>] [--remove-lang <csv>]
                    [--add-category <csv>] [--remove-category <csv>] [--set-stages <csv>]
@@ -100,6 +101,7 @@ function runAddRule(args: ParsedArgs): void {
       categories: csv(args.values.get("categories")),
       description: args.values.get("description"),
       languages: csv(args.values.get("lang")),
+      languagesFixed: args.flags.has("languages-fixed"),
       config: args.values.get("config"),
       stages: csv(args.values.get("stages")),
     });

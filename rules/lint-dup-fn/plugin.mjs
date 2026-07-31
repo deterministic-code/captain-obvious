@@ -7,6 +7,7 @@ export default {
     description:
       "Detects duplicated function bodies (AST clones) in production code.",
     languages: ["typescript", "javascript"],
+    languagesFixed: true,
     config: null,
     ratchetable: true,
     modes: ["push", "staged", "all", "files", "warn"],

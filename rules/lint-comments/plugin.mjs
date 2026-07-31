@@ -7,6 +7,7 @@ export default {
     description:
       "Flags empty, malformed, or excessive consecutive comments; discourages block comments.",
     languages: ["typescript", "javascript"],
+    languagesFixed: true,
     config: null,
     ratchetable: false,
     modes: ["staged", "files"],

@@ -168,6 +168,22 @@ describe("listRules actions and bindings", () => {
     expect(view("lint-scoped").languageIndependent).toBe(false);
     expect(view("lint-agnostic").languageIndependent).toBe(true);
   });
+
+  it("surfaces languagesFixed from the rule's languages_fixed flag", () => {
+    addRule(db, {
+      slug: "lint-fixedlang",
+      name: "FixedLang",
+      languages: ["typescript"],
+      languagesFixed: true,
+    });
+    addRule(db, {
+      slug: "lint-looselang",
+      name: "LooseLang",
+      languages: ["typescript"],
+    });
+    expect(view("lint-fixedlang").languagesFixed).toBe(true);
+    expect(view("lint-looselang").languagesFixed).toBe(false);
+  });
 });
 
 describe("getMeta", () => {

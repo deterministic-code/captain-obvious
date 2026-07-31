@@ -80,6 +80,8 @@ export interface RulePluginMeta {
   categories?: RuleCategory[];
   description: string;
   languages: Language[];
+  /** The language set is intrinsic to the check; the panel renders it read-only. Default false. */
+  languagesFixed?: boolean;
   config: Record<string, unknown> | null;
   ratchetable: boolean;
   modes: LintMode[];

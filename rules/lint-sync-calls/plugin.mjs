@@ -7,6 +7,7 @@ export default {
     description:
       "Blocks blocking sync I/O (readFileSync, etc.) outside DevOps scripts.",
     languages: ["typescript", "javascript"],
+    languagesFixed: true,
     config: null,
     ratchetable: false,
     modes: ["staged", "all", "files", "warn"],

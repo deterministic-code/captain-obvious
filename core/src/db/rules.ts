@@ -30,6 +30,7 @@ export function addRule(db: Db, opts: AddRuleOpts): RuleRow {
     categories,
     description,
     languages,
+    languagesFixed,
     config,
     stages,
   } = opts;
@@ -44,7 +45,7 @@ export function addRule(db: Db, opts: AddRuleOpts): RuleRow {
     try {
       ruleId = db
         .prepare(
-          "INSERT INTO rules (slug, name, category, description, config_json) VALUES (?, ?, ?, ?, ?)",
+          "INSERT INTO rules (slug, name, category, description, config_json, languages_fixed) VALUES (?, ?, ?, ?, ?, ?)",
         )
         .run(
           slug,
@@ -52,6 +53,7 @@ export function addRule(db: Db, opts: AddRuleOpts): RuleRow {
           category ?? null,
           description ?? null,
           configJson,
+          languagesFixed ? 1 : 0,
         ).lastInsertRowid;
     } catch (err) {
       if (isUniqueViolation(err))
@@ -363,15 +365,16 @@ export function registerRule(db: Db, plugin: RulePlugin): void {
 
   const tx = db.transaction(() => {
     db.prepare(
-      `INSERT INTO rules (slug, name, category, description, config_json, control_json, deps_json, sort_index)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO rules (slug, name, category, description, config_json, control_json, deps_json, sort_index, languages_fixed)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(slug) DO UPDATE SET
          name = excluded.name,
          category = excluded.category,
          description = excluded.description,
          config_json = excluded.config_json,
          control_json = excluded.control_json,
-         deps_json = excluded.deps_json`,
+         deps_json = excluded.deps_json,
+         languages_fixed = excluded.languages_fixed`,
     ).run(
       meta.slug,
       meta.name,
@@ -381,6 +384,7 @@ export function registerRule(db: Db, plugin: RulePlugin): void {
       controlJson,
       depsJson,
       meta.order ?? 100,
+      meta.languagesFixed ? 1 : 0,
     );
 
     const ruleId = (

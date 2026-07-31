@@ -7,6 +7,7 @@ export default {
     description:
       "Detects token-based copy-paste clones across the repo (jscpd).",
     languages: ["typescript", "javascript"],
+    languagesFixed: true,
     config: null,
     ratchetable: true,
     modes: ["push", "staged", "all", "files", "warn"],

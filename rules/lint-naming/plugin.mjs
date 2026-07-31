@@ -7,6 +7,7 @@ export default {
     description:
       "PascalCase for types/classes; camelCase/PascalCase/UPPER_SNAKE for values (blocks snake_case).",
     languages: ["typescript", "javascript"],
+    languagesFixed: true,
     config: null,
     ratchetable: false,
     modes: ["staged", "all", "files", "warn"],

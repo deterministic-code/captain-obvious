@@ -7,6 +7,7 @@ export default {
     description:
       "Flags nondeterministic sources in tests — Date.now/new Date()/performance.now, Math.random, and real network (fetch/XMLHttpRequest).",
     languages: ["typescript", "javascript"],
+    languagesFixed: true,
     config: null,
     ratchetable: false,
     modes: ["staged", "all", "files", "warn"],

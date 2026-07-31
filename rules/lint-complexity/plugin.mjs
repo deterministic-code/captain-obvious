@@ -7,6 +7,7 @@ export default {
     description:
       "Flags functions whose cyclomatic complexity exceeds the limit.",
     languages: ["typescript", "javascript"],
+    languagesFixed: true,
     config: {
       maxComplexity: 15,
     },

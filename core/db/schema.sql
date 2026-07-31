@@ -41,7 +41,8 @@ CREATE TABLE IF NOT EXISTS rules (
   control_json TEXT,                      -- serialized ControlSpec (settings dialog), or null
   deps_json   TEXT,                       -- serialized RuleDependency[] (external tools), or null
   enabled     INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
-  sort_index  INTEGER NOT NULL DEFAULT 100 -- execution/display order, ascending; ties break by slug
+  sort_index  INTEGER NOT NULL DEFAULT 100, -- execution/display order, ascending; ties break by slug
+  languages_fixed INTEGER NOT NULL DEFAULT 0 CHECK (languages_fixed IN (0, 1)) -- 1 = language set is intrinsic to the check; panel renders it read-only
 ) STRICT;
 
 -- Rule <-> Language (many-to-many) ----------------------------------------

@@ -93,6 +93,18 @@ describe("addRule", () => {
     expect(langCount("lint-max-lines")).toBe(2);
   });
 
+  it("defaults languages_fixed to 0 and sets it when requested", () => {
+    const loose = addRule(db, { slug: "lint-loose", name: "Loose" });
+    expect(loose.languages_fixed).toBe(0);
+    const fixed = addRule(db, {
+      slug: "lint-fixed",
+      name: "Fixed",
+      languages: ["typescript", "javascript"],
+      languagesFixed: true,
+    });
+    expect(fixed.languages_fixed).toBe(1);
+  });
+
   it("links the primary plus extra categories, de-duplicated", () => {
     addRule(db, {
       slug: "lint-max-lines",

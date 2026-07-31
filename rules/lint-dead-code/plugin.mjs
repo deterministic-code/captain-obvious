@@ -6,6 +6,7 @@ export default {
     category: "dead-code",
     description: "Detects unused files, exports, and enum members (knip).",
     languages: ["typescript", "javascript"],
+    languagesFixed: true,
     config: null,
     ratchetable: false,
     modes: ["staged", "all", "files", "warn"],
