@@ -45,6 +45,9 @@ const META = {
     { slug: "warn", name: "Warn" },
     { slug: "halt", name: "Halt" },
     { slug: "delay_halt", name: "Delayed halt" },
+    { slug: "fix", name: "Fix", requiresFix: true },
+    { slug: "fix_and_warn", name: "Fix and Warn", requiresFix: true },
+    { slug: "fix_and_halt", name: "Fix and Halt", requiresFix: true },
   ],
   stages: [
     { slug: "pre-commit", name: "Pre-commit" },
@@ -1326,6 +1329,26 @@ describe("panelExt injected script", () => {
     // Config: a number field (maxLines) and an exclude list editor with a chip.
     expect(modal.querySelector<HTMLInputElement>(".co-set-num")!.value).toBe("300");
     expect(modal.querySelector(".co-set-chip")!.textContent).toContain("dist/**");
+  });
+
+  it("hides the fix actions for a rule with no installed fix, shows them when it has one", async () => {
+    await runInjected();
+    // lint-a declares no actions -> the fix bindings are absent from every select.
+    actBtn("lint-a", "settings").click();
+    await flush();
+    let sel = document.querySelector<HTMLSelectElement>("#co-set-modal .co-set-select")!;
+    let slugs = [...sel.options].map((o) => o.value);
+    expect(slugs).toEqual(["", "warn", "halt", "delay_halt"]);
+    document.getElementById("co-set-modal")!.remove();
+
+    // lint-b declares a script fix -> the three fix bindings are offered.
+    actBtn("lint-b", "settings").click();
+    await flush();
+    sel = document.querySelector<HTMLSelectElement>("#co-set-modal .co-set-select")!;
+    slugs = [...sel.options].map((o) => o.value);
+    expect(slugs).toContain("fix");
+    expect(slugs).toContain("fix_and_warn");
+    expect(slugs).toContain("fix_and_halt");
   });
 
   it("Settings Save PATCHes enabled, config, and materialised severity bindings", async () => {
