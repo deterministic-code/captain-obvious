@@ -14,6 +14,7 @@ export default {
     ratchetable: false,
     modes: [],
     stages: ["server"],
+    order: 29,
     actions: [],
   },
   control: {

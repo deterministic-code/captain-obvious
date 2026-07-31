@@ -11,6 +11,7 @@ export default {
     ratchetable: true,
     modes: ["push", "staged", "all", "files", "warn"],
     stages: ["pre-commit"],
+    order: 1,
     actions: [],
   },
   dependencies: [],

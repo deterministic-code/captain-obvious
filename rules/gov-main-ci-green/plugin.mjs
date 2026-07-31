@@ -14,6 +14,7 @@ export default {
     ratchetable: false,
     modes: ["push", "warn"],
     stages: ["pre-push"],
+    order: 30,
     actions: [],
   },
   control: {
