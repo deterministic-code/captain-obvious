@@ -1429,7 +1429,8 @@ export const PANEL_EXT = `(() => {
       ".co-act-key{flex:0 0 auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#0f172a}" +
       ".co-act-stage{flex:0 0 auto;font-size:11px;border-radius:4px;padding:1px 6px;background:#fef3c7;color:#92400e}" +
       ".co-act-lang{flex:0 0 auto;font-size:11px;border-radius:4px;padding:1px 6px;background:#dcfce7;color:#166534}" +
-      ".co-act-detail{flex:1;color:#475569;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
+      ".co-act-msg{flex:1;min-width:0;color:#334155;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
+      ".co-act-detail{flex:0 1 auto;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
       ".co-act-empty{padding:12px 4px;font-size:13px;color:#94a3b8}" +
       // Toasts.
       "#co-toast-region{position:fixed;z-index:60;bottom:20px;right:20px;display:flex;flex-direction:column;gap:8px;pointer-events:none}" +
@@ -1550,7 +1551,8 @@ export const PANEL_EXT = `(() => {
       D + ":is(.co-act-toprow-key,.co-act-key){color:#e2e8f0}" +
       D + ":is(.co-act-toplist-head,.co-act-bottom-title,.co-act-chart-cap,.co-act-time,.co-act-empty){color:#94a3b8}" +
       D + ".co-act-toprow-n{color:#94a3b8}" +
-      D + ".co-act-detail{color:#cbd5e1}" +
+      D + ".co-act-msg{color:#cbd5e1}" +
+      D + ".co-act-detail{color:#64748b}" +
       D + ":is(.co-act-toprow:hover,.co-act-row:hover){background:#334155}" +
       D + ":is(.co-act-toprow-bar){background:#334155}" +
       D + ".co-act-toprow-fill{background:#818cf8}" +
@@ -4002,9 +4004,12 @@ export const PANEL_EXT = `(() => {
       let pill = "";
       if (ev.status === "failure") pill = '<span class="co-run-pill co-run-pill-n">failure</span>';
       else if (ev.status === "success") pill = '<span class="co-run-pill co-run-pill-ok">success</span>';
+      const msg = ev.message
+        ? '<span class="co-act-msg">' + esc(ev.message) + "</span>"
+        : "";
       html +=
         '<div class="co-act-row"><span class="co-act-time">' + esc(when) + "</span>" +
-        badge + stage + '<span class="co-act-key">' + esc(ev.key) + "</span>" + langs + pill +
+        badge + stage + '<span class="co-act-key">' + esc(ev.key) + "</span>" + msg + langs + pill +
         '<span class="co-act-detail">' + esc(ev.detail) + "</span></div>";
     }
     el.innerHTML = html;

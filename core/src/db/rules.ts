@@ -287,6 +287,17 @@ export function reorderRuleBefore(
   return row;
 }
 
+/**
+ * Map each registered rule's slug to its human summary — the registry
+ * `description`, falling back to `name` when a rule carries no description.
+ */
+export function descriptionsBySlug(db: Db): Map<string, string> {
+  const rows = db
+    .prepare("SELECT slug, name, description FROM rules")
+    .all() as { slug: string; name: string; description: string | null }[];
+  return new Map(rows.map((r) => [r.slug, r.description ?? r.name]));
+}
+
 /** Emit one audit event per distinct change a configureRule call made. */
 function auditConfigureRule(
   slug: string,
