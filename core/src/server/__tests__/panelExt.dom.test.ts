@@ -227,6 +227,7 @@ beforeEach(() => {
       key: "lint:naming",
       status: "failure",
       detail: "npm lint:naming",
+      message: "Enforces naming conventions",
     },
     {
       timeMs: 1000,
@@ -1670,6 +1671,10 @@ describe("panelExt injected script", () => {
     expect(feed.textContent).toContain("npm lint:naming");
     expect(feed.querySelector(".co-run-pill-n")!.textContent).toBe("failure");
     expect(feed.textContent).toContain("enabled lint-naming");
+    // The hook row surfaces the rule's summary; the log row carries no message.
+    const msgs = feed.querySelectorAll(".co-act-msg");
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].textContent).toBe("Enforces naming conventions");
   });
 
   it("Activity icon on a rule row opens the overlay pre-filtered to that rule", async () => {

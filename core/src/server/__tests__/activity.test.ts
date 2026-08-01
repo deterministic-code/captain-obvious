@@ -79,10 +79,13 @@ beforeEach(() => {
   // The registry the feed reads languages from. lint-dup carries two so the
   // feed can prove it surfaces the full set; lint-naming carries one.
   db = openDb(":memory:");
+  // lint-naming carries no description, so the feed's message falls back to its
+  // name; lint-dup carries one, so the feed surfaces the description verbatim.
   addRule(db, { slug: "lint-naming", name: "Naming", languages: ["typescript"] });
   addRule(db, {
     slug: "lint-dup",
     name: "Dup",
+    description: "Flags duplicated code",
     languages: ["javascript", "typescript"],
   });
 });
@@ -275,10 +278,13 @@ describe("activityFeed", () => {
       detail: "lint-naming",
       stage: "pre-push",
       languages: ["typescript"],
+      // No registry description, so the message falls back to the rule name.
+      message: "Naming",
     });
-    // A config-change row is neither staged nor language-scoped.
+    // A config-change row is neither staged, language-scoped, nor summarised.
     expect(feed[1].stage).toBeUndefined();
     expect(feed[1].languages).toBeUndefined();
+    expect(feed[1].message).toBeUndefined();
   });
 
   it("surfaces every language a rule targets and empties the list for an unknown rule", () => {
@@ -292,6 +298,11 @@ describe("activityFeed", () => {
       "typescript",
     ]);
     expect(feed.find((e) => e.key === "lint:solid")?.languages).toEqual([]);
+    // A known rule surfaces its registry description; an unknown one has none.
+    expect(feed.find((e) => e.key === "lint:dup")?.message).toBe(
+      "Flags duplicated code",
+    );
+    expect(feed.find((e) => e.key === "lint:solid")?.message).toBeUndefined();
   });
 
   it("filters dispatch runs by the selected key like profiler runs", () => {

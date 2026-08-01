@@ -9,6 +9,7 @@
 import Database from "better-sqlite3";
 import { listHookRuns, listLogs } from "../db/audit.js";
 import { languagesBySlug } from "../db/languages.js";
+import { descriptionsBySlug } from "../db/rules.js";
 import type { Db } from "../db/open.js";
 
 const US_PER_MS = 1000;
@@ -195,6 +196,8 @@ export interface ActivityEvent {
   stage?: string;
   /** Language slugs the run's rule targets; only on hook rows for a known rule. */
   languages?: string[];
+  /** The rule's human summary (registry description); only on hook rows for a known rule. */
+  message?: string;
 }
 export interface FeedQuery extends ActivityQuery {
   limit?: number;
@@ -217,6 +220,7 @@ export function activityFeed(
   const limit = query.limit ?? DEFAULT_LIMIT;
   const selected = parseRules(query.rules);
   const langBySlug = languagesBySlug(db);
+  const summaryBySlug = descriptionsBySlug(db);
 
   const events: ActivityEvent[] = [];
 
@@ -226,6 +230,8 @@ export function activityFeed(
   ];
   for (const r of hookRuns) {
     if (selected.size && !selected.has(r.key)) continue;
+    const slug = keyToSlug(r.key);
+    const summary = summaryBySlug.get(slug);
     events.push({
       timeMs: r.startMs,
       source: "hook",
@@ -233,7 +239,8 @@ export function activityFeed(
       status: r.failed ? "failure" : "success",
       detail: r.detail,
       ...(r.stage ? { stage: r.stage } : {}),
-      languages: langBySlug.get(keyToSlug(r.key)) ?? [],
+      languages: langBySlug.get(slug) ?? [],
+      ...(summary ? { message: summary } : {}),
     });
   }
 
