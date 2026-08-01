@@ -120,10 +120,10 @@ export const PANEL_EXT = `(() => {
   const THEME_ICONS = { auto: ICON_THEME_AUTO, light: ICON_THEME_LIGHT, dark: ICON_THEME_DARK };
   const THEME_TITLES = { auto: "System theme", light: "Light theme", dark: "Dark theme" };
   const ACTIONS_HTML =
-    DRAG_HANDLE_HTML +
     '<button type="button" class="co-act-btn" data-act="run" title="Run this rule" aria-label="Run this rule">' + ICON_RUN + "</button>" +
     '<button type="button" class="co-act-btn" data-act="activity" title="Open activity" aria-label="Open activity">' + ICON_ACTIVITY + "</button>" +
-    '<button type="button" class="co-act-btn" data-act="settings" title="Project settings" aria-label="Project settings">' + ICON_SETTINGS + "</button>";
+    '<button type="button" class="co-act-btn" data-act="settings" title="Project settings" aria-label="Project settings">' + ICON_SETTINGS + "</button>" +
+    DRAG_HANDLE_HTML;
 
   // Transient status toasts (bottom-right), stacked and self-dismissing. Used for
   // the small config mutations the panel makes inline (enable, languages, save)
@@ -1370,7 +1370,7 @@ export const PANEL_EXT = `(() => {
       // Drag-to-reorder: the grip is the only draggable element (rows stay
       // clickable/selectable); the dragged row dims and the hovered row shows a
       // solid line on the edge the drop will insert at.
-      ".co-drag-handle{cursor:grab;display:inline-flex;align-items:center;color:#94a3b8;touch-action:none}" +
+      ".co-drag-handle{cursor:grab;display:inline-flex;align-items:center;color:#94a3b8;touch-action:none;margin-left:2px}" +
       ".co-drag-handle:hover{color:#0f172a}" +
       ".co-drag-handle:active{cursor:grabbing}" +
       ".co-drag-handle svg{width:16px;height:16px}" +
