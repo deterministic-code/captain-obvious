@@ -5,6 +5,7 @@ import { extname } from "node:path";
 import { promisify } from "node:util";
 import ts from "typescript";
 import {
+  emitFound,
   emitJson,
   formatViolation,
   isExcluded,
@@ -278,6 +279,7 @@ async function fileViolations(path, metric, limit, meta, staged) {
 
 function report(meta, limit, mode, violations) {
   if (jsonMode()) return emitJson(violations);
+  emitFound(violations.length);
   if (violations.length === 0) {
     const where = mode === "--staged" ? " in staged diff" : "";
     process.stdout.write(

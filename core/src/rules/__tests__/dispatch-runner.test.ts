@@ -38,9 +38,27 @@ function recordedRuns(): { slug: string; stage: string; status: string }[] {
   }
 }
 
-/** A fake child that emits its outcome on the next microtask, like a real spawn. */
-function fakeChild(emit: (c: EventEmitter) => void): EventEmitter {
-  const c = new EventEmitter();
+/** The found-count of each recorded hook run, newest-first. */
+function recordedFound(): (number | null)[] {
+  const db = openAuditDb(process.env.CAPTAIN_OBVIOUS_AUDIT_DB as string);
+  try {
+    return listHookRuns(db).map((r) => r.found);
+  } finally {
+    db.close();
+  }
+}
+
+type FakeChild = EventEmitter & { stdio: (EventEmitter | null)[] };
+
+/**
+ * A fake child that emits its outcome on the next microtask, like a real spawn.
+ * Carries a result pipe at fd 3 (the check's out-of-band count channel); a test
+ * emits `data` on it to simulate a check reporting its violation count.
+ */
+function fakeChild(emit: (c: FakeChild) => void): FakeChild {
+  const c = Object.assign(new EventEmitter(), {
+    stdio: [null, null, null, new EventEmitter()] as (EventEmitter | null)[],
+  });
   queueMicrotask(() => emit(c));
   return c;
 }
@@ -118,7 +136,10 @@ describe("runDispatch", () => {
     expect(spawnMock).toHaveBeenCalledWith(
       process.execPath,
       [script, "--staged"],
-      { stdio: "inherit" },
+      expect.objectContaining({
+        stdio: ["inherit", "inherit", "inherit", "pipe"],
+        env: expect.objectContaining({ CO_RESULT_FD: "3" }),
+      }),
     );
     // The clean run is recorded as a hook_run for the Activity view.
     expect(recordedRuns()).toEqual([
@@ -182,6 +203,42 @@ describe("runDispatch", () => {
       () => fakeChild((c) => c.emit("error", new Error("boom"))) as never,
     );
     await expect(runDispatch(["pre-commit"])).rejects.toThrow(/boom/);
+  });
+
+  it("records the violation count a check reports on fd 3", async () => {
+    isolatePreCommit("lint-naming");
+    bindDefault("lint-naming", "halt");
+    spawnMock.mockImplementationOnce(
+      () =>
+        fakeChild((c) => {
+          c.stdio[3]!.emit("data", Buffer.from('{"found":4}\n'));
+          c.emit("exit", 1, null);
+        }) as never,
+    );
+    await expect(runDispatch(["pre-commit"])).rejects.toThrow("process.exit:1");
+    expect(recordedFound()).toEqual([4]);
+  });
+
+  it("records a null count when the check reports nothing on fd 3", async () => {
+    isolatePreCommit("lint-naming");
+    bindDefault("lint-naming", "halt");
+    // Default spawn exits 0 without writing to the result pipe.
+    await expect(runDispatch(["pre-commit"])).resolves.toBeUndefined();
+    expect(recordedFound()).toEqual([null]);
+  });
+
+  it("records a null count when the result line carries no numeric found", async () => {
+    isolatePreCommit("lint-naming");
+    bindDefault("lint-naming", "halt");
+    spawnMock.mockImplementationOnce(
+      () =>
+        fakeChild((c) => {
+          c.stdio[3]!.emit("data", Buffer.from("{}\n"));
+          c.emit("exit", 0, null);
+        }) as never,
+    );
+    await expect(runDispatch(["pre-commit"])).resolves.toBeUndefined();
+    expect(recordedFound()).toEqual([null]);
   });
 
   it("rejects on an invalid stage before spawning", async () => {
@@ -370,6 +427,35 @@ describe("runDispatch fix actions", () => {
     expect(
       calls.find(([cmd, args]) => cmd === "git" && args[0] === "diff"),
     ).toBeUndefined();
+  });
+
+  it("treats a null fix exit code as success", async () => {
+    isolatePreCommit("lint-prettier");
+    bindDefault("lint-prettier", "fix_and_warn");
+    spawnMock.mockImplementation(((cmd: string, args: string[]) => {
+      if (cmd === "git" && args[0] === "diff") return childWithStdout("a.ts\n", 0);
+      if (args.includes("--fix"))
+        return fakeChild((c) => c.emit("exit", null, null));
+      return fakeChild((c) => c.emit("exit", 0, null));
+    }) as never);
+
+    await expect(runDispatch(["pre-commit"])).resolves.toBeUndefined();
+    expect(exitSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects when the fix child is killed by a signal", async () => {
+    isolatePreCommit("lint-prettier");
+    bindDefault("lint-prettier", "fix_and_halt");
+    spawnMock.mockImplementation(((cmd: string, args: string[]) => {
+      if (cmd === "git" && args[0] === "diff") return childWithStdout("a.ts\n", 0);
+      if (args.includes("--fix"))
+        return fakeChild((c) => c.emit("exit", null, "SIGTERM"));
+      return fakeChild((c) => c.emit("exit", 0, null));
+    }) as never);
+
+    await expect(runDispatch(["pre-commit"])).rejects.toThrow(
+      /fix killed by SIGTERM/,
+    );
   });
 
   it("runs a shell scriptBody fix over the staged files", async () => {

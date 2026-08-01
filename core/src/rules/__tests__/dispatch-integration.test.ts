@@ -72,9 +72,11 @@ describe("dispatch integration — real hooks run and log activity", () => {
       const runs = listHookRuns(audit);
       const bySlug = new Map(runs.map((r) => [r.slug, r]));
       for (const slug of SUBSET) {
+        // Each real check reports its count over fd 3; a clean run is 0 found.
         expect(bySlug.get(slug)).toMatchObject({
           stage: "pre-commit",
           status: "success",
+          found: 0,
         });
       }
       // Exactly the enabled subset ran — no rule silently skipped or doubled.
@@ -122,6 +124,8 @@ describe("dispatch integration — real hooks run and log activity", () => {
           slug: "lint-naming",
           stage: "pre-commit",
           status: "failure",
+          // The real hook reported its one violation over fd 3.
+          found: 1,
         }),
       ]);
     } finally {

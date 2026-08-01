@@ -38,7 +38,28 @@ export function openAuditDb(dbPath: string): Db {
   }
   const db = new Database(dbPath);
   db.exec(readFileSync(AUDIT_SCHEMA_PATH, "utf8"));
+  migrateHookRuns(db);
   return db;
+}
+
+/**
+ * Backfill the per-run result columns onto a hook_runs table that predates them.
+ * A fresh DB already carries `found`/`fixed` from the schema, so both checks are
+ * a no-op; an audit file written before this feature gets them added so opening
+ * it never fails on the count SELECT. Idempotent (guarded by table_info).
+ */
+export function migrateHookRuns(db: Db): void {
+  const cols = new Set(
+    (
+      db.prepare("PRAGMA table_info(hook_runs)").all() as { name: string }[]
+    ).map((c) => c.name),
+  );
+  if (!cols.has("found")) {
+    db.exec("ALTER TABLE hook_runs ADD COLUMN found INTEGER");
+  }
+  if (!cols.has("fixed")) {
+    db.exec("ALTER TABLE hook_runs ADD COLUMN fixed INTEGER");
+  }
 }
 
 // The audit log is a cross-cutting sink the mutation helpers write to. It stays a
@@ -119,6 +140,8 @@ export interface HookRunRecord {
   startedMs: number;
   /** Run duration, milliseconds. */
   durationMs: number;
+  /** Violations the check reported this run; null when it emitted no count. */
+  found?: number | null;
 }
 
 /**
@@ -128,8 +151,15 @@ export interface HookRunRecord {
  */
 export function recordHookRun(db: Db, run: HookRunRecord): void {
   db.prepare(
-    "INSERT INTO hook_runs (slug, stage, status, started, duration) VALUES (?, ?, ?, ?, ?)",
-  ).run(run.slug, run.stage, run.status, run.startedMs, run.durationMs);
+    "INSERT INTO hook_runs (slug, stage, status, started, duration, found) VALUES (?, ?, ?, ?, ?, ?)",
+  ).run(
+    run.slug,
+    run.stage,
+    run.status,
+    run.startedMs,
+    run.durationMs,
+    run.found ?? null,
+  );
 }
 
 export interface HookRunEntry {
@@ -137,6 +167,8 @@ export interface HookRunEntry {
   stage: string;
   status: string;
   started: number;
+  /** Violations the check reported, or null for runs predating result capture. */
+  found: number | null;
 }
 
 /** Newest-first git-hook runs, window-filtered on `started` (epoch ms). */
@@ -152,7 +184,7 @@ export function listHookRuns(db: Db, opts: ListLogsOpts = {}): HookRunEntry[] {
   if (opts.limit !== undefined) params.push(opts.limit);
   return db
     .prepare(
-      `SELECT slug, stage, status, started FROM hook_runs ${where} ORDER BY started DESC${limit}`,
+      `SELECT slug, stage, status, started, found FROM hook_runs ${where} ORDER BY started DESC${limit}`,
     )
     .all(...params) as HookRunEntry[];
 }

@@ -67,9 +67,20 @@ function addLog(logType: string, message: string, atMs: number): void {
 function addDispatchRun(
   slug: string,
   atMs: number,
-  { stage = "pre-commit", status = "success" as "success" | "failure" } = {},
+  {
+    stage = "pre-commit",
+    status = "success" as "success" | "failure",
+    found = null as number | null,
+  } = {},
 ): void {
-  recordHookRun(audit, { slug, stage, status, startedMs: atMs, durationMs: 5 });
+  recordHookRun(audit, {
+    slug,
+    stage,
+    status,
+    startedMs: atMs,
+    durationMs: 5,
+    found,
+  });
 }
 
 beforeEach(() => {
@@ -303,6 +314,21 @@ describe("activityFeed", () => {
       "Flags duplicated code",
     );
     expect(feed.find((e) => e.key === "lint:solid")?.message).toBeUndefined();
+  });
+
+  it("makes the per-run count the message, overriding the registry description", () => {
+    const now = Date.now();
+    // lint-dup carries a description, but a run that reported a count shows the
+    // count instead — the outcome wins over the static summary.
+    addDispatchRun("lint-dup", now - HOUR, { found: 4, status: "failure" });
+    // A single violation reads in the singular.
+    addDispatchRun("lint-naming", now - 2 * HOUR, { found: 1, status: "failure" });
+    // Zero is still a count, not the description fallback.
+    addDispatchRun("lint-dup", now - 3 * HOUR, { found: 0 });
+    const feed = activityFeed(undefined, audit, db, { last: "24h" });
+    expect(feed[0].message).toBe("4 issues found");
+    expect(feed[1].message).toBe("1 issue found");
+    expect(feed[2].message).toBe("0 issues found");
   });
 
   it("filters dispatch runs by the selected key like profiler runs", () => {

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { execFile } from "node:child_process";
+import { writeSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { basename, dirname, extname, resolve } from "node:path";
@@ -269,8 +270,21 @@ export function emitJson(violations) {
   process.stdout.write(`${JSON.stringify({ violations })}\n`);
 }
 
+/**
+ * Report this run's violation count out-of-band on the fd named by CO_RESULT_FD —
+ * the git-hook dispatcher opens that pipe and reads the count for the Activity
+ * feed. A no-op when the env var is unset (a developer running a check by hand),
+ * so the sentinel never reaches the terminal or mixes into the human report.
+ */
+export function emitFound(found) {
+  const fd = process.env.CO_RESULT_FD;
+  if (!fd) return;
+  writeSync(Number(fd), `${JSON.stringify({ found })}\n`);
+}
+
 export function emitHookReport(violations, { mode, okLine, summaryLine }) {
   if (jsonMode()) return emitJson(violations);
+  emitFound(violations.length);
   if (violations.length === 0) {
     const where = mode === "--staged" ? " in staged diff" : "";
     process.stdout.write(`${okLine}${where}.\n`);
@@ -293,6 +307,7 @@ export async function runFileHook(argv, { usage, collect, okLine, summary }) {
   const perFile = await Promise.all(files.map((path) => collect(path, mode)));
   const violations = perFile.flat();
   if (warn && violations.length > 0) {
+    emitFound(violations.length);
     for (const v of violations) process.stderr.write(`${formatViolation(v)}\n`);
     process.stderr.write(
       `\n⚠ ${summary(violations.length)} (advisory — not blocking this commit yet)\n`,

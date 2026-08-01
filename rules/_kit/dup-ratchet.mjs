@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import {
+  emitFound,
   emitJson,
   formatViolation,
   jsonMode,
@@ -29,6 +30,7 @@ async function runFilesMode(
   }
   const violations = await collectFiles(repoRoot, files);
   if (jsonMode()) return emitJson(violations);
+  emitFound(violations.length);
   if (violations.length === 0) {
     process.stdout.write(`${tool}: no violations in the given files.\n`);
     return;
@@ -77,6 +79,7 @@ export function reportRatchetViolations(
   violations,
   { okLine, summaryLine, warnLine },
 ) {
+  emitFound(violations.length);
   if (violations.length === 0) {
     process.stdout.write(`${okLine}\n`);
     return;
