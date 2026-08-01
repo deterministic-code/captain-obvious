@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { execFile } from "node:child_process";
+import { closeSync, openSync, readFileSync, rmSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import {
+  emitFound,
   emitHookReport,
   emitJson,
   formatViolation,
@@ -204,6 +206,34 @@ describe("emitHookReport", () => {
     const out = spyOut();
     emitHookReport([], { mode: "--all", okLine: "OK", summaryLine: "S" });
     expect(out.join("")).toBe("OK.\n");
+  });
+});
+
+describe("emitFound", () => {
+  const saved = process.env.CO_RESULT_FD;
+  let fd;
+  let path;
+  beforeEach(() => {
+    path = join(tmpdir(), `co-found-${process.pid}-${Date.now()}`);
+    fd = openSync(path, "w");
+  });
+  afterEach(() => {
+    closeSync(fd);
+    rmSync(path, { force: true });
+    if (saved === undefined) delete process.env.CO_RESULT_FD;
+    else process.env.CO_RESULT_FD = saved;
+  });
+
+  test("writes one count line to the fd named by CO_RESULT_FD", () => {
+    process.env.CO_RESULT_FD = String(fd);
+    emitFound(4);
+    expect(readFileSync(path, "utf8")).toBe('{"found":4}\n');
+  });
+
+  test("is a no-op when CO_RESULT_FD is unset (standalone run)", () => {
+    delete process.env.CO_RESULT_FD;
+    emitFound(4);
+    expect(readFileSync(path, "utf8")).toBe("");
   });
 });
 

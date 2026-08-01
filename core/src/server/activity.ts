@@ -62,6 +62,8 @@ interface HookRun {
   detail: string;
   /** The git-hook stage (`pre-commit` | `pre-push` | `fix`); absent for profiler runs. */
   stage?: string;
+  /** Violations the check reported this run; only dispatch runs carry a count. */
+  found?: number | null;
 }
 
 /** Window-filtered profiling rows, normalised to activity keys + ms. */
@@ -109,7 +111,13 @@ function readDispatchRuns(auditDb: Db, sinceMs: number): HookRun[] {
     failed: r.status === "failure",
     detail: r.slug,
     stage: r.stage,
+    found: r.found,
   }));
+}
+
+/** The per-run outcome line for a hook row: how many violations the check reported. */
+function formatFound(found: number): string {
+  return `${found} issue${found === 1 ? "" : "s"} found`;
 }
 
 interface ActivityTop {
@@ -196,7 +204,10 @@ export interface ActivityEvent {
   stage?: string;
   /** Language slugs the run's rule targets; only on hook rows for a known rule. */
   languages?: string[];
-  /** The rule's human summary (registry description); only on hook rows for a known rule. */
+  /**
+   * The hook row's primary text: the per-run outcome (`N issues found`) when the
+   * check reported a count, else the rule's registry description as a fallback.
+   */
   message?: string;
 }
 export interface FeedQuery extends ActivityQuery {
@@ -231,7 +242,8 @@ export function activityFeed(
   for (const r of hookRuns) {
     if (selected.size && !selected.has(r.key)) continue;
     const slug = keyToSlug(r.key);
-    const summary = summaryBySlug.get(slug);
+    const found = r.found ?? null;
+    const message = found !== null ? formatFound(found) : summaryBySlug.get(slug);
     events.push({
       timeMs: r.startMs,
       source: "hook",
@@ -240,7 +252,7 @@ export function activityFeed(
       detail: r.detail,
       ...(r.stage ? { stage: r.stage } : {}),
       languages: langBySlug.get(slug) ?? [],
-      ...(summary ? { message: summary } : {}),
+      ...(message ? { message } : {}),
     });
   }
 

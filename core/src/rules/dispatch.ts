@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import type { Readable } from "node:stream";
 import { openAuditDb, recordHookRun, resolveAuditDbPath } from "../db/audit.js";
 import { getRuleFixes, type RuleAction } from "../db/fixes.js";
 import { openDb, resolveDbPath, type Db } from "../db/open.js";
@@ -109,19 +110,15 @@ export function checkScriptPath(slug: string): string {
   return entry;
 }
 
-/** Spawn a child with inherited stdio, resolving its exit code (killed → reject). */
+/** Spawn a fix child with inherited stdio in `cwd`, resolving its exit code (killed → reject). */
 function spawnProcess(
   command: string,
   args: string[],
   label: string,
-  cwd?: string,
+  cwd: string,
 ): Promise<number> {
   return new Promise((resolveCode, reject) => {
-    const child = spawn(
-      command,
-      args,
-      cwd ? { stdio: "inherit", cwd } : { stdio: "inherit" },
-    );
+    const child = spawn(command, args, { stdio: "inherit", cwd });
     child.on("error", reject);
     child.on("exit", (code, signal) => {
       if (signal) reject(new Error(`${label} killed by ${signal}`));
@@ -130,8 +127,47 @@ function spawnProcess(
   });
 }
 
-function runRule(slug: string, args: string[]): Promise<number> {
-  return spawnProcess(process.execPath, [checkScriptPath(slug), ...args], slug);
+export interface RuleRunResult {
+  code: number;
+  /** Violation count the check reported on the result pipe, or null if it emitted none. */
+  found: number | null;
+}
+
+/** The extra fd the check writes its result sentinel to (see rules/_kit emitFound). */
+const RESULT_FD = 3;
+
+/** Parse the check's result sentinel — the last JSON line on fd 3 — into a found count. */
+function parseFound(raw: string): number | null {
+  const line = raw
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .pop();
+  if (!line) return null;
+  const parsed = JSON.parse(line) as { found?: unknown };
+  return typeof parsed.found === "number" ? parsed.found : null;
+}
+
+/**
+ * Spawn a rule's check, inheriting stdio so its human report streams live while
+ * reading the violation count out-of-band on fd 3. Resolves the exit code and the
+ * parsed count; a killed child rejects like the shared spawnProcess.
+ */
+function runRule(slug: string, args: string[]): Promise<RuleRunResult> {
+  return new Promise((resolveResult, reject) => {
+    const child = spawn(process.execPath, [checkScriptPath(slug), ...args], {
+      stdio: ["inherit", "inherit", "inherit", "pipe"],
+      env: { ...process.env, CO_RESULT_FD: String(RESULT_FD) },
+    });
+    const pipe = child.stdio[RESULT_FD] as Readable;
+    let buf = "";
+    pipe.on("data", (d) => (buf += d));
+    child.on("error", reject);
+    child.on("exit", (code, signal) => {
+      if (signal) reject(new Error(`${slug} killed by ${signal}`));
+      else resolveResult({ code: code ?? 0, found: parseFound(buf) });
+    });
+  });
 }
 
 /** git plumbing, capturing stdout; rejects on a non-zero exit. */
@@ -228,15 +264,18 @@ export async function runDispatch(argv: string[]): Promise<void> {
         await runRuleFix(slug, fix, cwd, args, staged);
         if (staged.length) await runGit(["add", "--", ...staged], cwd);
       }
-      const code = behavior.checks ? await runRule(slug, args) : 0;
+      const result = behavior.checks
+        ? await runRule(slug, args)
+        : { code: 0, found: null };
       recordHookRun(auditDb, {
         slug,
         stage,
-        status: code === 0 ? "success" : "failure",
+        status: result.code === 0 ? "success" : "failure",
         startedMs,
         durationMs: Date.now() - startedMs,
+        found: result.found,
       });
-      if (code !== 0 && behavior.blocks) process.exit(code);
+      if (result.code !== 0 && behavior.blocks) process.exit(result.code);
     }
   } finally {
     auditDb.close();

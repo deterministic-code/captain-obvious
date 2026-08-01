@@ -1,10 +1,12 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   listHookRuns,
   logEvent,
+  migrateHookRuns,
   openAuditDb,
   recordHookRun,
   resolveAuditDbPath,
@@ -116,14 +118,34 @@ describe("hook runs", () => {
       durationMs: 40,
     });
     expect(listHookRuns(audit)).toEqual([
-      { slug: "lint-dup", stage: "pre-push", status: "failure", started: base },
+      {
+        slug: "lint-dup",
+        stage: "pre-push",
+        status: "failure",
+        started: base,
+        found: null,
+      },
       {
         slug: "lint-naming",
         stage: "pre-commit",
         status: "success",
         started: base - 1000,
+        found: null,
       },
     ]);
+  });
+
+  it("stores and lists back the violation count a run reported", () => {
+    const base = Date.now();
+    recordHookRun(audit, {
+      slug: "lint-dup",
+      stage: "pre-commit",
+      status: "failure",
+      startedMs: base,
+      durationMs: 3,
+      found: 4,
+    });
+    expect(listHookRuns(audit)[0].found).toBe(4);
   });
 
   it("filters by sinceMs and caps by limit", () => {
@@ -202,6 +224,28 @@ describe("resolveAuditDbPath", () => {
     } finally {
       process.chdir(cwd);
       rmSync(outside, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("migrateHookRuns", () => {
+  it("backfills the found/fixed columns onto a legacy hook_runs table", () => {
+    const legacy = new Database(":memory:");
+    try {
+      legacy.exec(
+        "CREATE TABLE hook_runs (id INTEGER PRIMARY KEY, slug TEXT NOT NULL)",
+      );
+      migrateHookRuns(legacy);
+      const cols = (
+        legacy.prepare("PRAGMA table_info(hook_runs)").all() as {
+          name: string;
+        }[]
+      ).map((c) => c.name);
+      expect(cols).toEqual(expect.arrayContaining(["found", "fixed"]));
+      // Idempotent: a second run over the now-migrated table is a no-op.
+      expect(() => migrateHookRuns(legacy)).not.toThrow();
+    } finally {
+      legacy.close();
     }
   });
 });

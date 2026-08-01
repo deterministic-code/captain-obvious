@@ -29,9 +29,15 @@ const CASES = RULES.flatMap((r) =>
     .map((stage) => ({ slug: r.meta.slug, stage })),
 );
 
-/** A fake child that emits its outcome on the next microtask, like a real spawn. */
+/**
+ * A fake child that emits its outcome on the next microtask, like a real spawn.
+ * Carries an fd-3 result pipe so the dispatcher's out-of-band count read has a
+ * stream to attach to (the check reports no count here, so it stays silent).
+ */
 function fakeChild(emit: (c: EventEmitter) => void): EventEmitter {
-  const c = new EventEmitter();
+  const c = Object.assign(new EventEmitter(), {
+    stdio: [null, null, null, new EventEmitter()],
+  });
   queueMicrotask(() => emit(c));
   return c;
 }

@@ -25,7 +25,9 @@ CREATE TABLE IF NOT EXISTS hook_runs (
   stage    TEXT    NOT NULL,   -- 'pre-commit' | 'pre-push'
   status   TEXT    NOT NULL,   -- 'success' | 'failure'
   started  INTEGER NOT NULL,   -- epoch milliseconds
-  duration INTEGER NOT NULL    -- run time in milliseconds
+  duration INTEGER NOT NULL,   -- run time in milliseconds
+  found    INTEGER,            -- violations the check reported; NULL if it emitted no count
+  fixed    INTEGER             -- violations a fix resolved; NULL until per-rule fix accounting lands
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS idx_hook_runs_started ON hook_runs(started);
