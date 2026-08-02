@@ -120,6 +120,19 @@ function summarizeLineDelta(oldSrc: string, newSrc: string): string {
   return `+${added}/-${removed} lines`;
 }
 
+/** Count files modified in prettier/formatter output (lines without "(unchanged)"). */
+function countModifiedFiles(output: string): number {
+  const lines = output.split("\n");
+  let count = 0;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed && !line.startsWith("lint-") && !trimmed.startsWith("Re-stage")) {
+      if (!trimmed.includes("(unchanged)")) count++;
+    }
+  }
+  return count;
+}
+
 type ResolvedTarget = Awaited<ReturnType<typeof resolveRunTarget>>;
 
 /**
@@ -138,12 +151,14 @@ async function runScriptFix(
   const outcome = action.scriptPath
     ? await runNodeFix(checkScriptPath(slug), cwd, modeArgs)
     : await runShellFix(action.scriptBody as string, cwd, isDir ? "." : target);
+  const fixed = outcome.ok ? countModifiedFiles(outcome.output) : null;
   recordHookRun(auditDb, {
     slug,
     stage: "fix",
     status: outcome.ok ? "success" : "failure",
     startedMs: started,
     durationMs: Date.now() - started,
+    fixed,
   });
   logEvent(
     "fix.applied",

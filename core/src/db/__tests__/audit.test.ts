@@ -124,6 +124,7 @@ describe("hook runs", () => {
         status: "failure",
         started: base,
         found: null,
+        fixed: null,
       },
       {
         slug: "lint-naming",
@@ -131,6 +132,7 @@ describe("hook runs", () => {
         status: "success",
         started: base - 1000,
         found: null,
+        fixed: null,
       },
     ]);
   });

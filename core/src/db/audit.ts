@@ -142,6 +142,8 @@ export interface HookRunRecord {
   durationMs: number;
   /** Violations the check reported this run; null when it emitted no count. */
   found?: number | null;
+  /** Files a fix modified this run; null when not applicable. */
+  fixed?: number | null;
 }
 
 /**
@@ -151,7 +153,7 @@ export interface HookRunRecord {
  */
 export function recordHookRun(db: Db, run: HookRunRecord): void {
   db.prepare(
-    "INSERT INTO hook_runs (slug, stage, status, started, duration, found) VALUES (?, ?, ?, ?, ?, ?)",
+    "INSERT INTO hook_runs (slug, stage, status, started, duration, found, fixed) VALUES (?, ?, ?, ?, ?, ?, ?)",
   ).run(
     run.slug,
     run.stage,
@@ -159,6 +161,7 @@ export function recordHookRun(db: Db, run: HookRunRecord): void {
     run.startedMs,
     run.durationMs,
     run.found ?? null,
+    run.fixed ?? null,
   );
 }
 
@@ -169,6 +172,8 @@ export interface HookRunEntry {
   started: number;
   /** Violations the check reported, or null for runs predating result capture. */
   found: number | null;
+  /** Files a fix modified, or null for runs that don't perform fixes. */
+  fixed: number | null;
 }
 
 /** Newest-first git-hook runs, window-filtered on `started` (epoch ms). */
@@ -184,7 +189,7 @@ export function listHookRuns(db: Db, opts: ListLogsOpts = {}): HookRunEntry[] {
   if (opts.limit !== undefined) params.push(opts.limit);
   return db
     .prepare(
-      `SELECT slug, stage, status, started, found FROM hook_runs ${where} ORDER BY started DESC${limit}`,
+      `SELECT slug, stage, status, started, found, fixed FROM hook_runs ${where} ORDER BY started DESC${limit}`,
     )
     .all(...params) as HookRunEntry[];
 }

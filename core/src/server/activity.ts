@@ -64,6 +64,8 @@ interface HookRun {
   stage?: string;
   /** Violations the check reported this run; only dispatch runs carry a count. */
   found?: number | null;
+  /** Files a fix modified this run; only fix runs carry a count. */
+  fixed?: number | null;
 }
 
 /** Window-filtered profiling rows, normalised to activity keys + ms. */
@@ -112,12 +114,16 @@ function readDispatchRuns(auditDb: Db, sinceMs: number): HookRun[] {
     detail: r.slug,
     stage: r.stage,
     found: r.found,
+    fixed: r.fixed,
   }));
 }
 
-/** The per-run outcome line for a hook row: how many violations the check reported. */
 function formatFound(found: number): string {
   return `${found} issue${found === 1 ? "" : "s"} found`;
+}
+
+function formatFixed(fixed: number): string {
+  return `${fixed} file${fixed === 1 ? "" : "s"} fixed`;
 }
 
 interface ActivityTop {
@@ -243,7 +249,11 @@ export function activityFeed(
     if (selected.size && !selected.has(r.key)) continue;
     const slug = keyToSlug(r.key);
     const found = r.found ?? null;
-    const message = found !== null ? formatFound(found) : summaryBySlug.get(slug);
+    const fixed = r.fixed ?? null;
+    const message =
+      fixed !== null ? formatFixed(fixed) :
+      found !== null ? formatFound(found) :
+      summaryBySlug.get(slug);
     events.push({
       timeMs: r.startMs,
       source: "hook",
