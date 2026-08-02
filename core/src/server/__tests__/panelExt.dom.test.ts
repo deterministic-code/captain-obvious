@@ -97,6 +97,10 @@ let runResult: unknown;
 let analyzeCalls: unknown[];
 let analyzeFails: boolean;
 let analyzeStatusResult: { analyzed: boolean; lastAnalyzed: string | null };
+let projectLangsStored: string[];
+let projectLangsFails: boolean;
+let projectLangsPatchFails: boolean;
+let projectLangsPatch: string[][];
 let lsStore: Map<string, string>;
 let activitySummaryResult: unknown;
 let activityFeedResult: unknown[];
@@ -204,6 +208,10 @@ beforeEach(() => {
     analyzed: true,
     lastAnalyzed: "2026-01-01T00:00:00Z",
   };
+  projectLangsStored = [];
+  projectLangsFails = false;
+  projectLangsPatchFails = false;
+  projectLangsPatch = [];
   activityCalls = [];
   activityFeedCalls = [];
   activitySummaryResult = {
@@ -354,6 +362,29 @@ beforeEach(() => {
     if (typeof url === "string" && url.startsWith("/api/activity/feed")) {
       activityFeedCalls.push(url);
       return jsonRes(activityFeedResult);
+    }
+    if (typeof url === "string" && /^\/api\/projects\/\d+\/languages$/.test(url)) {
+      if (opts?.method === "PATCH") {
+        if (projectLangsPatchFails) {
+          return {
+            ok: false,
+            status: 500,
+            json: async () => ({ error: "apply failed" }),
+          } as unknown as Response;
+        }
+        const langs = JSON.parse(opts.body as string).languages as string[];
+        projectLangsPatch.push(langs);
+        projectLangsStored = langs;
+        return jsonRes({ languages: langs });
+      }
+      if (projectLangsFails) {
+        return {
+          ok: false,
+          status: 500,
+          json: async () => ({ error: "languages load failed" }),
+        } as unknown as Response;
+      }
+      return jsonRes({ languages: projectLangsStored });
     }
     if (opts?.method === "PATCH") {
       patchCalls.push({ url, body: JSON.parse(opts.body as string) });
@@ -1298,6 +1329,70 @@ describe("panelExt injected script", () => {
     expect(document.querySelector(".co-toast")?.textContent).toContain(
       "scan failed",
     );
+  });
+
+  const openAnalyzeFromHeader = async () => {
+    await runInjected();
+    (document.querySelector(".co-analyze-launch") as HTMLElement).click();
+    for (let i = 0; i < 3; i++) await flush();
+    return document.getElementById("co-analyze-modal")!;
+  };
+
+  it("Apply to project persists the detected languages and toasts", async () => {
+    const modal = await openAnalyzeFromHeader();
+    (modal.querySelector(".co-analyze-apply") as HTMLElement).click();
+    for (let i = 0; i < 3; i++) await flush();
+
+    expect(projectLangsPatch).toEqual([["typescript"]]);
+    expect(document.querySelector(".co-toast")?.textContent).toContain(
+      "Applied 1 languages to project",
+    );
+  });
+
+  it("filters to project-supported languages once applied", async () => {
+    const modal = await openAnalyzeFromHeader();
+    const box = modal.querySelector<HTMLInputElement>("#co-analyze-supported")!;
+    expect(box.checked).toBe(false);
+    expect(modal.querySelectorAll(".co-analyze-lang")).toHaveLength(1);
+
+    // Nothing applied yet -> filtering on hides every detected language.
+    box.checked = true;
+    box.dispatchEvent(new Event("change"));
+    expect(modal.querySelectorAll(".co-analyze-lang")).toHaveLength(0);
+
+    // Applying re-populates the supported set, so the filter now shows it.
+    (modal.querySelector(".co-analyze-apply") as HTMLElement).click();
+    for (let i = 0; i < 3; i++) await flush();
+    expect(modal.querySelectorAll(".co-analyze-lang")).toHaveLength(1);
+    expect(modal.textContent).toContain("TypeScript (3)");
+
+    box.checked = false;
+    box.dispatchEvent(new Event("change"));
+    expect(modal.querySelectorAll(".co-analyze-lang")).toHaveLength(1);
+  });
+
+  it("toasts when the applied-languages fetch fails but still shows results", async () => {
+    projectLangsFails = true;
+    const modal = await openAnalyzeFromHeader();
+    expect(modal).not.toBeNull();
+    expect(modal.querySelectorAll(".co-analyze-lang")).toHaveLength(1);
+    expect(document.querySelector(".co-toast")?.textContent).toContain(
+      "/api/projects/1/languages -> 500",
+    );
+  });
+
+  it("toasts and re-enables the button when Apply to project fails", async () => {
+    const modal = await openAnalyzeFromHeader();
+    projectLangsPatchFails = true;
+    const applyBtn = modal.querySelector(
+      ".co-analyze-apply",
+    ) as HTMLButtonElement;
+    applyBtn.click();
+    for (let i = 0; i < 3; i++) await flush();
+
+    expect(document.querySelector(".co-toast")?.textContent).toContain("500");
+    expect(applyBtn.disabled).toBe(false);
+    expect(applyBtn.textContent).toBe("Apply to project");
   });
 
   const enabledBox = (slug: string) => {
