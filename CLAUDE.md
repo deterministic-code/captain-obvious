@@ -1,9 +1,12 @@
 ## Project
 
 `@deterministic-code/captain-obvious` — deterministic, mechanical lint gates + Claude Code
-guard hooks, installable into any repo. The package ships the **hook implementations**; each
-consuming repo owns a `captain-obvious.config.json` that decides **which** hooks run, in what
-order, and which are advisory — so one package drives a strict repo and a lax one without forking.
+guard hooks, installable into any repo. The package ships the **hook implementations**; the
+per-project **registry DB** — seeded from the discovered rules, toggled in the web panel —
+decides **which** rules run, in what order, and which are advisory, so one package drives a strict
+repo and a lax one without forking. Each consuming repo owns a `captain-obvious.config.json` for
+install-time wiring only: the DB `mode`, the Claude guard bindings, and any `run:` passthroughs —
+it no longer lists the rules (discovery finds them; see `load.ts`).
 
 The config's optional `"mode"` key (`"local"` | `"global"`, default `local`, overridable by the
 `CAPTAIN_OBVIOUS_MODE` env var) picks where the registry + audit DBs live: **local** ties them to the
@@ -26,9 +29,10 @@ are workspace packages. Dependency DAG: **rule package → `rules/_kit` → `cor
   TypeScript compiled to `core/dist/` by `tsc`:
   - `core/src/db/` — the SQLite catalog via `better-sqlite3` (`open`, `rules`, `fixes`, `actions`,
     `languages`, `seed`, `lookups`, `types`, `args`).
-  - `core/src/rules/` — the plugin engine: `plugin.ts` (the `RulePlugin` interface), `load.ts` (hybrid
-    discovery — the `plugins[]` list in `captain-obvious.config.json` plus a folder-scan for
-    not-yet-packaged rules; stamps each plugin's absolute `checkPath`), `index.ts`
+  - `core/src/rules/` — the plugin engine: `plugin.ts` (the `RulePlugin` interface), `load.ts`
+    (discovery — folder-scans `rules/<slug>/` for each `plugin.mjs`, no config list; the registry
+    DB seeded from these is the single source of truth for the rule set; stamps each plugin's
+    absolute `checkPath`), `index.ts`
     (`RULES = await loadPlugins()`), `config.ts` (per-rule config for the check bridge), `deps.ts`
     (dependency verification), `dispatch.ts`, `stages.ts`, `languages.ts`, `types.ts`.
   - `core/src/server/` — the web control panel: `serve.ts` (routing + static SPA), `registry.ts`

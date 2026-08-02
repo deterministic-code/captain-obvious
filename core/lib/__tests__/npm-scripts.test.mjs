@@ -1,17 +1,17 @@
 import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { readJson, writeJson } from "../json-file.mjs";
 import { installNpmScripts } from "../npm-scripts.mjs";
 
-const SCRATCH =
-  "/private/tmp/claude-501/-Users-ryan-Projects-captain-obvious/21d816db-ca11-437f-a0f2-ca45be7dd636/scratchpad";
+const rule = (slug, stages, hasCheck = true) => ({ slug, stages, hasCheck });
 
 describe("npm-scripts / installNpmScripts", () => {
   let target;
 
   beforeEach(async () => {
-    target = await mkdtemp(join(SCRATCH, "npm-scripts-"));
+    target = await mkdtemp(join(tmpdir(), "npm-scripts-"));
   });
 
   afterEach(async () => {
@@ -24,17 +24,17 @@ describe("npm-scripts / installNpmScripts", () => {
     expect(
       await installNpmScripts({
         target,
-        gitHooks: {},
+        rules: [],
         npmScripts: { enabled: false },
       }),
     ).toEqual([]);
   });
 
-  test("derives staged/all aliases for each lint hook (no --push)", async () => {
+  test("derives staged/all aliases for a pre-commit rule (no --push)", async () => {
     await writeJson(pkgPath(), { name: "consumer" });
     const written = await installNpmScripts({
       target,
-      gitHooks: { preCommit: ["lint-comments"] },
+      rules: [rule("lint-comments", ["pre-commit"])],
       npmScripts: {},
     });
     expect(written).toEqual([pkgPath()]);
@@ -54,34 +54,50 @@ describe("npm-scripts / installNpmScripts", () => {
     ]);
   });
 
-  test("adds a :push alias for prePush hooks flagged with --push", async () => {
+  test("derives only a :push alias for a pre-push-only rule", async () => {
     await installNpmScripts({
       target,
-      gitHooks: { prePush: ["lint-dup --push"] },
+      rules: [rule("lint-dup", ["pre-push"])],
       npmScripts: {},
     });
     const pkg = await readJson(pkgPath());
-    expect(pkg.scripts["lint:dup:push"]).toBe(
-      "captain-obvious-lint dup --push",
-    );
+    expect(pkg.scripts["lint:dup:push"]).toBe("captain-obvious-lint dup --push");
+    expect(pkg.scripts["lint:dup"]).toBeUndefined();
+    expect(pkg.scripts["lint:dup:all"]).toBeUndefined();
   });
 
-  test("skips bare `run:` passthrough entries", async () => {
+  test("a rule bound to both stages gets staged, all, and push aliases", async () => {
     await installNpmScripts({
       target,
-      gitHooks: { preCommit: ["run: prettier --check", "lint-naming"] },
+      rules: [rule("lint-coverage", ["pre-commit", "pre-push"])],
       npmScripts: {},
     });
     const pkg = await readJson(pkgPath());
-    const keys = pkg.captainObvious.managedScripts;
-    expect(keys).toEqual(["lint:naming", "lint:naming:all", "panel"]);
-    expect(keys.some((k) => k.includes("run"))).toBe(false);
+    expect(pkg.captainObvious.managedScripts).toEqual([
+      "lint:coverage",
+      "lint:coverage:all",
+      "lint:coverage:push",
+      "panel",
+    ]);
+  });
+
+  test("skips non-lint (governance) and policy-only rules", async () => {
+    await installNpmScripts({
+      target,
+      rules: [
+        rule("gov-no-push-to-main", ["pre-push"]),
+        rule("lint-require-pr", ["server"], false),
+      ],
+      npmScripts: {},
+    });
+    const pkg = await readJson(pkgPath());
+    expect(pkg.captainObvious.managedScripts).toEqual(["panel"]);
   });
 
   test("extraScripts override or add odd aliases", async () => {
     await installNpmScripts({
       target,
-      gitHooks: {},
+      rules: [],
       npmScripts: { extraScripts: { "lint:dead-code": "dead-code --all" } },
     });
     const pkg = await readJson(pkgPath());
@@ -97,7 +113,7 @@ describe("npm-scripts / installNpmScripts", () => {
     });
     await installNpmScripts({
       target,
-      gitHooks: { preCommit: ["lint-comments"] },
+      rules: [rule("lint-comments", ["pre-commit"])],
       npmScripts: {},
     });
     const pkg = await readJson(pkgPath());
@@ -106,7 +122,7 @@ describe("npm-scripts / installNpmScripts", () => {
     expect(pkg.scripts["lint:comments"]).toBeDefined();
   });
 
-  test("defaults gitHooks and npmScripts to empty when omitted", async () => {
+  test("defaults rules and npmScripts to empty when omitted", async () => {
     const written = await installNpmScripts({ target });
     expect(written).toEqual([pkgPath()]);
     const pkg = await readJson(pkgPath());
@@ -117,7 +133,7 @@ describe("npm-scripts / installNpmScripts", () => {
   test("adds a managed `panel` alias that launches the control panel", async () => {
     await installNpmScripts({
       target,
-      gitHooks: { preCommit: ["lint-comments"] },
+      rules: [rule("lint-comments", ["pre-commit"])],
       npmScripts: {},
     });
     const pkg = await readJson(pkgPath());
@@ -128,7 +144,7 @@ describe("npm-scripts / installNpmScripts", () => {
   test("panelScript renames the panel alias key", async () => {
     await installNpmScripts({
       target,
-      gitHooks: {},
+      rules: [],
       npmScripts: { panelScript: "co:panel" },
     });
     const pkg = await readJson(pkgPath());
@@ -140,7 +156,7 @@ describe("npm-scripts / installNpmScripts", () => {
   test("panelScript:false drops the panel alias entirely", async () => {
     await installNpmScripts({
       target,
-      gitHooks: { preCommit: ["lint-comments"] },
+      rules: [rule("lint-comments", ["pre-commit"])],
       npmScripts: { panelScript: false },
     });
     const pkg = await readJson(pkgPath());
@@ -149,16 +165,5 @@ describe("npm-scripts / installNpmScripts", () => {
       "lint:comments",
       "lint:comments:all",
     ]);
-  });
-
-  test("merges both preCommit and prePush stems", async () => {
-    await installNpmScripts({
-      target,
-      gitHooks: { preCommit: ["lint-comments"], prePush: ["lint-dup --push"] },
-      npmScripts: {},
-    });
-    const pkg = await readJson(pkgPath());
-    expect(pkg.scripts["lint:comments"]).toBeDefined();
-    expect(pkg.scripts["lint:dup:push"]).toBeDefined();
   });
 });

@@ -1,4 +1,4 @@
-import { dirname, resolve, sep } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { assertRulePlugin, loadPlugins } from "../load.js";
@@ -7,8 +7,7 @@ import type { RulePlugin } from "../plugin.js";
 const here = dirname(fileURLToPath(import.meta.url));
 const OK_ROOT = resolve(here, "fixtures", "plugins-ok");
 const BAD_ROOT = resolve(here, "fixtures", "plugins-bad");
-const CONFIG_ROOT = resolve(here, "fixtures", "plugins-config");
-const BADCFG_ROOT = resolve(here, "fixtures", "plugins-badcfg");
+const NOSLUG_ROOT = resolve(here, "fixtures", "plugins-noslug");
 
 /** A structurally valid descriptor; tests mutate a clone to hit each branch. */
 function validPlugin(): RulePlugin {
@@ -30,8 +29,8 @@ function validPlugin(): RulePlugin {
 }
 
 describe("loadPlugins", () => {
-  it("discovers plugin directories, skipping _shared and descriptor-less dirs", async () => {
-    const plugins = await loadPlugins(OK_ROOT, OK_ROOT);
+  it("discovers plugin dirs, skipping _shared, descriptor-less, and stray files", async () => {
+    const plugins = await loadPlugins(OK_ROOT);
     expect(plugins.map((p) => p.meta.slug)).toEqual(["good-rule"]);
     expect(plugins[0].control).toEqual({
       kind: "declarative",
@@ -40,32 +39,27 @@ describe("loadPlugins", () => {
   });
 
   it("throws when a plugin's checkEntry does not exist", async () => {
-    await expect(loadPlugins(BAD_ROOT, BAD_ROOT)).rejects.toThrow(
-      /checkEntry not found/,
-    );
+    await expect(loadPlugins(BAD_ROOT)).rejects.toThrow(/checkEntry not found/);
   });
 
   it("returns an array for the default (bundled) rules root", async () => {
     expect(Array.isArray(await loadPlugins())).toBe(true);
   });
 
-  it("loads a config plugins[] entry by local path and dedupes the folder scan", async () => {
-    // dup-rule is both listed in the config and present as a folder dir; the config
-    // entry wins and the folder scan skips the duplicate slug.
-    const plugins = await loadPlugins(CONFIG_ROOT, CONFIG_ROOT);
-    expect(plugins.map((p) => p.meta.slug)).toEqual(["dup-rule"]);
-    expect(plugins[0].checkPath).toContain(`dup-rule${sep}check.mjs`);
-  });
-
-  it("ignores a plugins config that is not an array", async () => {
-    expect(await loadPlugins(BADCFG_ROOT, BADCFG_ROOT)).toEqual([]);
-  });
-
-  it("throws on a config plugin whose descriptor is missing meta.slug", async () => {
-    const NOSLUG_ROOT = resolve(here, "fixtures", "plugins-noslug");
-    await expect(loadPlugins(NOSLUG_ROOT, NOSLUG_ROOT)).rejects.toThrow(
+  it("throws when a folder's descriptor slug disagrees with its dir name", async () => {
+    await expect(loadPlugins(NOSLUG_ROOT)).rejects.toThrow(
       /must match the directory name/,
     );
+  });
+
+  it("returns no rules when the rules dir is absent", async () => {
+    const missing = resolve(here, "fixtures", "does-not-exist");
+    expect(await loadPlugins(missing)).toEqual([]);
+  });
+
+  it("rethrows a non-ENOENT readdir error when the root is a file", async () => {
+    const file = resolve(OK_ROOT, "stray.txt");
+    await expect(loadPlugins(file)).rejects.toThrow();
   });
 });
 

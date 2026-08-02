@@ -1,11 +1,8 @@
-import { access, readdir, readFile } from "node:fs/promises";
-import { createRequire } from "node:module";
+import { access, readdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { requireStage } from "./stages.js";
 import type { ControlSpec, RulePlugin } from "./plugin.js";
-
-const require = createRequire(import.meta.url);
 
 /** Core package root: two levels up from this module (src/rules or dist/rules). */
 const pkgRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -19,85 +16,39 @@ const exists = (p: string): Promise<boolean> =>
     () => false,
   );
 
-interface Discovered {
-  plugin: RulePlugin;
-  /** Base directory the plugin's `checkEntry` resolves against. */
-  dir: string;
-}
-
-/** The `plugins: [...]` entries from captain-obvious.config.json (or [] if absent). */
-async function readPluginEntries(configDir: string): Promise<string[]> {
-  const path = resolve(configDir, "captain-obvious.config.json");
-  if (!(await exists(path))) return [];
-  const cfg = JSON.parse(await readFile(path, "utf8")) as { plugins?: unknown };
-  return Array.isArray(cfg.plugins) ? (cfg.plugins as string[]) : [];
-}
-
-/** Resolve a `plugins[]` entry — an npm package name or a local path — to its descriptor. */
-async function resolveEntry(
-  entry: string,
-  configDir: string,
-): Promise<Discovered> {
-  const descriptor =
-    entry.startsWith(".") || entry.startsWith("/")
-      ? resolve(configDir, entry, "plugin.mjs")
-      : require.resolve(`${entry}/plugin.mjs`);
-  const mod = (await import(pathToFileURL(descriptor).href)) as {
-    default?: unknown;
-  };
-  const slug = (mod.default as { meta?: { slug?: unknown } })?.meta?.slug;
-  return {
-    plugin: assertRulePlugin(
-      mod.default,
-      typeof slug === "string" ? slug : entry,
-    ),
-    dir: dirname(descriptor),
-  };
-}
-
 /**
- * Discover every rule plugin: the packages listed in `plugins[]`
- * (captain-obvious.config.json, an npm name or a local path), plus any not-yet-
- * packaged rule under `rules/<slug>/` (folder-scan, skipping dirs that carry their
- * own package.json — those arrive via the config list). Each descriptor is
- * validated and its check runner confirmed to exist; the loader stamps an absolute
- * `checkPath` by resolving `checkEntry` against the plugin's own directory, so a
- * mistyped slug or missing runner fails the load loudly. `configDir`/`root` are
- * overridable for tests.
+ * Discover every rule plugin by scanning `rules/<slug>/` for a `plugin.mjs`, skipping
+ * `_`-prefixed shared dirs (e.g. `_kit`). The registry DB, seeded from these, is the
+ * single source of truth for the rule set — there is no config list to keep in sync.
+ * Each descriptor is validated and its check runner confirmed to exist; the loader
+ * stamps an absolute `checkPath` by resolving `checkEntry` against the rule's own
+ * directory, so a mistyped slug or missing runner fails the load loudly. A missing
+ * `rules/` dir yields no rules rather than throwing; `root` is overridable for tests.
  */
 export async function loadPlugins(
   root: string = RULES_DIR,
-  configDir: string = repoRoot,
 ): Promise<RulePlugin[]> {
-  const bySlug = new Map<string, Discovered>();
-
-  for (const entry of await readPluginEntries(configDir)) {
-    const d = await resolveEntry(entry, configDir);
-    bySlug.set(d.plugin.meta.slug, d);
-  }
-
-  const entries = await readdir(root, { withFileTypes: true });
+  const entries = await readdir(root, { withFileTypes: true }).catch(
+    (err: NodeJS.ErrnoException) => {
+      if (err.code === "ENOENT") return [];
+      throw err;
+    },
+  );
   const slugs = entries
     .filter((e) => e.isDirectory() && !e.name.startsWith("_"))
     .map((e) => e.name)
     .sort();
+
+  const out: RulePlugin[] = [];
   for (const slug of slugs) {
-    if (await exists(resolve(root, slug, "package.json"))) continue;
     const descriptor = resolve(root, slug, "plugin.mjs");
     if (!(await exists(descriptor))) continue;
     const mod = (await import(pathToFileURL(descriptor).href)) as {
       default?: unknown;
     };
     const plugin = assertRulePlugin(mod.default, slug);
-    if (!bySlug.has(plugin.meta.slug)) {
-      bySlug.set(plugin.meta.slug, { plugin, dir: resolve(root, slug) });
-    }
-  }
-
-  const out: RulePlugin[] = [];
-  for (const { plugin, dir } of bySlug.values()) {
     const checkPath =
-      plugin.checkEntry === null ? null : resolve(dir, plugin.checkEntry);
+      plugin.checkEntry === null ? null : resolve(root, slug, plugin.checkEntry);
     if (checkPath !== null && !(await exists(checkPath))) {
       throw new Error(
         `rule ${plugin.meta.slug}: checkEntry not found: ${plugin.checkEntry}`,

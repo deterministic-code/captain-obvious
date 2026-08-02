@@ -15,23 +15,29 @@ const exists = (p) =>
     () => false,
   );
 
+// The discovered rule set from the compiled engine — the single source of truth for
+// which rules exist (registry-seeded, no config list). Null when dist isn't built yet
+// (install can precede the build); callers degrade to a rule-free install.
+async function loadDistRules() {
+  const indexPath = resolve(pkgRoot, "dist", "rules", "index.js");
+  if (!(await exists(indexPath))) return null;
+  const { RULES } = await import(pathToFileURL(indexPath).href);
+  return RULES;
+}
+
 // Best-effort: warn about external tools a rule's check needs but that aren't
-// installed. Skipped when dist isn't built yet (install can precede the build);
-// `captain-obvious check-deps` reports the same thing on demand. Warn-only.
-async function warnMissingDependencies() {
-  const depsPath = resolve(pkgRoot, "dist", "rules", "deps.js");
-  if (!(await exists(depsPath))) return;
+// installed. Skipped when dist isn't built yet; `captain-obvious check-deps` reports
+// the same thing on demand. Warn-only.
+async function warnMissingDependencies(rules) {
+  if (!rules) return;
   const { verifyDependencies, missingRequired } = await import(
-    pathToFileURL(depsPath).href
+    pathToFileURL(resolve(pkgRoot, "dist", "rules", "deps.js")).href
   );
   const { probeDependency } = await import(
     pathToFileURL(resolve(pkgRoot, "dist", "rules", "depProbe.js")).href
   );
-  const { RULES } = await import(
-    pathToFileURL(resolve(pkgRoot, "dist", "rules", "index.js")).href
-  );
   for (const { slug, dep } of missingRequired(
-    verifyDependencies(RULES, probeDependency),
+    verifyDependencies(rules, probeDependency),
   )) {
     const why = dep.reason ? ` — ${dep.reason}` : "";
     process.stdout.write(
@@ -56,6 +62,17 @@ async function main() {
   const { target, config: configPath } = parseArgs(process.argv.slice(2));
   const { path, config } = await loadConfig(target, configPath);
   process.stdout.write(`captain-obvious: installing from ${path}\n`);
+  const rules = await loadDistRules();
+  if (!rules) {
+    process.stdout.write(
+      "captain-obvious: dist not built — skipping lint:* script generation (run `npm run build`, then re-install)\n",
+    );
+  }
+  const ruleScripts = (rules ?? []).map((r) => ({
+    slug: r.meta.slug,
+    stages: r.meta.stages,
+    hasCheck: r.checkEntry !== null,
+  }));
   const written = [
     ...(await installGitHooks({
       target,
@@ -69,14 +86,14 @@ async function main() {
     })),
     ...(await installNpmScripts({
       target,
-      gitHooks: config.gitHooks ?? {},
+      rules: ruleScripts,
       npmScripts: config.npmScripts,
     })),
   ];
   for (const file of written) {
     process.stdout.write(`captain-obvious: wrote ${file}\n`);
   }
-  await warnMissingDependencies();
+  await warnMissingDependencies(rules);
 }
 
 main().catch((err) => {
