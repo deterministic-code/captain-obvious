@@ -1351,9 +1351,9 @@ export const PANEL_EXT = `(() => {
       ".co-modal-btn-primary:hover{background:#1e293b}" +
       // Analyze results modal (summary line + per-language file lists).
       ".co-analyze-summary{font-size:13px;color:#334155}" +
-      ".co-analyze-body{max-height:52vh;overflow:auto;display:flex;flex-direction:column;gap:14px}" +
-      ".co-analyze-lang-name{font-size:13px;font-weight:700;color:#0f172a;margin-bottom:4px}" +
-      ".co-analyze-files{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:2px}" +
+      ".co-analyze-body{max-height:52vh;overflow:auto;display:flex;flex-direction:column;gap:8px}" +
+      ".co-analyze-lang-name{font-size:13px;font-weight:700;color:#0f172a;cursor:pointer;list-style-position:inside}" +
+      ".co-analyze-files{margin:6px 0 0;padding-left:22px;display:flex;flex-direction:column;gap:2px}" +
       ".co-analyze-file{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#475569;word-break:break-all}" +
       // Rules table actions column (Run / Report / Settings icons).
       ".co-act-td{white-space:nowrap;text-align:right}" +
@@ -2740,17 +2740,17 @@ export const PANEL_EXT = `(() => {
         langs
           .map(
             (l) =>
-              '<div class="co-analyze-lang">' +
-              '<div class="co-analyze-lang-name">' +
+              '<details class="co-analyze-lang">' +
+              '<summary class="co-analyze-lang-name">' +
               esc(l.name) +
               " (" +
               l.files +
-              ")</div>" +
+              ")</summary>" +
               '<ul class="co-analyze-files">' +
               (l.paths || [])
                 .map((p) => '<li class="co-analyze-file">' + esc(p) + "</li>")
                 .join("") +
-              "</ul></div>",
+              "</ul></details>",
           )
           .join("") +
         "</div>"
