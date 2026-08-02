@@ -332,7 +332,7 @@ beforeEach(() => {
       }
       return jsonRes({
         root: "/proj",
-        totalFiles: 3,
+        totalFiles: 4,
         otherFiles: 1,
         languages: [
           {
@@ -341,6 +341,7 @@ beforeEach(() => {
             files: 3,
             paths: ["a.ts", "b.ts", "c.ts"],
           },
+          { slug: "css", name: "CSS", files: 1, paths: ["styles.css"] },
         ],
       });
     }
@@ -1277,7 +1278,8 @@ describe("panelExt injected script", () => {
     const lang = modal.querySelector("details.co-analyze-lang")!;
     expect(lang).not.toBeNull();
     expect(lang.hasAttribute("open")).toBe(false);
-    const files = [...modal.querySelectorAll(".co-analyze-file")].map(
+    const tsRow = modal.querySelector(".co-analyze-lang-row")!;
+    const files = [...tsRow.querySelectorAll(".co-analyze-file")].map(
       (el) => el.textContent,
     );
     expect(files).toEqual(["a.ts", "b.ts", "c.ts"]);
@@ -1338,44 +1340,79 @@ describe("panelExt injected script", () => {
     return document.getElementById("co-analyze-modal")!;
   };
 
-  it("Apply to project persists the detected languages and toasts", async () => {
+  const pickBox = (modal: HTMLElement, slug: string) =>
+    modal.querySelector<HTMLInputElement>(
+      '.co-analyze-pick[data-slug="' + slug + '"]',
+    )!;
+  const langNames = (modal: HTMLElement) =>
+    [...modal.querySelectorAll(".co-analyze-lang-name")].map(
+      (el) => el.textContent,
+    );
+
+  it("Apply to project saves every detected language by default and toasts", async () => {
     const modal = await openAnalyzeFromHeader();
+    // Both languages start ticked.
+    expect(pickBox(modal, "typescript").checked).toBe(true);
+    expect(pickBox(modal, "css").checked).toBe(true);
+
     (modal.querySelector(".co-analyze-apply") as HTMLElement).click();
     for (let i = 0; i < 3; i++) await flush();
 
-    expect(projectLangsPatch).toEqual([["typescript"]]);
+    expect(projectLangsPatch).toEqual([["typescript", "css"]]);
     expect(document.querySelector(".co-toast")?.textContent).toContain(
-      "Applied 1 languages to project",
+      "Applied 2 languages to project",
     );
   });
 
-  it("filters to project-supported languages once applied", async () => {
+  it("unticking a language excludes it from Apply and the supported filter", async () => {
     const modal = await openAnalyzeFromHeader();
-    const box = modal.querySelector<HTMLInputElement>("#co-analyze-supported")!;
-    expect(box.checked).toBe(false);
-    expect(modal.querySelectorAll(".co-analyze-lang")).toHaveLength(1);
+    const supported = modal.querySelector<HTMLInputElement>(
+      "#co-analyze-supported",
+    )!;
+    expect(supported.checked).toBe(false);
+    expect(langNames(modal)).toEqual(["TypeScript (3)", "CSS (1)"]);
 
-    // Nothing applied yet -> filtering on hides every detected language.
-    box.checked = true;
-    box.dispatchEvent(new Event("change"));
-    expect(modal.querySelectorAll(".co-analyze-lang")).toHaveLength(0);
+    // Nothing applied yet -> the supported filter hides everything.
+    supported.checked = true;
+    supported.dispatchEvent(new Event("change"));
+    expect(langNames(modal)).toEqual([]);
+    supported.checked = false;
+    supported.dispatchEvent(new Event("change"));
 
-    // Applying re-populates the supported set, so the filter now shows it.
+    // Untick CSS, then apply: only the ticked language is saved. Pick changes
+    // reach a delegated listener on the list, so they must bubble.
+    const css = pickBox(modal, "css");
+    css.checked = false;
+    css.dispatchEvent(new Event("change", { bubbles: true }));
     (modal.querySelector(".co-analyze-apply") as HTMLElement).click();
     for (let i = 0; i < 3; i++) await flush();
-    expect(modal.querySelectorAll(".co-analyze-lang")).toHaveLength(1);
-    expect(modal.textContent).toContain("TypeScript (3)");
+    expect(projectLangsPatch).toEqual([["typescript"]]);
 
-    box.checked = false;
-    box.dispatchEvent(new Event("change"));
-    expect(modal.querySelectorAll(".co-analyze-lang")).toHaveLength(1);
+    // The supported filter now narrows the list to the applied language.
+    supported.checked = true;
+    supported.dispatchEvent(new Event("change"));
+    expect(langNames(modal)).toEqual(["TypeScript (3)"]);
+    supported.checked = false;
+    supported.dispatchEvent(new Event("change"));
+    expect(langNames(modal)).toEqual(["TypeScript (3)", "CSS (1)"]);
+
+    // Re-ticking CSS restores it to the next Apply.
+    pickBox(modal, "css").checked = true;
+    pickBox(modal, "css").dispatchEvent(new Event("change", { bubbles: true }));
+    // A non-pick change bubbling through the list is ignored (no throw).
+    modal
+      .querySelector(".co-analyze-file")!
+      .dispatchEvent(new Event("change", { bubbles: true }));
+    (modal.querySelector(".co-analyze-apply") as HTMLElement).click();
+    for (let i = 0; i < 3; i++) await flush();
+    expect(projectLangsPatch[1]).toEqual(["typescript", "css"]);
   });
 
   it("toasts when the applied-languages fetch fails but still shows results", async () => {
     projectLangsFails = true;
     const modal = await openAnalyzeFromHeader();
     expect(modal).not.toBeNull();
-    expect(modal.querySelectorAll(".co-analyze-lang")).toHaveLength(1);
+    expect(modal.querySelectorAll(".co-analyze-lang")).toHaveLength(2);
     expect(document.querySelector(".co-toast")?.textContent).toContain(
       "/api/projects/1/languages -> 500",
     );

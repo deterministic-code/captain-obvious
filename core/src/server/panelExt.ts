@@ -2750,8 +2750,16 @@ export const PANEL_EXT = `(() => {
     return "Detected " + langs.map((l) => l.name + " (" + l.files + ")").join(", ") + ".";
   }
 
-  function analyzeLangHtml(l) {
+  // The pick-checkbox is a sibling of <details>, not inside <summary>, so ticking
+  // it never toggles the disclosure.
+  function analyzeLangHtml(l, checked) {
     return (
+      '<div class="co-analyze-lang-row">' +
+      '<input type="checkbox" class="co-analyze-pick" data-slug="' +
+      esc(l.slug) +
+      '"' +
+      (checked ? " checked" : "") +
+      ">" +
       '<details class="co-analyze-lang">' +
       '<summary class="co-analyze-lang-name">' +
       esc(l.name) +
@@ -2762,7 +2770,7 @@ export const PANEL_EXT = `(() => {
       (l.paths || [])
         .map((p) => '<li class="co-analyze-file">' + esc(p) + "</li>")
         .join("") +
-      "</ul></details>"
+      "</ul></details></div>"
     );
   }
 
@@ -2774,6 +2782,9 @@ export const PANEL_EXT = `(() => {
     const card = document.createElement("div");
     card.className = "co-modal-card";
     const allLangs = data.languages || [];
+    // Which detected languages Apply will save — all ticked by default; the user
+    // unticks strays before applying.
+    const selected = new Set(allLangs.map((l) => l.slug));
     // Languages already applied to the project; drives the "supported" filter.
     // Populated after the async fetch below, so the toggle can narrow the list.
     let projectLangs = new Set();
@@ -2797,9 +2808,20 @@ export const PANEL_EXT = `(() => {
       const langs = onlySupported
         ? allLangs.filter((l) => projectLangs.has(l.slug))
         : allLangs;
-      listEl.innerHTML = langs.map(analyzeLangHtml).join("");
+      listEl.innerHTML = langs
+        .map((l) => analyzeLangHtml(l, selected.has(l.slug)))
+        .join("");
     }
     renderList();
+
+    // Delegated so the handler survives every renderList() innerHTML rebuild.
+    listEl.addEventListener("change", (e) => {
+      const cb = e.target;
+      if (!cb.classList.contains("co-analyze-pick")) return;
+      const slug = cb.getAttribute("data-slug");
+      if (cb.checked) selected.add(slug);
+      else selected.delete(slug);
+    });
 
     fetchProjectLanguages(currentProjectId).then(
       (r) => {
@@ -2823,7 +2845,7 @@ export const PANEL_EXT = `(() => {
       try {
         const r = await patchProjectLanguages(
           currentProjectId,
-          allLangs.map((l) => l.slug),
+          allLangs.map((l) => l.slug).filter((s) => selected.has(s)),
         );
         projectLangs = new Set(r.languages || []);
         renderList();
