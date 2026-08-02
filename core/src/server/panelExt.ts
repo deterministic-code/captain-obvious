@@ -1371,8 +1371,11 @@ export const PANEL_EXT = `(() => {
       ".co-modal-btn-primary{background:#0f172a;color:#fff;border-color:#0f172a}" +
       ".co-modal-btn-primary:hover{background:#1e293b}" +
       // Analyze results modal (summary line + per-language file lists).
-      ".co-analyze-summary{font-size:13px;color:#334155}" +
+      ".co-analyze-summary{font-size:13px;color:#334155;margin-bottom:8px}" +
       ".co-analyze-body{max-height:52vh;overflow:auto;display:flex;flex-direction:column;gap:8px}" +
+      ".co-analyze-lang-row{display:flex;align-items:flex-start;gap:8px}" +
+      ".co-analyze-pick{width:16px;height:16px;margin-top:2px;flex-shrink:0;cursor:pointer;accent-color:#0f172a}" +
+      ".co-analyze-lang{flex:1;margin:0}" +
       ".co-analyze-lang-name{font-size:13px;font-weight:700;color:#0f172a;cursor:pointer;list-style-position:inside}" +
       ".co-analyze-files{margin:6px 0 0;padding-left:22px;display:flex;flex-direction:column;gap:2px}" +
       ".co-analyze-file{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#475569;word-break:break-all}" +
@@ -1570,6 +1573,7 @@ export const PANEL_EXT = `(() => {
       D + ".co-analyze{background:#78350f;border-bottom-color:#92400e;color:#fde68a}" +
       D + ".co-analyze-summary{color:#cbd5e1}" +
       D + ".co-analyze-lang-name{color:#f1f5f9}" +
+      D + ".co-analyze-pick{accent-color:#818cf8}" +
       D + ".co-analyze-file{color:#94a3b8}" +
       // Checkbox accents.
       D + ":is(.co-enabled-box,.co-set-check){accent-color:#818cf8}" +
@@ -2794,7 +2798,7 @@ export const PANEL_EXT = `(() => {
       '<div class="co-analyze-summary">' +
       esc(analyzeSummary(data)) +
       "</div>" +
-      '<label class="co-fix-toggle"><input type="checkbox" id="co-analyze-supported"> only show project supported languages</label>' +
+      '<label class="co-fix-toggle"><input type="checkbox" id="co-analyze-supported" disabled> only show project supported languages</label>' +
       '<div class="co-analyze-body"></div>' +
       '<div class="co-modal-actions">' +
       '<button type="button" class="co-modal-btn co-analyze-apply">Apply to project</button>' +
@@ -2804,6 +2808,7 @@ export const PANEL_EXT = `(() => {
     document.body.appendChild(overlay);
 
     const listEl = card.querySelector(".co-analyze-body");
+    const filterCheckbox = card.querySelector("#co-analyze-supported");
     function renderList() {
       const langs = onlySupported
         ? allLangs.filter((l) => projectLangs.has(l.slug))
@@ -2826,17 +2831,16 @@ export const PANEL_EXT = `(() => {
     fetchProjectLanguages(currentProjectId).then(
       (r) => {
         projectLangs = new Set(r.languages || []);
+        filterCheckbox.disabled = false;
         renderList();
       },
       (err) => toast(err.message, "error"),
     );
 
-    card
-      .querySelector("#co-analyze-supported")
-      .addEventListener("change", (e) => {
-        onlySupported = e.target.checked;
-        renderList();
-      });
+    filterCheckbox.addEventListener("change", (e) => {
+      onlySupported = e.target.checked;
+      renderList();
+    });
 
     const applyBtn = card.querySelector(".co-analyze-apply");
     applyBtn.addEventListener("click", async () => {
