@@ -2,6 +2,7 @@
 import { writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import {
+  emitFound,
   isInvokedAsScript,
   readSourceOrNull,
   repoRootOf,
@@ -114,12 +115,14 @@ export async function main(argv) {
 
   const baseline = await loadBaseline(repoRoot);
   if (!baseline) {
+    emitFound(0);
     process.stdout.write(
       `lint-coverage: no ${BASELINE_FILE}; run with --update to establish one.\n`,
     );
     return;
   }
   const regressions = findRegressions(baseline, await readSummary(repoRoot));
+  emitFound(regressions.length);
   if (regressions.length === 0) {
     process.stdout.write("lint-coverage: no coverage regressions.\n");
     return;
