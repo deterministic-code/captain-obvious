@@ -6,7 +6,7 @@
  * event to decide whether to prompt the user to analyze before configuring rules.
  */
 import { readdir } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { detect } from "../../lib/languages.mjs";
 import { latestEvent, logEvent } from "../db/audit.js";
 import { HIDDEN_DIRS } from "./run.js";
@@ -15,6 +15,8 @@ interface LanguageTally {
   slug: string;
   name: string;
   files: number;
+  /** Matched files, relative to `root`, sorted. */
+  paths: string[];
 }
 
 export interface AnalyzeResult {
@@ -67,13 +69,16 @@ export async function analyzeProject(rawPath?: string): Promise<AnalyzeResult> {
       slug: lang.slug,
       name: lang.name,
       files: 0,
+      paths: [],
     };
     entry.files++;
+    entry.paths.push(relative(root, filePath));
     tally.set(lang.slug, entry);
   });
   const languages = [...tally.values()].sort(
     (a, b) => b.files - a.files || a.slug.localeCompare(b.slug),
   );
+  for (const entry of languages) entry.paths.sort((a, b) => a.localeCompare(b));
   const result: AnalyzeResult = { root, totalFiles, otherFiles, languages };
   logEvent("project.analyzed", summarize(result));
   return result;

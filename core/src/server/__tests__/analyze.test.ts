@@ -45,11 +45,12 @@ describe("analyzeProject", () => {
     expect(result.totalFiles).toBe(6);
     expect(result.otherFiles).toBe(2);
     // typescript leads on count; the ties (1 each) fall back to slug order.
+    // Each language carries its matched files, relative to root and sorted.
     expect(result.languages).toEqual([
-      { slug: "typescript", name: "TypeScript", files: 3 },
-      { slug: "go", name: "Go", files: 1 },
-      { slug: "javascript", name: "JavaScript", files: 1 },
-      { slug: "python", name: "Python", files: 1 },
+      { slug: "typescript", name: "TypeScript", files: 3, paths: ["a.ts", "b.ts", "src/f.ts"] },
+      { slug: "go", name: "Go", files: 1, paths: ["e.go"] },
+      { slug: "javascript", name: "JavaScript", files: 1, paths: ["c.js"] },
+      { slug: "python", name: "Python", files: 1, paths: ["d.py"] },
     ]);
   });
 

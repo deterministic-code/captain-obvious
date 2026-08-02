@@ -326,7 +326,14 @@ beforeEach(() => {
         root: "/proj",
         totalFiles: 3,
         otherFiles: 1,
-        languages: [{ slug: "typescript", name: "TypeScript", files: 3 }],
+        languages: [
+          {
+            slug: "typescript",
+            name: "TypeScript",
+            files: 3,
+            paths: ["a.ts", "b.ts", "c.ts"],
+          },
+        ],
       });
     }
     if (typeof url === "string" && url.startsWith("/api/run/file")) {
@@ -1224,19 +1231,24 @@ describe("panelExt injected script", () => {
     expect(document.getElementById("co-analyze")).toBeNull();
   });
 
-  it("Analyze posts the scan and shows the detected languages, then Dismiss clears it", async () => {
+  it("Analyze posts the scan, opens the results modal with files, and Close clears it", async () => {
     analyzeStatusResult = { analyzed: false, lastAnalyzed: null };
     await runInjected();
     (document.querySelector(".co-analyze-run") as HTMLElement).click();
     for (let i = 0; i < 3; i++) await flush();
 
     expect(analyzeCalls).toHaveLength(1);
-    const banner = document.getElementById("co-analyze")!;
-    expect(banner.classList.contains("co-analyze-done")).toBe(true);
-    expect(banner.textContent).toContain("TypeScript (3)");
+    expect(document.getElementById("co-analyze")).toBeNull(); // banner gone
+    const modal = document.getElementById("co-analyze-modal")!;
+    expect(modal).not.toBeNull();
+    expect(modal.textContent).toContain("TypeScript (3)");
+    const files = [...modal.querySelectorAll(".co-analyze-file")].map(
+      (el) => el.textContent,
+    );
+    expect(files).toEqual(["a.ts", "b.ts", "c.ts"]);
 
-    (banner.querySelector(".co-analyze-ignore") as HTMLElement).click();
-    expect(document.getElementById("co-analyze")).toBeNull();
+    (modal.querySelector(".co-analyze-close") as HTMLElement).click();
+    expect(document.getElementById("co-analyze-modal")).toBeNull();
   });
 
   it("shows the error and re-enables the button when analyze fails", async () => {
