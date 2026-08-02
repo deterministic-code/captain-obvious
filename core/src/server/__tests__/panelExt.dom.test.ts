@@ -1242,6 +1242,10 @@ describe("panelExt injected script", () => {
     const modal = document.getElementById("co-analyze-modal")!;
     expect(modal).not.toBeNull();
     expect(modal.textContent).toContain("TypeScript (3)");
+    // Each language is a collapsed <details>, expandable to reveal its files.
+    const lang = modal.querySelector("details.co-analyze-lang")!;
+    expect(lang).not.toBeNull();
+    expect(lang.hasAttribute("open")).toBe(false);
     const files = [...modal.querySelectorAll(".co-analyze-file")].map(
       (el) => el.textContent,
     );
