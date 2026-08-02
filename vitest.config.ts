@@ -34,6 +34,7 @@ export default defineConfig({
         "core/hooks/git/dispatch.mjs", // git-hook entry shim: imports compiled dist and calls runDispatch (tested in core/src/rules/dispatch.ts)
         "rules/_kit/protected-globs.mjs", // bridge to core runtime (readProtectedGlobs/matchProtected, tested in core/src/rules/protectedPaths.ts)
         "core/hooks/claude/protected-paths-guard.mjs", // PreToolUse I/O shim: stdin+git+db, decision tested in core/src/rules/claudeGuard.ts
+        "core/hooks/claude/tool-fix.mjs", // PostToolUse I/O shim: stdin+db+fixRule, decision tested in core/src/rules/toolFix.ts
         "rules/_kit/config-bridge.mjs", // bridge to core runtime (ruleConfigFromDb, tested in core/src/rules/config.ts)
         "core/src/rules/depProbe.ts", // platform shim (require.resolve + PATH lookup); verifyDependencies tested in deps.ts
       ],

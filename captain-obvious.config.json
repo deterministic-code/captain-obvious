@@ -85,6 +85,12 @@
       "timeout": 5
     },
     {
+      "event": "PostToolUse",
+      "matcher": "Edit|Write|NotebookEdit",
+      "hook": "tool-fix",
+      "timeout": 20
+    },
+    {
       "event": "Stop",
       "hook": "stop-unmerged-guard",
       "timeout": 15

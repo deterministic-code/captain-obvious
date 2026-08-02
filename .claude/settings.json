@@ -35,6 +35,19 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "_captainObvious": true,
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PROJECT_DIR}/core/hooks/claude/tool-fix.sh",
+            "timeout": 20
+          }
+        ]
+      }
     ]
   }
 }
