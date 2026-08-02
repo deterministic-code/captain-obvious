@@ -1,0 +1,1 @@
+a stray non-directory entry in a rules root; the scan ignores it

@@ -3,7 +3,7 @@ export default {
     name: "No slug",
     category: "governance",
     description:
-      "descriptor missing meta.slug — exercises the config slug fallback",
+      "descriptor missing meta.slug — the folder scan rejects the slug mismatch",
     languages: [],
     config: null,
     ratchetable: false,

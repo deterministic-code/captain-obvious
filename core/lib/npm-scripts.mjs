@@ -23,31 +23,26 @@ function panelKey(npmScripts) {
 }
 
 /**
- * Derive the managed `lint:*` alias set from the git-hook config. Each lint hook gets
- * `lint:<name>` (--staged) and `lint:<name>:all`; hooks that run with --push also get
- * `lint:<name>:push`. `extraScripts` (key → bin args) overrides or adds the odd ones
- * (e.g. dead-code is --all-only, frozen-interfaces has --add/--update).
+ * Derive the managed `lint:*` alias set from the discovered rule set — the registry's
+ * source of truth, not a config list. Each `lint-*` rule that runs `pre-commit` gets
+ * `lint:<name>` (--staged) and `lint:<name>:all`; each that runs `pre-push` gets
+ * `lint:<name>:push`. Non-`lint-` rules (governance) and policy-only rules (no check
+ * runner) get no alias — they aren't invocable through `captain-obvious-lint`.
+ * `extraScripts` (key → bin args) overrides or adds the odd ones (e.g. dead-code is
+ * --all-only, frozen-interfaces has --add/--update).
  */
-function deriveScripts(gitHooks, extraScripts) {
-  const entries = [...(gitHooks.preCommit ?? []), ...(gitHooks.prePush ?? [])];
-  const stems = new Set();
-  const hasPush = new Set();
-  for (const entry of entries) {
-    const [stem, ...flags] = entry.trim().split(/\s+/);
-    if (stem === "run:") {
+function deriveScripts(rules, extraScripts) {
+  const scripts = {};
+  for (const { slug, stages, hasCheck } of rules) {
+    if (!hasCheck || !slug.startsWith("lint-")) {
       continue;
     }
-    stems.add(stem);
-    if (flags.includes("--push")) {
-      hasPush.add(stem);
+    const short = shortName(slug);
+    if (stages.includes("pre-commit")) {
+      scripts[`lint:${short}`] = `captain-obvious-lint ${short} --staged`;
+      scripts[`lint:${short}:all`] = `captain-obvious-lint ${short} --all`;
     }
-  }
-  const scripts = {};
-  for (const stem of stems) {
-    const short = shortName(stem);
-    scripts[`lint:${short}`] = `captain-obvious-lint ${short} --staged`;
-    scripts[`lint:${short}:all`] = `captain-obvious-lint ${short} --all`;
-    if (hasPush.has(stem)) {
+    if (stages.includes("pre-push")) {
       scripts[`lint:${short}:push`] = `captain-obvious-lint ${short} --push`;
     }
   }
@@ -63,7 +58,7 @@ function deriveScripts(gitHooks, extraScripts) {
  * `captainObvious.managedScripts` to stay idempotent and to prune hooks that go away.
  * Returns the path written (or [] when disabled).
  */
-export async function installNpmScripts({ target, gitHooks, npmScripts }) {
+export async function installNpmScripts({ target, rules, npmScripts }) {
   if (npmScripts?.enabled === false) {
     return [];
   }
@@ -74,10 +69,7 @@ export async function installNpmScripts({ target, gitHooks, npmScripts }) {
   for (const key of pkg.captainObvious.managedScripts ?? []) {
     delete pkg.scripts[key];
   }
-  const generated = deriveScripts(
-    gitHooks ?? {},
-    npmScripts?.extraScripts ?? {},
-  );
+  const generated = deriveScripts(rules ?? [], npmScripts?.extraScripts ?? {});
   const key = panelKey(npmScripts);
   if (key) {
     generated[key] = PANEL_COMMAND;

@@ -1,11 +1,11 @@
 import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { readJson, writeJson } from "../json-file.mjs";
 import { installClaudeHooks } from "../claude-settings.mjs";
 
-const SCRATCH =
-  "/private/tmp/claude-501/-Users-ryan-Projects-captain-obvious/21d816db-ca11-437f-a0f2-ca45be7dd636/scratchpad";
+const SCRATCH = tmpdir();
 
 describe("claude-settings / installClaudeHooks", () => {
   let dir;
