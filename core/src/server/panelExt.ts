@@ -2798,7 +2798,7 @@ export const PANEL_EXT = `(() => {
       '<div class="co-analyze-summary">' +
       esc(analyzeSummary(data)) +
       "</div>" +
-      '<label class="co-fix-toggle"><input type="checkbox" id="co-analyze-supported" disabled> only show project supported languages</label>' +
+      '<label class="co-fix-toggle"><input type="checkbox" id="co-analyze-supported"> only show project supported languages</label>' +
       '<div class="co-analyze-body"></div>' +
       '<div class="co-modal-actions">' +
       '<button type="button" class="co-modal-btn co-analyze-apply">Apply to project</button>' +
@@ -2808,7 +2808,6 @@ export const PANEL_EXT = `(() => {
     document.body.appendChild(overlay);
 
     const listEl = card.querySelector(".co-analyze-body");
-    const filterCheckbox = card.querySelector("#co-analyze-supported");
     function renderList() {
       const langs = onlySupported
         ? allLangs.filter((l) => projectLangs.has(l.slug))
@@ -2828,19 +2827,20 @@ export const PANEL_EXT = `(() => {
       else selected.delete(slug);
     });
 
+    card
+      .querySelector("#co-analyze-supported")
+      .addEventListener("change", (e) => {
+        onlySupported = e.target.checked;
+        renderList();
+      });
+
     fetchProjectLanguages(currentProjectId).then(
       (r) => {
         projectLangs = new Set(r.languages || []);
-        filterCheckbox.disabled = false;
         renderList();
       },
       (err) => toast(err.message, "error"),
     );
-
-    filterCheckbox.addEventListener("change", (e) => {
-      onlySupported = e.target.checked;
-      renderList();
-    });
 
     const applyBtn = card.querySelector(".co-analyze-apply");
     applyBtn.addEventListener("click", async () => {
