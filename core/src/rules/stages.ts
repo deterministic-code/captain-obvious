@@ -1,7 +1,8 @@
 /**
  * The canonical stage list — the single source of truth for the stage taxonomy.
- * The git stages fire locally (pre-commit / pre-push); `tool` fires from
- * the Claude Code PreToolUse guard, not from git; `server` marks a governance
+ * The git stages fire locally (pre-commit / pre-push); `tool` fires from the
+ * Claude Code tool hooks, not from git — guard rules on PreToolUse (claudeGuard)
+ * and fix rules on PostToolUse (toolFix); `server` marks a governance
  * policy only GitHub can enforce. A stage's `gitFlag` is the lint-mode flag its
  * rules receive when the git hook dispatches it — stages with no local git
  * runner carry null. Ordered earliest-first so a rule's `stages[0]` (the scalar
