@@ -73,6 +73,8 @@ export const PANEL_EXT = `(() => {
   // the header selector switches which project the rules table reflects/edits.
   let projects = [];
   let currentProjectId = null;
+  // Languages applied to the current project (from /api/projects/:id/languages).
+  let projectLanguages = new Set();
   // GET /api/mode: which DB set the server opened (local vs global) + its paths.
   let modeInfo = null;
   let enabledBySlug = {};
@@ -388,8 +390,11 @@ export const PANEL_EXT = `(() => {
       cell.setAttribute("data-langs", current.slice().sort().join(","));
       return;
     }
+    const filteredLangs = projectLanguages.size > 0
+      ? supportedLangs.filter((l) => projectLanguages.has(l.slug))
+      : supportedLangs;
     const dd = checkboxDropdown({
-      items: supportedLangs.map((l) => ({ value: l.slug, label: l.name })),
+      items: filteredLangs.map((l) => ({ value: l.slug, label: l.name })),
       selected: current,
       summaryFn: (vals) => langLabel(vals),
       onChange: async (vals) => {
@@ -635,9 +640,12 @@ export const PANEL_EXT = `(() => {
       selectedStages,
     );
     stageDd.details.classList.add("co-filter-stages");
+    const filteredLangs = projectLanguages.size > 0
+      ? supportedLangs.filter((l) => projectLanguages.has(l.slug))
+      : supportedLangs;
     const langDd = buildFilterDropdown(
       "Languages",
-      supportedLangs.map((l) => ({ value: l.slug, label: l.name })),
+      filteredLangs.map((l) => ({ value: l.slug, label: l.name })),
       selectedLangs,
     );
     langDd.details.classList.add("co-filter-langs");
@@ -2792,13 +2800,14 @@ export const PANEL_EXT = `(() => {
     // Languages already applied to the project; drives the "supported" filter.
     // Populated after the async fetch below, so the toggle can narrow the list.
     let projectLangs = new Set();
-    let onlySupported = false;
+    const analyzeShowKey = "co-analyze-show-only-" + currentProjectId;
+    let onlySupported = localStorage.getItem(analyzeShowKey) === "true";
     card.innerHTML =
       '<div class="co-modal-title">Analyze results</div>' +
       '<div class="co-analyze-summary">' +
       esc(analyzeSummary(data)) +
       "</div>" +
-      '<label class="co-fix-toggle"><input type="checkbox" id="co-analyze-supported"> only show project supported languages</label>' +
+      '<label class="co-fix-toggle"><input type="checkbox" id="co-analyze-supported"' + (onlySupported ? ' checked' : '') + '> only show project supported languages</label>' +
       '<div class="co-analyze-body"></div>' +
       '<div class="co-modal-actions">' +
       '<button type="button" class="co-modal-btn co-analyze-apply">Apply to project</button>' +
@@ -2831,6 +2840,7 @@ export const PANEL_EXT = `(() => {
       .querySelector("#co-analyze-supported")
       .addEventListener("change", (e) => {
         onlySupported = e.target.checked;
+        localStorage.setItem(analyzeShowKey, onlySupported ? "true" : "false");
         renderList();
       });
 
@@ -3848,6 +3858,16 @@ export const PANEL_EXT = `(() => {
     if (!metaRes.ok) throw new Error("GET /api/meta -> " + metaRes.status);
     const rules = await rulesRes.json();
     const meta = await metaRes.json();
+    projectLanguages.clear();
+    if (currentProjectId !== null) {
+      try {
+        const langRes = await fetchProjectLanguages(currentProjectId);
+        for (const lang of langRes.languages || []) {
+          projectLanguages.add(lang);
+        }
+      } catch {
+      }
+    }
     fixesBySlug = {};
     langsBySlug = {};
     langFixedBySlug = {};
