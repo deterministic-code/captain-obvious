@@ -1270,6 +1270,36 @@ describe("panelExt injected script", () => {
     expect(runBtn.disabled).toBe(false);
   });
 
+  it("header Analyze button opens the results modal even with no banner", async () => {
+    await runInjected(); // analyzed:true default -> no first-run banner
+    expect(document.getElementById("co-analyze")).toBeNull();
+    const btn = document.querySelector(".co-analyze-launch") as HTMLButtonElement;
+    expect(btn).not.toBeNull();
+
+    btn.click();
+    for (let i = 0; i < 3; i++) await flush();
+
+    expect(analyzeCalls).toHaveLength(1);
+    const modal = document.getElementById("co-analyze-modal")!;
+    expect(modal).not.toBeNull();
+    expect(modal.textContent).toContain("TypeScript (3)");
+  });
+
+  it("header Analyze button toasts and re-enables on failure", async () => {
+    analyzeFails = true;
+    await runInjected();
+    const btn = document.querySelector(".co-analyze-launch") as HTMLButtonElement;
+    btn.click();
+    for (let i = 0; i < 3; i++) await flush();
+
+    expect(document.getElementById("co-analyze-modal")).toBeNull();
+    expect(btn.disabled).toBe(false);
+    expect(btn.textContent).toBe("Analyze");
+    expect(document.querySelector(".co-toast")?.textContent).toContain(
+      "scan failed",
+    );
+  });
+
   const enabledBox = (slug: string) => {
     const tr = [...document.querySelectorAll("tbody tr")].find(
       (r) => r.querySelector(".font-mono")?.textContent === slug,
