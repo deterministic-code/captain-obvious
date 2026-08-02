@@ -1299,7 +1299,6 @@ export const PANEL_EXT = `(() => {
       ".co-run-detail{color:#334155}" +
       ".co-run-empty,.co-run-error{font-size:13px;color:#64748b;padding:8px}.co-run-error{color:#991b1b}" +
       ".co-analyze{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 16px;background:#fef3c7;border-bottom:1px solid #fde68a;font-size:13px;color:#92400e}" +
-      ".co-analyze-done{background:#dcfce7;border-bottom-color:#bbf7d0;color:#166534}" +
       ".co-analyze-msg{flex:1}" +
       ".co-analyze-actions{display:flex;gap:8px;flex-shrink:0}" +
       ".co-analyze-run{cursor:pointer;font-size:13px;font-weight:600;padding:5px 12px;border-radius:6px;border:1px solid #0f172a;background:#0f172a;color:#fff}" +
@@ -1350,6 +1349,12 @@ export const PANEL_EXT = `(() => {
       ".co-modal-btn:hover{background:#f8fafc}" +
       ".co-modal-btn-primary{background:#0f172a;color:#fff;border-color:#0f172a}" +
       ".co-modal-btn-primary:hover{background:#1e293b}" +
+      // Analyze results modal (summary line + per-language file lists).
+      ".co-analyze-summary{font-size:13px;color:#334155}" +
+      ".co-analyze-body{max-height:52vh;overflow:auto;display:flex;flex-direction:column;gap:14px}" +
+      ".co-analyze-lang-name{font-size:13px;font-weight:700;color:#0f172a;margin-bottom:4px}" +
+      ".co-analyze-files{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:2px}" +
+      ".co-analyze-file{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#475569;word-break:break-all}" +
       // Rules table actions column (Run / Report / Settings icons).
       ".co-act-td{white-space:nowrap;text-align:right}" +
       ".co-act-btn{cursor:pointer;border:0;background:none;border-radius:6px;padding:5px;margin-left:2px;color:#64748b;display:inline-flex;align-items:center;vertical-align:middle}" +
@@ -1538,9 +1543,11 @@ export const PANEL_EXT = `(() => {
       D + ".co-ln-active .co-line{background:#7f1d1d}" +
       D + ".co-caret .co-line{background:#450a0a}" +
       D + ".co-caret-msg{color:#fca5a5}" +
-      // Analyze banners.
+      // Analyze banner + results modal.
       D + ".co-analyze{background:#78350f;border-bottom-color:#92400e;color:#fde68a}" +
-      D + ".co-analyze-done{background:#064e3b;border-bottom-color:#166534;color:#6ee7b7}" +
+      D + ".co-analyze-summary{color:#cbd5e1}" +
+      D + ".co-analyze-lang-name{color:#f1f5f9}" +
+      D + ".co-analyze-file{color:#94a3b8}" +
       // Checkbox accents.
       D + ":is(.co-enabled-box,.co-set-check){accent-color:#818cf8}" +
       // Activity overlay.
@@ -2720,21 +2727,53 @@ export const PANEL_EXT = `(() => {
     return "Detected " + langs.map((l) => l.name + " (" + l.files + ")").join(", ") + ".";
   }
 
-  function showAnalyzeResult(data) {
-    const banner = document.getElementById("co-analyze");
-    if (!banner) return;
-    banner.className = "co-analyze co-analyze-done";
-    banner.innerHTML = "";
-    const msg = document.createElement("span");
-    msg.className = "co-analyze-msg";
-    msg.textContent = analyzeSummary(data);
-    const dismiss = document.createElement("button");
-    dismiss.type = "button";
-    dismiss.className = "co-analyze-ignore";
-    dismiss.textContent = "Dismiss";
-    dismiss.addEventListener("click", removeAnalyzeBanner);
-    banner.appendChild(msg);
-    banner.appendChild(dismiss);
+  function openAnalyzeModal(data) {
+    if (document.getElementById("co-analyze-modal")) return;
+    const overlay = document.createElement("div");
+    overlay.id = "co-analyze-modal";
+    overlay.className = "co-modal";
+    const card = document.createElement("div");
+    card.className = "co-modal-card";
+    const langs = data.languages || [];
+    const body = langs.length
+      ? '<div class="co-analyze-body">' +
+        langs
+          .map(
+            (l) =>
+              '<div class="co-analyze-lang">' +
+              '<div class="co-analyze-lang-name">' +
+              esc(l.name) +
+              " (" +
+              l.files +
+              ")</div>" +
+              '<ul class="co-analyze-files">' +
+              (l.paths || [])
+                .map((p) => '<li class="co-analyze-file">' + esc(p) + "</li>")
+                .join("") +
+              "</ul></div>",
+          )
+          .join("") +
+        "</div>"
+      : "";
+    card.innerHTML =
+      '<div class="co-modal-title">Analyze results</div>' +
+      '<div class="co-analyze-summary">' +
+      esc(analyzeSummary(data)) +
+      "</div>" +
+      body +
+      '<div class="co-modal-actions">' +
+      '<button type="button" class="co-modal-btn co-modal-btn-primary co-analyze-close">Close</button>' +
+      "</div>";
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+
+    function close() {
+      overlay.remove();
+    }
+    card.querySelector(".co-analyze-close").addEventListener("click", close);
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close();
+    });
   }
 
   async function doAnalyze() {
@@ -2761,7 +2800,8 @@ export const PANEL_EXT = `(() => {
       if (runBtn) runBtn.disabled = false;
       return;
     }
-    showAnalyzeResult(data);
+    removeAnalyzeBanner();
+    openAnalyzeModal(data);
   }
 
   function buildAnalyzeBanner() {
