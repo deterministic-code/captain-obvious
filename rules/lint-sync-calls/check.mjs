@@ -2,6 +2,7 @@
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import {
+  emitFound,
   emitJson,
   formatViolation,
   isExcluded,
@@ -148,6 +149,7 @@ export async function main(argv) {
   const targets = files.filter(isLintable);
   const violations = (await Promise.all(targets.map(lintFile))).flat();
   if (jsonMode()) return emitJson(violations);
+  emitFound(violations.length);
   if (violations.length === 0) {
     if (mode === "--staged")
       process.stdout.write("lint-sync-calls: no sync calls in staged diff.\n");

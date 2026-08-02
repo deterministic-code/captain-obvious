@@ -2,6 +2,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import {
+  emitFound,
   isInvokedAsScript,
   isLintable,
   sanitizedGitEnv,
@@ -86,6 +87,7 @@ export async function main(argv, opts = {}) {
     process.exit(2);
   }
   const untested = findUntested(await listStagedChanges(opts.cwd));
+  emitFound(untested.length);
   if (untested.length === 0) {
     process.stdout.write(
       "lint-tests-with-code: every changed source file moves with a test.\n",

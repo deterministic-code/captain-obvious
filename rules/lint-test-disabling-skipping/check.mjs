@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import {
+  emitFound,
   emitJson,
   formatViolation,
   isInvokedAsScript,
@@ -436,6 +437,7 @@ export async function main(argv, opts = {}) {
   if (jsonMode()) return emitJson(violations);
   const ratchetReports =
     mode === "--staged" ? await collectRatchetReports(cwd) : [];
+  emitFound(violations.length + ratchetReports.length);
   if (violations.length === 0 && ratchetReports.length === 0) {
     reportClean(mode);
     return;
