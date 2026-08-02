@@ -29,12 +29,14 @@ import {
   getMeta,
   getMode,
   getStats,
+  listProjectLanguages,
   listProjectRules,
   listProjects,
   listRules,
   patchProjectRule,
   patchRule,
   seed,
+  setProjectLanguages,
   updateProject,
 } from "./registry.js";
 import { profilingMeta, profilingReport } from "./profiling.js";
@@ -272,6 +274,20 @@ async function handle(
     if (rest.endsWith("/rules") && method === "GET") {
       const id = Number(decodeURIComponent(rest.slice(0, -"/rules".length)));
       return sendJson(res, 200, listProjectRules(db, id));
+    }
+    if (rest.endsWith("/languages")) {
+      const id = Number(
+        decodeURIComponent(rest.slice(0, -"/languages".length)),
+      );
+      if (method === "GET") {
+        return sendJson(res, 200, listProjectLanguages(db, id));
+      }
+      if (method === "PATCH") {
+        const body = (await readBody(req)) as Parameters<
+          typeof setProjectLanguages
+        >[2];
+        return sendJson(res, 200, setProjectLanguages(db, id, body));
+      }
     }
     if (!rest.includes("/") && method === "PATCH") {
       const id = Number(decodeURIComponent(rest));

@@ -10,7 +10,9 @@ import {
   addProject,
   configureProject,
   getProject,
+  getProjectLanguages,
   listProjects as listProjectRows,
+  setProjectLanguages as setProjectLanguagesDb,
   setProjectRule,
   syncProjectRules,
 } from "../db/projects.js";
@@ -544,6 +546,24 @@ export function updateProject(
   body: ProjectPatch,
 ): ProjectView {
   return toProjectView(configureProject(db, id, body));
+}
+
+/** GET /api/projects/:id/languages — the languages applied to this project. */
+export function listProjectLanguages(
+  db: Db,
+  id: number,
+): { languages: string[] } {
+  return { languages: getProjectLanguages(db, id) };
+}
+
+/** PATCH /api/projects/:id/languages — replace the project's applied-language set. */
+export function setProjectLanguages(
+  db: Db,
+  id: number,
+  body: { languages?: string[] },
+): { languages: string[] } {
+  if (!Array.isArray(body.languages)) throw new Error("languages must be an array");
+  return { languages: setProjectLanguagesDb(db, id, body.languages) };
 }
 
 /** GET /api/projects/:id/rules — every rule with this project's enabled + languages. */

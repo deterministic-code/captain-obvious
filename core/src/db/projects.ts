@@ -315,6 +315,50 @@ export function setProjectRule(
   }
 }
 
+/** The languages the user has applied to this project (slugs, name-ordered). */
+export function getProjectLanguages(db: Db, projectId: number): string[] {
+  getProject(db, projectId);
+  return db
+    .prepare(
+      `SELECT l.slug AS slug
+         FROM project_languages pl
+         JOIN languages l ON l.id = pl.language_id
+        WHERE pl.project_id = ?
+        ORDER BY l.name`,
+    )
+    .all(projectId)
+    .map((row) => (row as { slug: string }).slug);
+}
+
+/**
+ * Replace this project's applied-language set with `slugs` (from an Analyze
+ * scan). Delete-then-insert, mirroring setProjectRule's language handling.
+ * Returns the resulting slugs.
+ */
+export function setProjectLanguages(
+  db: Db,
+  projectId: number,
+  slugs: string[],
+): string[] {
+  getProject(db, projectId);
+  const languageIds = slugs.map((s) => requireLanguageId(db, s));
+  const apply = db.transaction(() => {
+    db.prepare("DELETE FROM project_languages WHERE project_id = ?").run(
+      projectId,
+    );
+    const link = db.prepare(
+      "INSERT INTO project_languages (project_id, language_id) VALUES (?, ?)",
+    );
+    for (const id of languageIds) link.run(projectId, id);
+  });
+  apply();
+  logEvent(
+    "project.languages.set",
+    `set ${languageIds.length} languages in project ${projectId}`,
+  );
+  return getProjectLanguages(db, projectId);
+}
+
 /**
  * Ensure the default project (is_default = 1) exists — the repo the hook is
  * installed in. `name` is resolved by the caller (server layer) so this stays

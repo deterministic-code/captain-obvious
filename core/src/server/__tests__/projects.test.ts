@@ -3,10 +3,12 @@ import { openDb, type Db } from "../../db/open.js";
 import { addRule } from "../../db/rules.js";
 import {
   createProject,
+  listProjectLanguages,
   listProjectRules,
   listProjects,
   listRules,
   patchProjectRule,
+  setProjectLanguages,
   updateProject,
 } from "../registry.js";
 
@@ -114,5 +116,45 @@ describe("patchProjectRule", () => {
     expect(ruleView(listRules(db), "lint-ts").languages).toEqual([
       "typescript",
     ]);
+  });
+});
+
+describe("project languages", () => {
+  it("starts empty, then stores and reads back the applied set", () => {
+    const p = createProject(db, { name: "Delta" });
+    expect(listProjectLanguages(db, p.id)).toEqual({ languages: [] });
+    const set = setProjectLanguages(db, p.id, {
+      languages: ["typescript", "go"],
+    });
+    expect(set).toEqual({ languages: ["go", "typescript"] });
+    expect(listProjectLanguages(db, p.id)).toEqual({
+      languages: ["go", "typescript"],
+    });
+  });
+
+  it("replaces the previous set wholesale", () => {
+    const p = createProject(db, { name: "Epsilon" });
+    setProjectLanguages(db, p.id, { languages: ["typescript", "go"] });
+    expect(
+      setProjectLanguages(db, p.id, { languages: ["python"] }),
+    ).toEqual({ languages: ["python"] });
+  });
+
+  it("throws on a non-array body", () => {
+    const p = createProject(db, { name: "Zeta" });
+    expect(() =>
+      setProjectLanguages(db, p.id, {} as { languages?: string[] }),
+    ).toThrow(/languages must be an array/);
+  });
+
+  it("throws on an unknown language slug", () => {
+    const p = createProject(db, { name: "Eta" });
+    expect(() =>
+      setProjectLanguages(db, p.id, { languages: ["klingon"] }),
+    ).toThrow(/unknown language: klingon/);
+  });
+
+  it("throws on an unknown project", () => {
+    expect(() => listProjectLanguages(db, 9999)).toThrow(/unknown project/);
   });
 });

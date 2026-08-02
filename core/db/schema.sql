@@ -142,6 +142,15 @@ CREATE TABLE IF NOT EXISTS project_rule_languages (
   PRIMARY KEY (project_id, rule_id, language_id)
 ) STRICT;
 
+-- Per-project language set independent of any rule: the languages the user
+-- applied to the project from an Analyze scan. Distinct from
+-- project_rule_languages (which scopes a language set to a rule).
+CREATE TABLE IF NOT EXISTS project_languages (
+  project_id  INTEGER NOT NULL REFERENCES projects(id)  ON DELETE CASCADE,
+  language_id INTEGER NOT NULL REFERENCES languages(id) ON DELETE CASCADE,
+  PRIMARY KEY (project_id, language_id)
+) STRICT;
+
 -- Per-project action bindings for a rule (mirrors rule_actions, scoped to a
 -- project). A rule with zero rows here inherits the global bindings; any row
 -- means the project's bindings fully replace the global set for that rule.
@@ -162,4 +171,5 @@ CREATE INDEX IF NOT EXISTS idx_rule_actions    ON rule_actions(rule_id);
 CREATE INDEX IF NOT EXISTS idx_fixes_rule      ON fixes(rule_id);
 CREATE INDEX IF NOT EXISTS idx_project_rules_project ON project_rules(project_id);
 CREATE INDEX IF NOT EXISTS idx_prl_project           ON project_rule_languages(project_id);
+CREATE INDEX IF NOT EXISTS idx_pl_project            ON project_languages(project_id);
 CREATE INDEX IF NOT EXISTS idx_pra_project_rule      ON project_rule_actions(project_id, rule_id);

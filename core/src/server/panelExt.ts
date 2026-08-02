@@ -330,6 +330,24 @@ export const PANEL_EXT = `(() => {
     return res.json();
   }
 
+  async function fetchProjectLanguages(id) {
+    const url = "/api/projects/" + id + "/languages";
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("GET " + url + " -> " + res.status);
+    return res.json();
+  }
+
+  async function patchProjectLanguages(id, languages) {
+    const url = "/api/projects/" + id + "/languages";
+    const res = await fetch(url, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ languages }),
+    });
+    if (!res.ok) throw new Error("PATCH " + url + " -> " + res.status);
+    return res.json();
+  }
+
   // Categories and stages are global catalog metadata (no per-project overlay),
   // so their edits hit /api/rules/:slug, not the project-scoped route above.
   async function patchGlobalRule(slug, patch) {
@@ -2732,6 +2750,22 @@ export const PANEL_EXT = `(() => {
     return "Detected " + langs.map((l) => l.name + " (" + l.files + ")").join(", ") + ".";
   }
 
+  function analyzeLangHtml(l) {
+    return (
+      '<details class="co-analyze-lang">' +
+      '<summary class="co-analyze-lang-name">' +
+      esc(l.name) +
+      " (" +
+      l.files +
+      ")</summary>" +
+      '<ul class="co-analyze-files">' +
+      (l.paths || [])
+        .map((p) => '<li class="co-analyze-file">' + esc(p) + "</li>")
+        .join("") +
+      "</ul></details>"
+    );
+  }
+
   function openAnalyzeModal(data) {
     if (document.getElementById("co-analyze-modal")) return;
     const overlay = document.createElement("div");
@@ -2739,38 +2773,67 @@ export const PANEL_EXT = `(() => {
     overlay.className = "co-modal";
     const card = document.createElement("div");
     card.className = "co-modal-card";
-    const langs = data.languages || [];
-    const body = langs.length
-      ? '<div class="co-analyze-body">' +
-        langs
-          .map(
-            (l) =>
-              '<details class="co-analyze-lang">' +
-              '<summary class="co-analyze-lang-name">' +
-              esc(l.name) +
-              " (" +
-              l.files +
-              ")</summary>" +
-              '<ul class="co-analyze-files">' +
-              (l.paths || [])
-                .map((p) => '<li class="co-analyze-file">' + esc(p) + "</li>")
-                .join("") +
-              "</ul></details>",
-          )
-          .join("") +
-        "</div>"
-      : "";
+    const allLangs = data.languages || [];
+    // Languages already applied to the project; drives the "supported" filter.
+    // Populated after the async fetch below, so the toggle can narrow the list.
+    let projectLangs = new Set();
+    let onlySupported = false;
     card.innerHTML =
       '<div class="co-modal-title">Analyze results</div>' +
       '<div class="co-analyze-summary">' +
       esc(analyzeSummary(data)) +
       "</div>" +
-      body +
+      '<label class="co-fix-toggle"><input type="checkbox" id="co-analyze-supported"> only show project supported languages</label>' +
+      '<div class="co-analyze-body"></div>' +
       '<div class="co-modal-actions">' +
+      '<button type="button" class="co-modal-btn co-analyze-apply">Apply to project</button>' +
       '<button type="button" class="co-modal-btn co-modal-btn-primary co-analyze-close">Close</button>' +
       "</div>";
     overlay.appendChild(card);
     document.body.appendChild(overlay);
+
+    const listEl = card.querySelector(".co-analyze-body");
+    function renderList() {
+      const langs = onlySupported
+        ? allLangs.filter((l) => projectLangs.has(l.slug))
+        : allLangs;
+      listEl.innerHTML = langs.map(analyzeLangHtml).join("");
+    }
+    renderList();
+
+    fetchProjectLanguages(currentProjectId).then(
+      (r) => {
+        projectLangs = new Set(r.languages || []);
+        renderList();
+      },
+      (err) => toast(err.message, "error"),
+    );
+
+    card
+      .querySelector("#co-analyze-supported")
+      .addEventListener("change", (e) => {
+        onlySupported = e.target.checked;
+        renderList();
+      });
+
+    const applyBtn = card.querySelector(".co-analyze-apply");
+    applyBtn.addEventListener("click", async () => {
+      applyBtn.disabled = true;
+      applyBtn.textContent = "Applying…";
+      try {
+        const r = await patchProjectLanguages(
+          currentProjectId,
+          allLangs.map((l) => l.slug),
+        );
+        projectLangs = new Set(r.languages || []);
+        renderList();
+        toast("Applied " + projectLangs.size + " languages to project");
+      } catch (err) {
+        toast(err.message, "error");
+      }
+      applyBtn.disabled = false;
+      applyBtn.textContent = "Apply to project";
+    });
 
     function close() {
       overlay.remove();
