@@ -2979,13 +2979,6 @@ export const PANEL_EXT = `(() => {
     }
     const wrap = document.createElement("div");
     wrap.className = "co-project-wrap";
-    const analyzeBtn = document.createElement("button");
-    analyzeBtn.type = "button";
-    analyzeBtn.className = "co-analyze-launch";
-    analyzeBtn.textContent = "Analyze";
-    analyzeBtn.title = "Detect this project's languages";
-    analyzeBtn.addEventListener("click", () => { analyzeFromHeader(analyzeBtn); });
-    wrap.appendChild(analyzeBtn);
     const modeBadge = document.createElement("span");
     modeBadge.className = "co-mode-badge";
     wrap.appendChild(modeBadge);
@@ -3014,6 +3007,13 @@ export const PANEL_EXT = `(() => {
       if (currentProjectId !== null) openProjectSettingsModal(currentProjectId);
     });
     wrap.appendChild(gear);
+    const analyzeBtn = document.createElement("button");
+    analyzeBtn.type = "button";
+    analyzeBtn.className = "co-analyze-launch";
+    analyzeBtn.textContent = "Analyze";
+    analyzeBtn.title = "Detect this project's languages";
+    analyzeBtn.addEventListener("click", () => { analyzeFromHeader(analyzeBtn); });
+    wrap.appendChild(analyzeBtn);
     bar.appendChild(wrap);
     renderModeBadge();
     renderProjectOptions();
