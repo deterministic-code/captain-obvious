@@ -433,7 +433,8 @@ describe("runDispatch fix actions", () => {
     isolatePreCommit("lint-prettier");
     bindDefault("lint-prettier", "fix_and_warn");
     spawnMock.mockImplementation(((cmd: string, args: string[]) => {
-      if (cmd === "git" && args[0] === "diff") return childWithStdout("a.ts\n", 0);
+      if (cmd === "git" && args[0] === "diff")
+        return childWithStdout("a.ts\n", 0);
       if (args.includes("--fix"))
         return fakeChild((c) => c.emit("exit", null, null));
       return fakeChild((c) => c.emit("exit", 0, null));
@@ -447,7 +448,8 @@ describe("runDispatch fix actions", () => {
     isolatePreCommit("lint-prettier");
     bindDefault("lint-prettier", "fix_and_halt");
     spawnMock.mockImplementation(((cmd: string, args: string[]) => {
-      if (cmd === "git" && args[0] === "diff") return childWithStdout("a.ts\n", 0);
+      if (cmd === "git" && args[0] === "diff")
+        return childWithStdout("a.ts\n", 0);
       if (args.includes("--fix"))
         return fakeChild((c) => c.emit("exit", null, "SIGTERM"));
       return fakeChild((c) => c.emit("exit", 0, null));

@@ -364,7 +364,10 @@ beforeEach(() => {
       activityFeedCalls.push(url);
       return jsonRes(activityFeedResult);
     }
-    if (typeof url === "string" && /^\/api\/projects\/\d+\/languages$/.test(url)) {
+    if (
+      typeof url === "string" &&
+      /^\/api\/projects\/\d+\/languages$/.test(url)
+    ) {
       if (opts?.method === "PATCH") {
         if (projectLangsPatchFails) {
           return {
@@ -712,12 +715,7 @@ describe("panelExt injected script", () => {
     const opts = [...cell.querySelectorAll<HTMLInputElement>(".co-dd-opt")].map(
       (i) => i.value,
     );
-    expect(opts.sort()).toEqual([
-      "pre-commit",
-      "pre-push",
-      "server",
-      "tool",
-    ]);
+    expect(opts.sort()).toEqual(["pre-commit", "pre-push", "server", "tool"]);
   });
 
   it("narrows rows by the Stage filter", async () => {
@@ -1306,7 +1304,9 @@ describe("panelExt injected script", () => {
   it("header Analyze button opens the results modal even with no banner", async () => {
     await runInjected(); // analyzed:true default -> no first-run banner
     expect(document.getElementById("co-analyze")).toBeNull();
-    const btn = document.querySelector(".co-analyze-launch") as HTMLButtonElement;
+    const btn = document.querySelector(
+      ".co-analyze-launch",
+    ) as HTMLButtonElement;
     expect(btn).not.toBeNull();
 
     btn.click();
@@ -1321,7 +1321,9 @@ describe("panelExt injected script", () => {
   it("header Analyze button toasts and re-enables on failure", async () => {
     analyzeFails = true;
     await runInjected();
-    const btn = document.querySelector(".co-analyze-launch") as HTMLButtonElement;
+    const btn = document.querySelector(
+      ".co-analyze-launch",
+    ) as HTMLButtonElement;
     btn.click();
     for (let i = 0; i < 3; i++) await flush();
 

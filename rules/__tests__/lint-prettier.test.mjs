@@ -236,7 +236,9 @@ describe("lint-prettier / main (real prettier)", () => {
     await main(["node", "s.mjs", "--fix", "--files", p]);
     expect(exitSpy).not.toHaveBeenCalled();
     expect(await readFile(p, "utf8")).toBe(FORMATTED);
-    expect(stdoutText()).toMatch(/formatted 1 file\(s\)/);
+    const out = stdoutText();
+    expect(out).toMatch(/formatted and saved:/);
+    expect(out).toContain("fixme.ts");
   });
 
   test("--staged over a clean repo reports all files formatted", async () => {

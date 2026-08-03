@@ -399,14 +399,12 @@ describe("aiProposeFix — Tier B/C (server-side model)", () => {
 
   it("calls Anthropic by default and returns a proposal (not applied)", async () => {
     vi.stubEnv("CO_FIX_API_KEY", "sk-test");
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        fetchResponse({
-          ok: true,
-          json: { content: [{ type: "text", text: "const myVar = 1;\n" }] },
-        }),
-      );
+    const fetchMock = vi.fn().mockResolvedValue(
+      fetchResponse({
+        ok: true,
+        json: { content: [{ type: "text", text: "const myVar = 1;\n" }] },
+      }),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const proposal = await aiProposeFix(db, {
@@ -431,14 +429,12 @@ describe("aiProposeFix — Tier B/C (server-side model)", () => {
 
   it("proposes a fix for a rule with no inferred action, omitting the guidance line", async () => {
     vi.stubEnv("CO_FIX_API_KEY", "sk-test");
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        fetchResponse({
-          ok: true,
-          json: { content: [{ type: "text", text: "const myVar = 1;\n" }] },
-        }),
-      );
+    const fetchMock = vi.fn().mockResolvedValue(
+      fetchResponse({
+        ok: true,
+        json: { content: [{ type: "text", text: "const myVar = 1;\n" }] },
+      }),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const proposal = await aiProposeFix(db, {
@@ -456,14 +452,12 @@ describe("aiProposeFix — Tier B/C (server-side model)", () => {
   it("calls an OpenAI-compatible endpoint when configured", async () => {
     vi.stubEnv("CO_FIX_PROVIDER", "openai");
     vi.stubEnv("CO_FIX_API_KEY", "sk-oai");
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        fetchResponse({
-          ok: true,
-          json: { choices: [{ message: { content: "fixed" } }] },
-        }),
-      );
+    const fetchMock = vi.fn().mockResolvedValue(
+      fetchResponse({
+        ok: true,
+        json: { choices: [{ message: { content: "fixed" } }] },
+      }),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const proposal = await aiProposeFix(db, {
@@ -480,14 +474,12 @@ describe("aiProposeFix — Tier B/C (server-side model)", () => {
   it("omits the auth header for a keyless local endpoint", async () => {
     vi.stubEnv("CO_FIX_PROVIDER", "openai");
     vi.stubEnv("CO_FIX_BASE_URL", "http://localhost:11434/v1");
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        fetchResponse({
-          ok: true,
-          json: { choices: [{ message: { content: "local fix" } }] },
-        }),
-      );
+    const fetchMock = vi.fn().mockResolvedValue(
+      fetchResponse({
+        ok: true,
+        json: { choices: [{ message: { content: "local fix" } }] },
+      }),
+    );
     vi.stubGlobal("fetch", fetchMock);
     const proposal = await aiProposeFix(db, {
       slug: "lint-naming",
@@ -503,19 +495,17 @@ describe("aiProposeFix — Tier B/C (server-side model)", () => {
     vi.stubEnv("CO_FIX_API_KEY", "k");
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          fetchResponse({
-            ok: true,
-            json: {
-              content: [
-                { type: "thinking" },
-                { type: "text", text: "const myVar = 1;\n" },
-              ],
-            },
-          }),
-        ),
+      vi.fn().mockResolvedValue(
+        fetchResponse({
+          ok: true,
+          json: {
+            content: [
+              { type: "thinking" },
+              { type: "text", text: "const myVar = 1;\n" },
+            ],
+          },
+        }),
+      ),
     );
     const proposal = await aiProposeFix(db, {
       slug: "lint-naming",
@@ -528,16 +518,14 @@ describe("aiProposeFix — Tier B/C (server-side model)", () => {
     vi.stubEnv("CO_FIX_API_KEY", "k");
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          fetchResponse({
-            ok: true,
-            json: {
-              content: [{ type: "text", text: "```ts\nconst myVar = 1;\n```" }],
-            },
-          }),
-        ),
+      vi.fn().mockResolvedValue(
+        fetchResponse({
+          ok: true,
+          json: {
+            content: [{ type: "text", text: "```ts\nconst myVar = 1;\n```" }],
+          },
+        }),
+      ),
     );
     const proposal = await aiProposeFix(db, {
       slug: "lint-naming",
@@ -550,14 +538,12 @@ describe("aiProposeFix — Tier B/C (server-side model)", () => {
     vi.stubEnv("CO_FIX_API_KEY", "k");
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          fetchResponse({
-            ok: true,
-            json: { content: [{ type: "text", text: "   " }] },
-          }),
-        ),
+      vi.fn().mockResolvedValue(
+        fetchResponse({
+          ok: true,
+          json: { content: [{ type: "text", text: "   " }] },
+        }),
+      ),
     );
     await expect(
       aiProposeFix(db, { slug: "lint-naming", path: filePath }),
@@ -770,14 +756,12 @@ describe("aiProposeAllFixes — model proposals for the whole run", () => {
   });
 
   function stubModel(text: string) {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        fetchResponse({
-          ok: true,
-          json: { content: [{ type: "text", text }] },
-        }),
-      );
+    const fetchMock = vi.fn().mockResolvedValue(
+      fetchResponse({
+        ok: true,
+        json: { content: [{ type: "text", text }] },
+      }),
+    );
     vi.stubGlobal("fetch", fetchMock);
     return fetchMock;
   }

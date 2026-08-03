@@ -562,7 +562,8 @@ export function setProjectLanguages(
   id: number,
   body: { languages?: string[] },
 ): { languages: string[] } {
-  if (!Array.isArray(body.languages)) throw new Error("languages must be an array");
+  if (!Array.isArray(body.languages))
+    throw new Error("languages must be an array");
   return { languages: setProjectLanguagesDb(db, id, body.languages) };
 }
 
