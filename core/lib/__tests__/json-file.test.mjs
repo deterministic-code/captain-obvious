@@ -11,14 +11,11 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { readJson, writeJson } from "../json-file.mjs";
 
-const SCRATCH =
-  "/private/tmp/claude-501/-Users-ryan-Projects-captain-obvious/21d816db-ca11-437f-a0f2-ca45be7dd636/scratchpad";
-
 describe("json-file", () => {
   let dir;
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(SCRATCH, "json-file-"));
+    dir = await mkdtemp(join(tmpdir(), "json-file-"));
   });
 
   afterEach(async () => {

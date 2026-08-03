@@ -1,17 +1,15 @@
 import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { readJson, writeJson } from "../json-file.mjs";
 import { installNpmScripts } from "../npm-scripts.mjs";
 
-const SCRATCH =
-  "/private/tmp/claude-501/-Users-ryan-Projects-captain-obvious/21d816db-ca11-437f-a0f2-ca45be7dd636/scratchpad";
-
 describe("npm-scripts / installNpmScripts", () => {
   let target;
 
   beforeEach(async () => {
-    target = await mkdtemp(join(SCRATCH, "npm-scripts-"));
+    target = await mkdtemp(join(tmpdir(), "npm-scripts-"));
   });
 
   afterEach(async () => {
