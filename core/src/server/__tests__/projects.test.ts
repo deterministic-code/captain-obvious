@@ -135,9 +135,9 @@ describe("project languages", () => {
   it("replaces the previous set wholesale", () => {
     const p = createProject(db, { name: "Epsilon" });
     setProjectLanguages(db, p.id, { languages: ["typescript", "go"] });
-    expect(
-      setProjectLanguages(db, p.id, { languages: ["python"] }),
-    ).toEqual({ languages: ["python"] });
+    expect(setProjectLanguages(db, p.id, { languages: ["python"] })).toEqual({
+      languages: ["python"],
+    });
   });
 
   it("throws on a non-array body", () => {

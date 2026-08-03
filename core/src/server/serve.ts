@@ -403,11 +403,16 @@ async function handle(
     return sendJson(
       res,
       200,
-      activityFeed(existsSync(PROFILE_DB) ? PROFILE_DB : undefined, auditDb, db, {
-        last: url.searchParams.get("last") ?? undefined,
-        rules: url.searchParams.get("rules") ?? undefined,
-        limit: limit ? Number(limit) : undefined,
-      }),
+      activityFeed(
+        existsSync(PROFILE_DB) ? PROFILE_DB : undefined,
+        auditDb,
+        db,
+        {
+          last: url.searchParams.get("last") ?? undefined,
+          rules: url.searchParams.get("rules") ?? undefined,
+          limit: limit ? Number(limit) : undefined,
+        },
+      ),
     );
   }
 

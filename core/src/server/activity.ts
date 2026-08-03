@@ -251,9 +251,11 @@ export function activityFeed(
     const found = r.found ?? null;
     const fixed = r.fixed ?? null;
     const message =
-      fixed !== null ? formatFixed(fixed) :
-      found !== null ? formatFound(found) :
-      summaryBySlug.get(slug);
+      fixed !== null
+        ? formatFixed(fixed)
+        : found !== null
+          ? formatFound(found)
+          : summaryBySlug.get(slug);
     events.push({
       timeMs: r.startMs,
       source: "hook",

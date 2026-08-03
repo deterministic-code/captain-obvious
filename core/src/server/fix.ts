@@ -126,7 +126,11 @@ function countModifiedFiles(output: string): number {
   let count = 0;
   for (const line of lines) {
     const trimmed = line.trim();
-    if (trimmed && !line.startsWith("lint-") && !trimmed.startsWith("Re-stage")) {
+    if (
+      trimmed &&
+      !line.startsWith("lint-") &&
+      !trimmed.startsWith("Re-stage")
+    ) {
       if (!trimmed.includes("(unchanged)")) count++;
     }
   }

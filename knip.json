@@ -9,12 +9,7 @@
     "**/__tests__/**/*.{test,spec}.{mjs,ts}",
     "**/__tests__/test-helpers.mjs"
   ],
-  "project": [
-    "src/**/*.ts",
-    "hooks/**/*.mjs",
-    "lib/**/*.mjs",
-    "bin/*.mjs"
-  ],
+  "project": ["src/**/*.ts", "hooks/**/*.mjs", "lib/**/*.mjs", "bin/*.mjs"],
   "ignore": ["web/dist/**", "**/*.d.mts"],
   "includeEntryExports": true
 }

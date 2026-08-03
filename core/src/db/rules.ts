@@ -271,11 +271,15 @@ export function reorderRuleBefore(
     const from = ordered.findIndex((r) => r.id === rule.id);
     ordered.splice(from, 1);
     const at =
-      before === null ? ordered.length : ordered.findIndex((r) => r.id === before.id);
+      before === null
+        ? ordered.length
+        : ordered.findIndex((r) => r.id === before.id);
     ordered.splice(at, 0, { id: rule.id });
     const renumber = db.prepare("UPDATE rules SET sort_index = ? WHERE id = ?");
     ordered.forEach((r, idx) => renumber.run(idx, r.id));
-    return db.prepare("SELECT * FROM rules WHERE id = ?").get(rule.id) as RuleRow;
+    return db
+      .prepare("SELECT * FROM rules WHERE id = ?")
+      .get(rule.id) as RuleRow;
   });
   const row = move();
   logEvent(
@@ -471,7 +475,8 @@ export function registerRule(db: Db, plugin: RulePlugin): void {
     linkStages(db, ruleId, meta.stages);
 
     if (meta.actions !== undefined) setRuleFixesTx(db, ruleId, meta.actions);
-    if (meta.defaultAction !== undefined) seedDefaultAction(db, ruleId, meta.defaultAction);
+    if (meta.defaultAction !== undefined)
+      seedDefaultAction(db, ruleId, meta.defaultAction);
   });
 
   tx();

@@ -92,7 +92,11 @@ beforeEach(() => {
   db = openDb(":memory:");
   // lint-naming carries no description, so the feed's message falls back to its
   // name; lint-dup carries one, so the feed surfaces the description verbatim.
-  addRule(db, { slug: "lint-naming", name: "Naming", languages: ["typescript"] });
+  addRule(db, {
+    slug: "lint-naming",
+    name: "Naming",
+    languages: ["typescript"],
+  });
   addRule(db, {
     slug: "lint-dup",
     name: "Dup",
@@ -322,7 +326,10 @@ describe("activityFeed", () => {
     // count instead — the outcome wins over the static summary.
     addDispatchRun("lint-dup", now - HOUR, { found: 4, status: "failure" });
     // A single violation reads in the singular.
-    addDispatchRun("lint-naming", now - 2 * HOUR, { found: 1, status: "failure" });
+    addDispatchRun("lint-naming", now - 2 * HOUR, {
+      found: 1,
+      status: "failure",
+    });
     // Zero is still a count, not the description fallback.
     addDispatchRun("lint-dup", now - 3 * HOUR, { found: 0 });
     const feed = activityFeed(undefined, audit, db, { last: "24h" });

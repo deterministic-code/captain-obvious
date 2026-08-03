@@ -74,7 +74,12 @@ collides with one of yours, or drop it with `npmScripts.panelScript: false`.
     ]
   },
   "claudeHooks": [
-    { "event": "PreToolUse", "matcher": "Edit|Write", "hook": "main-branch-guard", "timeout": 5 },
+    {
+      "event": "PreToolUse",
+      "matcher": "Edit|Write",
+      "hook": "main-branch-guard",
+      "timeout": 5
+    },
     { "event": "Stop", "hook": "stop-unmerged-guard", "timeout": 15 }
   ]
 }
@@ -95,7 +100,7 @@ collides with one of yours, or drop it with `npmScripts.panelScript: false`.
 - **`npmScripts.extraScripts`** (optional, `key → bin args`) adds or overrides managed
   aliases for the odd modes — e.g. `"lint:dead-code": "dead-code --all"` or
   `"lint:frozen-interfaces:add": "frozen-interfaces --add"`. Set `npmScripts.enabled:
-  false` to skip package.json rewriting entirely.
+false` to skip package.json rewriting entirely.
 - **`npmScripts.panelScript`** (optional) renames the managed control-panel alias (default
   `panel` → `captain-obvious serve`); set it to `false` to skip that alias.
 

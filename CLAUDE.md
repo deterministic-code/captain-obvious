@@ -48,7 +48,7 @@ are workspace packages. Dependency DAG: **rule package → `rules/_kit` → `cor
 - Node ≥ 18, ESM. Commands from the **repo root**: `npm test` (`vitest run --coverage` — covers
   `core/src`/`core/hooks`/`core/lib` + all `rules/*` `.mjs`, 100% enforced), `npm run build`
   (`tsc -p core/tsconfig.json`, emits `core/dist/`). There is **no CI** — a green `vitest` + clean `tsc`
-  are the only automated *merge* gates.
+  are the only automated _merge_ gates.
   The repo now **self-applies its own hooks** via `captain-obvious.config.json` (run
   `captain-obvious-install` after clone to wire the local `.git/hooks` + Claude guards); those hooks are
   local, best-effort, and driven by the local registry DB, not a substitute for the vitest + tsc gate.
@@ -68,7 +68,8 @@ on re-seed, `[]` = clear); CRUD in `src/db/fixes.ts`.
 Every rule is a self-contained module under `rules/<slug>/`, conforming to the `RulePlugin` interface
 (`src/rules/plugin.ts`). Setup discovers them by scanning the folder — drop a new `rules/<slug>/plugin.mjs`
 and it registers itself; there is no central list to edit.
-- **`plugin.mjs`** — a plain-ESM descriptor (JSDoc-typed against `RulePlugin`, *not* tsc-compiled, like
+
+- **`plugin.mjs`** — a plain-ESM descriptor (JSDoc-typed against `RulePlugin`, _not_ tsc-compiled, like
   the checks) default-exporting `{ meta, control?, dependencies?, checkEntry }`. `load.ts` validates each
   (`assertRulePlugin`) and `registerRule` (`src/db/rules.ts`) writes it to the catalog (languages,
   categories, stages, fixes, `control_json`, `deps_json`).
@@ -111,7 +112,7 @@ and served by `captain-obvious serve` (default port 4317).
 - **Warnings are errors.** A `tsc`/`vitest`/`npm` warning you can't explain is an undiagnosed failure —
   fix it at the source, don't silence it.
 - **Refactoring.** Prefer the clean rewrite in the shape the code should be over the minimal diff that
-  preserves the old shape; match surrounding *style*, not old structure.
+  preserves the old shape; match surrounding _style_, not old structure.
 - **Scratch scripts** go in `.claude/tmp/` (gitignored) — never the repo root or `scripts/`.
 
 ## Merge flow

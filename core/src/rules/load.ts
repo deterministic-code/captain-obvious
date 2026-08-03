@@ -48,7 +48,9 @@ export async function loadPlugins(
     };
     const plugin = assertRulePlugin(mod.default, slug);
     const checkPath =
-      plugin.checkEntry === null ? null : resolve(root, slug, plugin.checkEntry);
+      plugin.checkEntry === null
+        ? null
+        : resolve(root, slug, plugin.checkEntry);
     if (checkPath !== null && !(await exists(checkPath))) {
       throw new Error(
         `rule ${plugin.meta.slug}: checkEntry not found: ${plugin.checkEntry}`,

@@ -129,9 +129,9 @@ describe("formatDeny", () => {
 
 describe("tool-stage guard invariant", () => {
   it("keeps lint-protected-paths tool-staged — the only rule guardDecision enforces", () => {
-    const toolStaged = RULES.filter((r) =>
-      r.meta.stages.includes("tool"),
-    ).map((r) => r.meta.slug);
+    const toolStaged = RULES.filter((r) => r.meta.stages.includes("tool")).map(
+      (r) => r.meta.slug,
+    );
     expect(toolStaged).toContain("lint-protected-paths");
   });
 });

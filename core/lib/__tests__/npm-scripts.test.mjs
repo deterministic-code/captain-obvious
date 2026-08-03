@@ -61,7 +61,9 @@ describe("npm-scripts / installNpmScripts", () => {
       npmScripts: {},
     });
     const pkg = await readJson(pkgPath());
-    expect(pkg.scripts["lint:dup:push"]).toBe("captain-obvious-lint dup --push");
+    expect(pkg.scripts["lint:dup:push"]).toBe(
+      "captain-obvious-lint dup --push",
+    );
     expect(pkg.scripts["lint:dup"]).toBeUndefined();
     expect(pkg.scripts["lint:dup:all"]).toBeUndefined();
   });

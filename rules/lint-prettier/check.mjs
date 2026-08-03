@@ -138,7 +138,10 @@ async function runFix(bin, targets, repoRoot) {
       maxBuffer: 64 * 1024 * 1024,
     },
   );
-  const lines = stdout.trim().split("\n").filter((l) => l.length > 0);
+  const lines = stdout
+    .trim()
+    .split("\n")
+    .filter((l) => l.length > 0);
   if (lines.length > 0) {
     process.stdout.write("lint-prettier: formatted and saved:\n");
     for (const line of lines) process.stdout.write(`  ${line}\n`);
