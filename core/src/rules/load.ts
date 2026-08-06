@@ -1,5 +1,5 @@
-import { access, readdir } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { access, readFile, readdir } from "node:fs/promises";
+import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { requireStage } from "./stages.js";
 import type { ControlSpec, RulePlugin } from "./plugin.js";
@@ -10,11 +10,47 @@ const pkgRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const repoRoot = resolve(pkgRoot, "..");
 const RULES_DIR = resolve(repoRoot, "rules");
 
+/** The npm keyword an installed package declares to opt into rule discovery. */
+export const RULE_KEYWORD = "captain-obvious-rule";
+
 const exists = (p: string): Promise<boolean> =>
   access(p).then(
     () => true,
     () => false,
   );
+
+/** readdir that yields `[]` for an absent dir but rethrows every other error. */
+const readEntries = (p: string) =>
+  readdir(p, { withFileTypes: true }).catch((err: NodeJS.ErrnoException) => {
+    if (err.code === "ENOENT") return [];
+    throw err;
+  });
+
+/**
+ * Import a rule descriptor from `<dir>/plugin.mjs`, validate it, and stamp an
+ * absolute `checkPath` resolved against `dir`. `expectedSlug` enforces the
+ * folder-scan invariant that a rule's slug matches its directory; pass `null` for
+ * an installed package, where the package name differs from the slug and the
+ * descriptor's own `meta.slug` is authoritative. A missing runner fails loudly.
+ */
+async function loadDescriptor(
+  dir: string,
+  expectedSlug: string | null,
+): Promise<RulePlugin> {
+  const descriptor = resolve(dir, "plugin.mjs");
+  const mod = (await import(pathToFileURL(descriptor).href)) as {
+    default?: unknown;
+  };
+  const plugin = assertRulePlugin(mod.default, expectedSlug);
+  const checkPath =
+    plugin.checkEntry === null ? null : resolve(dir, plugin.checkEntry);
+  if (checkPath !== null && !(await exists(checkPath))) {
+    throw new Error(
+      `rule ${plugin.meta.slug}: checkEntry not found: ${plugin.checkEntry}`,
+    );
+  }
+  return { ...plugin, checkPath };
+}
 
 /**
  * Discover every rule plugin by scanning `rules/<slug>/` for a `plugin.mjs`, skipping
@@ -28,76 +64,153 @@ const exists = (p: string): Promise<boolean> =>
 export async function loadPlugins(
   root: string = RULES_DIR,
 ): Promise<RulePlugin[]> {
-  const entries = await readdir(root, { withFileTypes: true }).catch(
-    (err: NodeJS.ErrnoException) => {
-      if (err.code === "ENOENT") return [];
-      throw err;
-    },
-  );
-  const slugs = entries
+  const slugs = (await readEntries(root))
     .filter((e) => e.isDirectory() && !e.name.startsWith("_"))
     .map((e) => e.name)
     .sort();
 
   const out: RulePlugin[] = [];
   for (const slug of slugs) {
-    const descriptor = resolve(root, slug, "plugin.mjs");
-    if (!(await exists(descriptor))) continue;
-    const mod = (await import(pathToFileURL(descriptor).href)) as {
-      default?: unknown;
-    };
-    const plugin = assertRulePlugin(mod.default, slug);
-    const checkPath =
-      plugin.checkEntry === null
-        ? null
-        : resolve(root, slug, plugin.checkEntry);
-    if (checkPath !== null && !(await exists(checkPath))) {
-      throw new Error(
-        `rule ${plugin.meta.slug}: checkEntry not found: ${plugin.checkEntry}`,
-      );
-    }
-    out.push({ ...plugin, checkPath });
+    if (!(await exists(resolve(root, slug, "plugin.mjs")))) continue;
+    out.push(await loadDescriptor(resolve(root, slug), slug));
   }
   return out.sort((a, b) => a.meta.slug.localeCompare(b.meta.slug));
 }
 
 /**
- * Validate a plugin descriptor's shape, throwing `rule <slug>: <reason>` on the
- * errors that would otherwise pass silently — a slug that disagrees with its
- * directory, an unknown stage, or a malformed checkEntry/control. Fields the DB
- * layer rejects on its own (missing name/description) are left to fail there.
+ * The `node_modules` directories on this module's resolution path — every ancestor
+ * named `node_modules`. Empty in the monorepo (core is a source package, not itself
+ * under `node_modules`), non-empty exactly when core is installed as a dependency,
+ * which is when its sibling rule packages need discovering. `start` overridable for
+ * tests.
  */
-export function assertRulePlugin(value: unknown, slug: string): RulePlugin {
+export function nodeModulesRoots(
+  start: string = fileURLToPath(import.meta.url),
+): string[] {
+  const roots: string[] = [];
+  let dir = resolve(start);
+  for (let parent = dirname(dir); parent !== dir; parent = dirname(dir)) {
+    if (basename(parent) === "node_modules") roots.push(parent);
+    dir = parent;
+  }
+  return roots;
+}
+
+/** Every installed package directory under a `node_modules` root, scopes flattened. */
+async function packageDirs(nodeModules: string): Promise<string[]> {
+  const out: string[] = [];
+  for (const entry of await readEntries(nodeModules)) {
+    if (entry.name.startsWith(".")) continue;
+    if (entry.name.startsWith("@")) {
+      const scope = resolve(nodeModules, entry.name);
+      for (const pkg of await readEntries(scope)) {
+        if (!pkg.name.startsWith(".")) out.push(resolve(scope, pkg.name));
+      }
+    } else {
+      out.push(resolve(nodeModules, entry.name));
+    }
+  }
+  return out;
+}
+
+/** A `RulePlugin` from a package that opts in via {@link RULE_KEYWORD}, else null. */
+async function ruleFromPackage(dir: string): Promise<RulePlugin | null> {
+  const manifest = resolve(dir, "package.json");
+  if (!(await exists(manifest))) return null;
+  const pkg = JSON.parse(await readFile(manifest, "utf8")) as {
+    keywords?: unknown;
+  };
+  if (!Array.isArray(pkg.keywords) || !pkg.keywords.includes(RULE_KEYWORD)) {
+    return null;
+  }
+  return loadDescriptor(dir, null);
+}
+
+/**
+ * Discover rule plugins installed as npm packages: scan each `node_modules` root for
+ * packages that opt in via the {@link RULE_KEYWORD} keyword and load their descriptor.
+ * This is the delivery path for a consuming repo, where rules are separate packages —
+ * of any name or scope, including third-party — rather than folders in this tree.
+ * `roots` is overridable for tests.
+ */
+export async function discoverInstalledPlugins(
+  roots: string[] = nodeModulesRoots(),
+): Promise<RulePlugin[]> {
+  const out: RulePlugin[] = [];
+  for (const nodeModules of roots) {
+    for (const dir of await packageDirs(nodeModules)) {
+      const plugin = await ruleFromPackage(dir);
+      if (plugin !== null) out.push(plugin);
+    }
+  }
+  return out;
+}
+
+/**
+ * The full rule set feeding `seed-rules` and the dispatcher: installed rule packages
+ * (consumer install) unioned with the in-repo `rules/<slug>/` folder scan (monorepo
+ * dogfooding). On a slug clash the local folder wins, so the repo runs its own copy.
+ * `roots`/`localRoot` are overridable for tests.
+ */
+export async function discoverRules(
+  roots: string[] = nodeModulesRoots(),
+  localRoot: string = RULES_DIR,
+): Promise<RulePlugin[]> {
+  const bySlug = new Map<string, RulePlugin>();
+  for (const p of await discoverInstalledPlugins(roots))
+    bySlug.set(p.meta.slug, p);
+  for (const p of await loadPlugins(localRoot)) bySlug.set(p.meta.slug, p);
+  return [...bySlug.values()].sort((a, b) =>
+    a.meta.slug.localeCompare(b.meta.slug),
+  );
+}
+
+/**
+ * Validate a plugin descriptor's shape, throwing `rule <slug>: <reason>` on the
+ * errors that would otherwise pass silently — a non-string or (for a folder scan)
+ * mismatched slug, an unknown stage, or a malformed checkEntry/control. Pass
+ * `expectedSlug: null` for an installed package, where the package name differs
+ * from the slug so only `meta.slug`'s own well-formedness is enforced. Fields the
+ * DB layer rejects on its own (missing name/description) are left to fail there.
+ */
+export function assertRulePlugin(
+  value: unknown,
+  expectedSlug: string | null,
+): RulePlugin {
+  const label = expectedSlug ?? "installed rule";
   if (typeof value !== "object" || value === null) {
     throw new Error(
-      `rule ${slug}: plugin.mjs must default-export a RulePlugin object`,
+      `rule ${label}: plugin.mjs must default-export a RulePlugin object`,
     );
   }
   const plugin = value as Record<string, unknown>;
   const meta = plugin.meta;
   if (typeof meta !== "object" || meta === null) {
-    throw new Error(`rule ${slug}: plugin.meta is required`);
+    throw new Error(`rule ${label}: plugin.meta is required`);
   }
   const m = meta as Record<string, unknown>;
-  if (m.slug !== slug) {
+  if (typeof m.slug !== "string") {
+    throw new Error(`rule ${label}: meta.slug must be a string`);
+  }
+  if (expectedSlug !== null && m.slug !== expectedSlug) {
     throw new Error(
-      `rule ${slug}: meta.slug is ${JSON.stringify(m.slug)}, must match the directory name`,
+      `rule ${expectedSlug}: meta.slug is ${JSON.stringify(m.slug)}, must match the directory name`,
     );
   }
   if (!Array.isArray(m.stages)) {
-    throw new Error(`rule ${slug}: meta.stages must be an array`);
+    throw new Error(`rule ${label}: meta.stages must be an array`);
   }
   for (const stage of m.stages) requireStage(String(stage));
 
   if (m.defaultAction !== undefined && typeof m.defaultAction !== "string") {
-    throw new Error(`rule ${slug}: meta.defaultAction must be a string`);
+    throw new Error(`rule ${label}: meta.defaultAction must be a string`);
   }
 
   const { checkEntry, control } = plugin;
   if (checkEntry !== null && typeof checkEntry !== "string") {
-    throw new Error(`rule ${slug}: checkEntry must be a string or null`);
+    throw new Error(`rule ${label}: checkEntry must be a string or null`);
   }
-  if (control !== undefined) assertControl(control, slug);
+  if (control !== undefined) assertControl(control, label);
   return plugin as unknown as RulePlugin;
 }
 

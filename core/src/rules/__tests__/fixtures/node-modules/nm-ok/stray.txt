@@ -1,0 +1,1 @@
+a non-dir entry at the node_modules root

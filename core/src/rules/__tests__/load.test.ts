@@ -1,13 +1,21 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { assertRulePlugin, loadPlugins } from "../load.js";
+import {
+  assertRulePlugin,
+  discoverInstalledPlugins,
+  discoverRules,
+  loadPlugins,
+  nodeModulesRoots,
+} from "../load.js";
 import type { RulePlugin } from "../plugin.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const OK_ROOT = resolve(here, "fixtures", "plugins-ok");
 const BAD_ROOT = resolve(here, "fixtures", "plugins-bad");
 const NOSLUG_ROOT = resolve(here, "fixtures", "plugins-noslug");
+const NM = resolve(here, "fixtures", "node-modules");
+const NM_OK = resolve(NM, "nm-ok");
 
 /** A structurally valid descriptor; tests mutate a clone to hit each branch. */
 function validPlugin(): RulePlugin {
@@ -46,9 +54,9 @@ describe("loadPlugins", () => {
     expect(Array.isArray(await loadPlugins())).toBe(true);
   });
 
-  it("throws when a folder's descriptor slug disagrees with its dir name", async () => {
+  it("throws when a folder's descriptor has no string slug", async () => {
     await expect(loadPlugins(NOSLUG_ROOT)).rejects.toThrow(
-      /must match the directory name/,
+      /meta\.slug must be a string/,
     );
   });
 
@@ -63,7 +71,86 @@ describe("loadPlugins", () => {
   });
 });
 
+describe("nodeModulesRoots", () => {
+  it("collects every node_modules ancestor of the module path", () => {
+    expect(
+      nodeModulesRoots("/proj/node_modules/@scope/pkg/dist/rules/load.js"),
+    ).toEqual(["/proj/node_modules"]);
+  });
+
+  it("returns [] when no ancestor is a node_modules dir", () => {
+    expect(nodeModulesRoots("/proj/src/rules/load.js")).toEqual([]);
+  });
+
+  it("defaults to this module's own resolution path", () => {
+    expect(Array.isArray(nodeModulesRoots())).toBe(true);
+  });
+});
+
+describe("discoverInstalledPlugins", () => {
+  it("finds keyworded packages across scopes, skipping non-rules and stray entries", async () => {
+    const plugins = await discoverInstalledPlugins([NM_OK]);
+    expect(plugins.map((p) => p.meta.slug).sort()).toEqual([
+      "alpha",
+      "beta",
+      "good-rule",
+    ]);
+    const alpha = plugins.find((p) => p.meta.slug === "alpha");
+    expect(alpha?.checkPath).toMatch(/co-rule-alpha\/check\.mjs$/);
+  });
+
+  it("returns [] for a node_modules root that does not exist", async () => {
+    expect(await discoverInstalledPlugins([resolve(NM, "nope")])).toEqual([]);
+  });
+
+  it("throws when a keyworded package is missing its descriptor", async () => {
+    await expect(
+      discoverInstalledPlugins([resolve(NM, "nm-broken")]),
+    ).rejects.toThrow();
+  });
+
+  it("throws when a keyworded descriptor omits meta.slug", async () => {
+    await expect(
+      discoverInstalledPlugins([resolve(NM, "nm-noslug")]),
+    ).rejects.toThrow(/meta\.slug must be a string/);
+  });
+
+  it("defaults to the real node_modules roots", async () => {
+    expect(Array.isArray(await discoverInstalledPlugins())).toBe(true);
+  });
+});
+
+describe("discoverRules", () => {
+  it("unions installed packages with the local scan, the local folder winning a slug clash", async () => {
+    const rules = await discoverRules([NM_OK], OK_ROOT);
+    expect(rules.map((r) => r.meta.slug)).toEqual([
+      "alpha",
+      "beta",
+      "good-rule",
+    ]);
+    const good = rules.find((r) => r.meta.slug === "good-rule");
+    expect(good?.checkPath).toContain("plugins-ok");
+  });
+
+  it("returns an array for the default roots", async () => {
+    expect(Array.isArray(await discoverRules())).toBe(true);
+  });
+});
+
 describe("assertRulePlugin", () => {
+  it("accepts an installed descriptor (null expectedSlug) by its own slug", () => {
+    const p = validPlugin();
+    expect(assertRulePlugin(p, null)).toBe(p);
+  });
+
+  it("rejects a non-string slug", () => {
+    const p = validPlugin();
+    (p.meta as { slug: unknown }).slug = 7;
+    expect(() => assertRulePlugin(p, "r")).toThrow(
+      /meta.slug must be a string/,
+    );
+  });
+
   it("accepts a valid declarative plugin and returns it", () => {
     const p = validPlugin();
     expect(assertRulePlugin(p, "r")).toBe(p);

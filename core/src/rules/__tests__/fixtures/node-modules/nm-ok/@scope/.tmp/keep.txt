@@ -1,0 +1,1 @@
+dot entry inside a scope dir

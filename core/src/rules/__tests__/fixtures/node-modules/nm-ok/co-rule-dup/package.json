@@ -1,0 +1,8 @@
+{
+  "name": "@x/co-rule-dup",
+  "version": "0.0.0",
+  "type": "module",
+  "keywords": [
+    "captain-obvious-rule"
+  ]
+}
