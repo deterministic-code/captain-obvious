@@ -5,16 +5,30 @@ empty catches, multi-line comments, structural duplication, arg-creep on frozen
 interfaces, naming drift) before it ever reaches review — plus the Claude Code guard
 hooks that keep an agent off `main` and off a red tree.
 
-The package ships the **hook implementations**. Each consuming repo owns a
-`captain-obvious.config.json` that says **which** hooks run, in what order, and which
-are advisory — so the same package drives a strict repo and a lax one without forking.
+The package is the **engine + Claude guard hooks** — a plugin host. The lint rules
+themselves are **separate npm packages** you install à la carte; the engine discovers
+any installed package that opts in (see below) and the per-project registry DB says
+**which** of them run, in what order, and which are advisory — so the same engine drives
+a strict repo and a lax one without forking.
 
 ## Install
 
+Install the engine, then whichever rule packages you want. The engine alone ships **no
+rules** — a minimal install is exactly the rules you ask for:
+
 ```sh
 npm install --save-dev @deterministic-code/captain-obvious
+npm install --save-dev \
+  @deterministic-code/co-rule-lint-comments \
+  @deterministic-code/co-rule-lint-naming
 npx captain-obvious-install
 ```
+
+Rules are discovered from `node_modules`: any installed package whose `package.json`
+carries the `"captain-obvious-rule"` keyword is picked up and seeded into the registry —
+so a rule can live in **any package, any scope, any repo**, including one you publish
+yourself. `captain-obvious seed-rules` (run by install) refreshes the set; the control
+panel toggles them.
 
 Wire it to run on every `npm install` so a fresh clone is gated automatically:
 
@@ -106,11 +120,15 @@ false` to skip package.json rewriting entirely.
 
 ## What's in the box
 
-`hooks/git/` — the lint gate (`lint-comments`, `lint-empty-catch`, `lint-sync-calls`,
+This package is the **engine**: the git-hook dispatcher, the `captain-obvious` /
+`-install` / `-lint` bins, the registry DB + control panel, and the Claude guard hooks
+(`hooks/claude/` — `main-branch-guard`, `protected-paths-guard`, `stop-unmerged-guard`,
+`tool-fix`, …). It ships **no lint rules**.
+
+The rules are the `@deterministic-code/co-rule-*` packages — `lint-comments`,
 `lint-naming`, `lint-max-lines`/`-statements`/`-params`, `lint-complexity`,
 `lint-frozen-interfaces`, `lint-emitter-casing`, `lint-dead-code`, `lint-dup`/`-fn`/
-`-structural`, `lint-test-disabling-skipping`, `lint-solid-{s,d,i,l,o}`, and their
-metric helpers).
-
-`hooks/claude/` — `dispatch-guard`, `main-branch-guard`, `pre-merge-ci-guard`,
-`stop-unmerged-guard`, `session-main-ci-status`.
+`-structural`, `lint-test-disabling-skipping`, `lint-solid-{s,d,i,l,o}`, and the
+`gov-*` policy rules. Install the ones you want; each declares its own deps (the shared
+`@deterministic-code/co-rule-kit` and any tool it drives) and is discovered by the
+`"captain-obvious-rule"` keyword.

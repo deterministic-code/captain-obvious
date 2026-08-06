@@ -1,10 +1,12 @@
 ## Project
 
 `@deterministic-code/captain-obvious` — deterministic, mechanical lint gates + Claude Code
-guard hooks, installable into any repo. The package ships the **hook implementations**; the
-per-project **registry DB** — seeded from the discovered rules, toggled in the web panel —
-decides **which** rules run, in what order, and which are advisory, so one package drives a strict
-repo and a lax one without forking. Each consuming repo owns a `captain-obvious.config.json` for
+guard hooks, installable into any repo. The core package is the **engine + guard hooks** and
+ships **no lint rules**; the rules are separate `@deterministic-code/co-rule-*` packages a
+consumer installs à la carte and the engine discovers from `node_modules` by the
+`"captain-obvious-rule"` keyword. The per-project **registry DB** — seeded from the discovered
+rules, toggled in the web panel — decides **which** of them run, in what order, and which are
+advisory, so one engine drives a strict repo and a lax one without forking. Each consuming repo owns a `captain-obvious.config.json` for
 install-time wiring only: the DB `mode`, the Claude guard bindings, and any `run:` passthroughs —
 it no longer lists the rules (discovery finds them; see `load.ts`).
 
@@ -30,10 +32,13 @@ are workspace packages. Dependency DAG: **rule package → `rules/_kit` → `cor
   - `core/src/db/` — the SQLite catalog via `better-sqlite3` (`open`, `rules`, `fixes`, `actions`,
     `languages`, `seed`, `lookups`, `types`, `args`).
   - `core/src/rules/` — the plugin engine: `plugin.ts` (the `RulePlugin` interface), `load.ts`
-    (discovery — folder-scans `rules/<slug>/` for each `plugin.mjs`, no config list; the registry
-    DB seeded from these is the single source of truth for the rule set; stamps each plugin's
+    (discovery — `discoverRules()` unions two sources: installed `co-rule-*` packages found by
+    scanning each `node_modules` root on the resolution path for the `"captain-obvious-rule"`
+    keyword — the consumer delivery path, any name/scope incl. third-party — and the in-repo
+    `rules/<slug>/` folder scan for monorepo dogfooding, local winning a slug clash; no config
+    list; the registry DB seeded from these is the single source of truth; stamps each plugin's
     absolute `checkPath`), `index.ts`
-    (`RULES = await loadPlugins()`), `config.ts` (per-rule config for the check bridge), `deps.ts`
+    (`RULES = await discoverRules()`), `config.ts` (per-rule config for the check bridge), `deps.ts`
     (dependency verification), `dispatch.ts`, `stages.ts`, `languages.ts`, `types.ts`.
   - `core/src/server/` — the web control panel: `serve.ts` (routing + static SPA), `registry.ts`
     (shapes `/api/*`), `profiling.ts`. `core/src/bin/captain-obvious.ts` — the CLI (`add-rule`,

@@ -3,6 +3,9 @@
   "version": "0.2.0",
   "type": "module",
   "license": "MIT",
+  "keywords": [
+    "captain-obvious-rule"
+  ],
   "exports": {
     "./plugin.mjs": "./plugin.mjs",
     "./package.json": "./package.json",
