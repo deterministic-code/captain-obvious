@@ -7,6 +7,7 @@
   "workspaces": [
     "core",
     "rules/_kit",
+    "rules/_recommended",
     "rules/gov-main-ci-green",
     "rules/gov-no-push-to-main",
     "rules/gov-require-pr",

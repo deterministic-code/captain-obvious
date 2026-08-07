@@ -4,7 +4,10 @@
 guard hooks, installable into any repo. The core package is the **engine + guard hooks** and
 ships **no lint rules**; the rules are separate `@deterministic-code/co-rule-*` packages a
 consumer installs à la carte and the engine discovers from `node_modules` by the
-`"captain-obvious-rule"` keyword. The per-project **registry DB** — seeded from the discovered
+`"captain-obvious-rule"` keyword. The `@deterministic-code/co-rules-recommended` meta-package
+(`rules/_recommended/`, keyword-less, code-less) is a convenience aggregator that just `dependencies`
+every in-repo `co-rule-*` so one install pulls the whole first-party set; discovery still finds each
+by keyword. The per-project **registry DB** — seeded from the discovered
 rules, toggled in the web panel — decides **which** of them run, in what order, and which are
 advisory, so one engine drives a strict repo and a lax one without forking. Each consuming repo owns a `captain-obvious.config.json` for
 install-time wiring only: the DB `mode`, the Claude guard bindings, and any `run:` passthroughs —

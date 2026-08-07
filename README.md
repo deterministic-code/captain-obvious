@@ -24,11 +24,21 @@ npm install --save-dev \
 npx captain-obvious-install
 ```
 
+Want the whole first-party set in one line instead of naming rules individually? Install
+the bundle — it depends on every `co-rule-*` rule, so they all land in `node_modules` and
+get discovered the same way:
+
+```sh
+npm install --save-dev @deterministic-code/captain-obvious @deterministic-code/co-rules-recommended
+npx captain-obvious-install
+```
+
 Rules are discovered from `node_modules`: any installed package whose `package.json`
 carries the `"captain-obvious-rule"` keyword is picked up and seeded into the registry —
 so a rule can live in **any package, any scope, any repo**, including one you publish
-yourself. `captain-obvious seed-rules` (run by install) refreshes the set; the control
-panel toggles them.
+yourself. The bundle is only a convenience aggregator over that same mechanism.
+`captain-obvious seed-rules` (run by install) refreshes the set; the control panel toggles
+them.
 
 Wire it to run on every `npm install` so a fresh clone is gated automatically:
 
