@@ -132,6 +132,15 @@ don't arm `--auto`, don't poll. `main` is branch-protected, so any edit starts f
 (`git worktree add -b <branch> .worktrees/<slug> main`); don't give the user guidance for changes that
 aren't merged to `main` yet.
 
+**Releasing to npm.** `release.mjs` (root; `npm run release`) drives the lockstep publish. `node
+release.mjs bump <patch|minor|major|x.y.z>` rewrites every workspace package to one shared version and
+repoints all internal `@deterministic-code/*` ranges to `^<version>` (commit + merge that the normal
+way — it never pushes); `node release.mjs publish [--otp=NNNNNN]` builds then `npm publish --access
+public`es core → kit → rules → bundle in dependency order, skipping any `name@version` already on the
+registry so a partial-failure re-run is safe. Publish works with the existing token; **unpublish does
+not** — npm blocks 2FA-bypass granular tokens from destructive actions, so stale versions get
+`npm deprecate`d, not removed.
+
 **After merging, show it.** As the final step of any task that changes the control panel or its
 `/api/*`, make the result visible on the dev server without being asked: once the change is on `main`,
 rebuild (`npm run build`), free the port if a stale instance holds it

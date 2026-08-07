@@ -47,6 +47,7 @@
     "dev": "npm run build && (tsc -p core/tsconfig.json --watch & TSC=$!; trap 'kill $TSC 2>/dev/null' EXIT INT TERM; cd core && node --watch dist/bin/captain-obvious.js serve)",
     "prepare": "tsc -p core/tsconfig.json && node core/bin/install.mjs",
     "test": "vitest run --coverage",
+    "release": "node release.mjs",
     "lint:comments": "captain-obvious-lint comments --staged",
     "lint:comments:all": "captain-obvious-lint comments --all",
     "lint:complexity": "captain-obvious-lint complexity --staged",
