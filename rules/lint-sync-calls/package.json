@@ -18,5 +18,8 @@
   "dependencies": {
     "@deterministic-code/co-rule-kit": "^0.2.0",
     "@deterministic-code/captain-obvious": "^0.2.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

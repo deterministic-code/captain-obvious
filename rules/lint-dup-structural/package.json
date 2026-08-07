@@ -19,5 +19,8 @@
     "@deterministic-code/co-rule-kit": "^0.2.0",
     "@deterministic-code/captain-obvious": "^0.2.0",
     "jscpd": "^3.5.10"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
