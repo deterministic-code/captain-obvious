@@ -12,5 +12,8 @@
   },
   "files": [
     "plugin.mjs"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }
