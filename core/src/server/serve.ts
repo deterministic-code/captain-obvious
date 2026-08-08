@@ -60,6 +60,7 @@ import {
   type FixRequest,
 } from "./fix.js";
 import { analyzeProject, analyzeStatus } from "./analyze.js";
+import { inferenceRules, styleGuide } from "./tools.js";
 import { PANEL_EXT } from "./panelExt.js";
 
 // dist/server/serve.js -> repo root (matches open.ts's pkgRoot derivation).
@@ -347,6 +348,16 @@ async function handle(
   if (pathname === "/api/run/fix/ai/apply" && method === "POST") {
     const body = (await readBody(req)) as AiApplyRequest;
     return sendJson(res, 200, await aiApplyFix(body));
+  }
+
+  // --- tools: deterministic summaries of the enabled rules ---
+  if (pathname === "/api/tools/style-guide" && method === "POST") {
+    const body = (await readBody(req)) as { project?: number | null };
+    return sendJson(res, 200, styleGuide(db, body.project ?? null));
+  }
+  if (pathname === "/api/tools/inference-rules" && method === "POST") {
+    const body = (await readBody(req)) as { project?: number | null };
+    return sendJson(res, 200, inferenceRules(db, body.project ?? null));
   }
 
   // --- analyze (detect the project's languages; log the scan) ---
