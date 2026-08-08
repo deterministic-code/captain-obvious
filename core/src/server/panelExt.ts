@@ -897,6 +897,7 @@ export const PANEL_EXT = `(() => {
     applyFilter();
     applySort();
     ensureOrderBar();
+    ensureToolsBar();
     applyRowSelection();
   }
 
@@ -1016,6 +1017,65 @@ export const PANEL_EXT = `(() => {
     }
     if (!bar.isConnected) wrap.parentNode.insertBefore(bar, wrap.nextSibling);
     updateOrderBar();
+  }
+
+  // Export tools below the table; self-heals from decorate like the order bar.
+  function ensureToolsBar() {
+    const table = document.querySelector("table");
+    if (!table) return;
+    const wrap = table.closest(".co-table-wrap") || table.parentElement;
+    if (!wrap || !wrap.parentNode) return;
+    let bar = document.getElementById("co-tools-bar");
+    if (!bar) {
+      bar = document.createElement("div");
+      bar.id = "co-tools-bar";
+      bar.className = "co-tools-bar";
+      const guide = document.createElement("button");
+      guide.type = "button";
+      guide.className = "co-tools-btn";
+      guide.textContent = "Create style guide";
+      guide.addEventListener("click", () =>
+        openToolDoc("style-guide", "Style guide"),
+      );
+      const infer = document.createElement("button");
+      infer.type = "button";
+      infer.className = "co-tools-btn";
+      infer.textContent = "Create inference rules";
+      infer.addEventListener("click", () =>
+        openToolDoc("inference-rules", "Inference rules"),
+      );
+      bar.appendChild(guide);
+      bar.appendChild(infer);
+    }
+    const anchor = document.getElementById("co-order-bar") || wrap;
+    if (!bar.isConnected) anchor.parentNode.insertBefore(bar, anchor.nextSibling);
+  }
+
+  async function openToolDoc(kind, title) {
+    openFixModalShell(title, "Generated from the enabled rules");
+    const body = document.getElementById("co-fix-mbody");
+    if (!body) return;
+    body.innerHTML = '<p class="co-fix-mnote">Generating…</p>';
+    try {
+      const data = await postFix("/api/tools/" + kind, { project: currentProjectId });
+      renderToolDoc(body, data.text);
+    } catch (err) {
+      body.innerHTML = '<p class="co-fix-merr">' + esc(err.message) + "</p>";
+    }
+  }
+
+  function renderToolDoc(body, text) {
+    body.innerHTML =
+      '<div class="co-tools-doc">' +
+      '<pre class="co-fix-pre co-tools-pre">' + esc(text) + "</pre>" +
+      '<button type="button" class="co-tools-copy" id="co-tools-copy">Copy</button>' +
+      "</div>";
+    body.querySelector("#co-tools-copy").addEventListener("click", () => {
+      navigator.clipboard.writeText(text).then(
+        () => toast("Copied"),
+        () => toast("Copy failed — select the text manually", "error"),
+      );
+    });
   }
 
   // Sync the bar's label and the two buttons' disabled state to the current
@@ -1404,6 +1464,13 @@ export const PANEL_EXT = `(() => {
       ".co-order-btn svg{width:16px;height:16px}" +
       ".co-order-btn:hover:not(:disabled){background:#f1f5f9}" +
       ".co-order-btn:disabled{opacity:.45;cursor:not-allowed}" +
+      // Export-tools bar under the table (style guide / inference rules).
+      ".co-tools-bar{display:flex;gap:10px;margin:4px 0 4px;padding:8px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px}" +
+      ".co-tools-btn{cursor:pointer;font-size:13px;font-weight:600;padding:6px 14px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;color:#334155}" +
+      ".co-tools-btn:hover{background:#f1f5f9}" +
+      ".co-tools-doc{position:relative}" +
+      ".co-tools-pre{max-height:60vh}" +
+      ".co-tools-copy{position:absolute;right:12px;bottom:12px;cursor:pointer;font-size:12px;font-weight:600;padding:6px 14px;border-radius:6px;border:1px solid #0f172a;background:#0f172a;color:#fff;box-shadow:0 1px 4px rgba(15,23,42,.25)}" +
       // Drag-to-reorder: the grip is the only draggable element (rows stay
       // clickable/selectable); the dragged row dims and the hovered row shows a
       // solid line on the edge the drop will insert at.
@@ -1513,6 +1580,9 @@ export const PANEL_EXT = `(() => {
       D + ".co-order-label{color:#cbd5e1}" +
       D + ".co-order-btn{background:#1e293b;border-color:#475569;color:#cbd5e1}" +
       D + ".co-order-btn:hover:not(:disabled){background:#334155}" +
+      D + ".co-tools-bar{background:#0f172a;border-color:#334155}" +
+      D + ".co-tools-btn{background:#1e293b;border-color:#475569;color:#cbd5e1}" +
+      D + ".co-tools-btn:hover{background:#334155}" +
       D + ".co-drag-handle{color:#64748b}" +
       D + ".co-drag-handle:hover{color:#e2e8f0}" +
       D + ":is(#co-run-overlay,#co-activity-overlay){background:#0b1220}" +
