@@ -1,0 +1,24 @@
+{
+  "name": "@deterministic-code/co-rule-gov-tests-green",
+  "version": "0.2.0",
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "captain-obvious-rule"
+  ],
+  "exports": {
+    "./plugin.mjs": "./plugin.mjs",
+    "./package.json": "./package.json",
+    "./check.mjs": "./check.mjs"
+  },
+  "files": [
+    "plugin.mjs",
+    "check.mjs"
+  ],
+  "dependencies": {
+    "@deterministic-code/co-rule-kit": "^0.2.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
