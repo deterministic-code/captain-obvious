@@ -1,6 +1,6 @@
 {
   "name": "@deterministic-code/co-rule-lint-solid-o",
-  "version": "0.2.0",
+  "version": "0.2.3",
   "type": "module",
   "license": "MIT",
   "keywords": [
@@ -16,7 +16,7 @@
     "check.mjs"
   ],
   "dependencies": {
-    "@deterministic-code/co-rule-kit": "^0.2.0"
+    "@deterministic-code/co-rule-kit": "^0.2.3"
   },
   "publishConfig": {
     "access": "public"

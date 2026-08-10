@@ -1,6 +1,6 @@
 {
   "name": "@deterministic-code/captain-obvious",
-  "version": "0.2.0",
+  "version": "0.2.3",
   "description": "Deterministic, mechanical lint gates + Claude Code guard hooks, installable into any repo.",
   "type": "module",
   "license": "MIT",
