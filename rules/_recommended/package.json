@@ -18,6 +18,7 @@
     "@deterministic-code/co-rule-gov-main-ci-green": "^0.2.0",
     "@deterministic-code/co-rule-gov-no-push-to-main": "^0.2.0",
     "@deterministic-code/co-rule-gov-require-pr": "^0.2.0",
+    "@deterministic-code/co-rule-gov-tests-green": "^0.2.0",
     "@deterministic-code/co-rule-lint-comments": "^0.2.0",
     "@deterministic-code/co-rule-lint-complexity": "^0.2.0",
     "@deterministic-code/co-rule-lint-coverage": "^0.2.0",
