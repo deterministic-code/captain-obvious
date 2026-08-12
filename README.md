@@ -33,12 +33,17 @@ npm install --save-dev @deterministic-code/captain-obvious @deterministic-code/c
 npx captain-obvious-install
 ```
 
+`captain-obvious-install` scaffolds `captain-obvious.config.json` if it doesn't exist,
+asking you a few quick questions (DB mode, wire git hooks, wire Claude Code guard hooks)
+with sensible defaults; then it wires the hooks, merges Claude Code settings, rewrites npm
+scripts, and initializes + seeds the registry DB in one shot. On a fresh clone with a
+committed config, it runs non-interactively in your `prepare` script; on a new consumer
+repo, it prompts once and produces a working gate immediately.
+
 Rules are discovered from `node_modules`: any installed package whose `package.json`
 carries the `"captain-obvious-rule"` keyword is picked up and seeded into the registry —
 so a rule can live in **any package, any scope, any repo**, including one you publish
 yourself. The bundle is only a convenience aggregator over that same mechanism.
-`captain-obvious seed-rules` (run by install) refreshes the set; the control panel toggles
-them.
 
 Wire it to run on every `npm install` so a fresh clone is gated automatically:
 
@@ -50,18 +55,18 @@ Wire it to run on every `npm install` so a fresh clone is gated automatically:
 }
 ```
 
-`captain-obvious-install` reads `captain-obvious.config.json` from the repo root
-(override with `--config <path>`, or the repo root with `--target <dir>`) and owns all
-the reference wiring so you never hand-edit it:
+`captain-obvious-install` owns all the reference wiring so you never hand-edit it:
 
+- scaffolds `captain-obvious.config.json` if missing (or skips if `--config` is explicit),
 - writes `.git/hooks/pre-commit` and `pre-push` that dispatch the **enabled** rules for
   each stage from the registry DB (plus any `run:` passthroughs) — so toggling a rule in
   the control panel changes what runs with no reinstall,
 - merges the configured Claude hooks into `.claude/settings.json` (idempotently — it
-  only ever rewrites entries it previously added, tagged `_captainObvious`), and
+  only ever rewrites entries it previously added, tagged `_captainObvious`),
 - rewrites the `lint:*` scripts in your `package.json` to run through the package's
   `captain-obvious-lint` bin (plus a `panel` alias, below), tracking the keys it owns under
-  `captainObvious.managedScripts` so re-runs stay idempotent and dropped hooks get pruned.
+  `captainObvious.managedScripts` so re-runs stay idempotent and dropped hooks get pruned, and
+- initializes and seeds the registry DB so rules are live on the first hook run.
 
 Run any hook directly with the bin: `captain-obvious-lint <name> --staged` (e.g.
 `captain-obvious-lint comments --staged` runs `hooks/git/lint-comments.mjs`).
@@ -82,6 +87,11 @@ effect on the next hook run with no reinstall; its top-right badge shows the act
 collides with one of yours, or drop it with `npmScripts.panelScript: false`.
 
 ## Config
+
+`captain-obvious-install` scaffolds `captain-obvious.config.json` on first run, asking a few
+questions (DB mode, git hooks, Claude Code guard hooks) and filling in sensible defaults. You
+don't need to hand-author it — the scaffolding picks good defaults and you can customize
+afterward if needed:
 
 ```json
 {
@@ -127,6 +137,16 @@ collides with one of yours, or drop it with `npmScripts.panelScript: false`.
 false` to skip package.json rewriting entirely.
 - **`npmScripts.panelScript`** (optional) renames the managed control-panel alias (default
   `panel` → `captain-obvious serve`); set it to `false` to skip that alias.
+
+### Advanced: scripted registry management
+
+`captain-obvious-install` initializes and seeds the registry in one shot. For scripted or
+advanced use cases (e.g. re-seeding after installing a new rule package without touching hooks
+or settings), use the standalone CLI commands:
+
+- `captain-obvious init` — create the registry DB file.
+- `captain-obvious seed-rules [--only <slug>]` — populate or refresh the registry from
+  discovered rules.
 
 ## What's in the box
 
