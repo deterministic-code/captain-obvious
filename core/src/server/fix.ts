@@ -108,6 +108,8 @@ export interface FixResult {
   slug: string;
   ok: boolean;
   output: string;
+  /** Files the fix reported reformatting (prettier-style output); null when it failed. */
+  fixed: number | null;
   error?: string;
 }
 
@@ -172,6 +174,7 @@ async function runScriptFix(
     slug,
     ok: outcome.ok,
     output: outcome.output,
+    fixed,
     ...(outcome.ok ? {} : { error: outcome.output || "fix command failed" }),
   };
 }

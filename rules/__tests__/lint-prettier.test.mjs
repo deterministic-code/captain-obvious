@@ -30,7 +30,7 @@ vi.mock("node:child_process", async () => {
   return { ...actual, execFile };
 });
 
-const { main, parsePrettierCheckOutput, selectMode } =
+const { main, parsePrettierCheckOutput, parsePrettierWriteOutput, selectMode } =
   await import("../lint-prettier/check.mjs");
 const { cleanupTmp, commitAllIn, makeTempGitRepo } =
   await import("./test-helpers.mjs");
@@ -124,6 +124,23 @@ describe("lint-prettier / parsePrettierCheckOutput", () => {
     const v = parsePrettierCheckOutput(out);
     expect(v).toHaveLength(1);
     expect(v[0].path).toBe("src/a.ts");
+  });
+});
+
+describe("lint-prettier / parsePrettierWriteOutput", () => {
+  test("splits reformatted files from ones left unchanged", () => {
+    const out = "src/a.ts 13ms\nsrc/b.tsx 1ms (unchanged)\nsrc/c.ts 4ms\n";
+    expect(parsePrettierWriteOutput(out)).toEqual({
+      changed: ["src/a.ts", "src/c.ts"],
+      unchanged: ["src/b.tsx"],
+    });
+  });
+
+  test("a non-timing line (banner/blank) is ignored", () => {
+    expect(parsePrettierWriteOutput("\nignored line\n")).toEqual({
+      changed: [],
+      unchanged: [],
+    });
   });
 });
 
@@ -237,8 +254,20 @@ describe("lint-prettier / main (real prettier)", () => {
     expect(exitSpy).not.toHaveBeenCalled();
     expect(await readFile(p, "utf8")).toBe(FORMATTED);
     const out = stdoutText();
-    expect(out).toMatch(/formatted and saved:/);
+    expect(out).toMatch(/formatted 1 file\(s\):/);
     expect(out).toContain("fixme.ts");
+    expect(out).toMatch(/Re-stage them/);
+  });
+
+  test("--fix over an already-formatted file reports nothing changed", async () => {
+    const p = join(repo, "clean.ts");
+    await writeFile(p, FORMATTED, "utf8");
+    await main(["node", "s.mjs", "--fix", "--files", p]);
+    expect(exitSpy).not.toHaveBeenCalled();
+    expect(await readFile(p, "utf8")).toBe(FORMATTED);
+    expect(stdoutText()).toMatch(
+      /1 file\(s\) already formatted; nothing changed/,
+    );
   });
 
   test("--staged over a clean repo reports all files formatted", async () => {

@@ -166,6 +166,7 @@ describe("fixRule — scriptBody (shell command prefix)", () => {
       slug: "lint-prettier",
       ok: true,
       output: "formatted",
+      fixed: 1,
     });
     const [cmd, args, opts] = spawnMock.mock.calls[0] as [
       string,
@@ -302,6 +303,7 @@ describe("fixRule — failures", () => {
       slug: "lint-prettier",
       ok: false,
       output: "boom",
+      fixed: null,
       error: "boom",
     });
     expect(listHookRuns(auditDb)[0]).toMatchObject({ status: "failure" });
@@ -331,6 +333,7 @@ describe("fixRule — failures", () => {
       slug: "lint-prettier",
       ok: false,
       output: "nope",
+      fixed: null,
       error: "nope",
     });
   });

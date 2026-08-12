@@ -3,7 +3,7 @@ import { openDb, type Db } from "../../db/open.js";
 import { configureRule } from "../../db/rules.js";
 import { seedRules } from "../../db/seed.js";
 import { RULES } from "../index.js";
-import { selectToolFixes } from "../toolFix.js";
+import { formatToolFixNotice, selectToolFixes } from "../toolFix.js";
 
 let db: Db;
 
@@ -34,5 +34,23 @@ describe("selectToolFixes", () => {
   it("skips a disabled rule", () => {
     configureRule(db, "lint-prettier", { enabled: false });
     expect(selectToolFixes(db, "src/app.ts")).not.toContain("lint-prettier");
+  });
+});
+
+describe("formatToolFixNotice", () => {
+  it("names the repo-relative file and the fixes that rewrote it", () => {
+    expect(
+      formatToolFixNotice("/repo/src/app.ts", ["lint-prettier"], "/repo"),
+    ).toBe("captain-obvious: reformatted src/app.ts (lint-prettier)");
+  });
+
+  it("is null when nothing changed the file, so the edit stays silent", () => {
+    expect(formatToolFixNotice("/repo/src/app.ts", [], "/repo")).toBeNull();
+  });
+
+  it("uses the raw path when relative() resolves to empty (path === cwd)", () => {
+    expect(
+      formatToolFixNotice("/repo/app.ts", ["lint-prettier"], "/repo/app.ts"),
+    ).toBe("captain-obvious: reformatted /repo/app.ts (lint-prettier)");
   });
 });
