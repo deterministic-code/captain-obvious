@@ -1,6 +1,6 @@
 {
   "name": "@deterministic-code/co-rule-lint-max-file-lines",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "type": "module",
   "license": "MIT",
   "keywords": [
@@ -16,7 +16,7 @@
     "check.mjs"
   ],
   "dependencies": {
-    "@deterministic-code/co-rule-kit": "^0.3.0"
+    "@deterministic-code/co-rule-kit": "^0.3.1"
   },
   "publishConfig": {
     "access": "public"

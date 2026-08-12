@@ -5,6 +5,7 @@ import {
   assertRulePlugin,
   discoverInstalledPlugins,
   discoverRules,
+  installedRulePackages,
   loadPlugins,
   nodeModulesRoots,
 } from "../load.js";
@@ -16,6 +17,7 @@ const BAD_ROOT = resolve(here, "fixtures", "plugins-bad");
 const NOSLUG_ROOT = resolve(here, "fixtures", "plugins-noslug");
 const NM = resolve(here, "fixtures", "node-modules");
 const NM_OK = resolve(NM, "nm-ok");
+const NM_VERSIONS = resolve(NM, "nm-versions");
 
 /** A structurally valid descriptor; tests mutate a clone to hit each branch. */
 function validPlugin(): RulePlugin {
@@ -117,6 +119,18 @@ describe("discoverInstalledPlugins", () => {
 
   it("defaults to the real node_modules roots", async () => {
     expect(Array.isArray(await discoverInstalledPlugins())).toBe(true);
+  });
+});
+
+describe("installedRulePackages", () => {
+  it("returns name+version for keyworded packages with both fields, skipping the rest", async () => {
+    expect(await installedRulePackages([NM_VERSIONS])).toEqual([
+      { name: "co-rule-good", version: "1.0.0" },
+    ]);
+  });
+
+  it("defaults to the real node_modules roots", async () => {
+    expect(Array.isArray(await installedRulePackages())).toBe(true);
   });
 });
 
