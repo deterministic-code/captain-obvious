@@ -46,16 +46,19 @@ async function gitHooksDir(target) {
       encoding: "utf8",
     },
   );
-  // In a linked worktree `--git-path hooks` is absolute (the shared git dir), so
-  // resolve (not join) — an absolute path must win instead of nesting under target.
+  // Linked worktrees return absolute --git-path: resolve it, don't join onto target.
   return resolve(target, stdout.trim());
 }
 
 /**
  * Write `pre-commit` and `pre-push` into the repo's git hooks dir, each dispatching
  * the enabled rules for its stage plus any `run:` passthroughs. Returns the paths written.
+ * Returns [] when gitHooks.enabled === false.
  */
 export async function installGitHooks({ target, pkgRoot, gitHooks }) {
+  if (gitHooks?.enabled === false) {
+    return [];
+  }
   const relGitHooks = relative(target, join(pkgRoot, "hooks", "git"));
   const hooksDir = await gitHooksDir(target);
   await mkdir(hooksDir, { recursive: true });

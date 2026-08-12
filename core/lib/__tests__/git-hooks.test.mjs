@@ -114,16 +114,26 @@ describe("installGitHooks", () => {
     return wt;
   }
 
-  it("resolves the shared hooks dir from a linked worktree (absolute --git-path)", async () => {
+  it("resolves shared hooks dir from a linked worktree (absolute --git-path)", async () => {
     const target = await tempWorktree();
     const [preCommitPath] = await installGitHooks({
       target,
       pkgRoot: target,
       gitHooks: {},
     });
-    // The bug joined the absolute --git-path onto target, nesting the hook under
-    // the worktree; the fix resolves it to the real (shared) hooks dir outside it.
+    // Bug: joined absolute path onto target. Fix: resolve to real shared hooks dir.
     expect(preCommitPath.startsWith(target)).toBe(false);
     expect(await readFile(preCommitPath, "utf8")).toContain("dispatch.mjs");
+  });
+
+  it("returns empty array and writes nothing when gitHooks.enabled is false", async () => {
+    const target = await tempRepo();
+    const written = await installGitHooks({
+      target,
+      pkgRoot: target,
+      gitHooks: { enabled: false },
+    });
+
+    expect(written).toHaveLength(0);
   });
 });
