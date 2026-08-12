@@ -3,10 +3,13 @@ import { readJson, writeJson } from "./json-file.mjs";
 
 const PROJECT_DIR = "${CLAUDE_PROJECT_DIR}";
 
+/** Marks settings.json entries this installer owns, so re-runs and `list-hooks` can find them. */
+export const CLAUDE_HOOK_TAG = "_captainObvious";
+
 function entryFor(spec, relClaude) {
   const command = `bash ${PROJECT_DIR}/${relClaude}/${spec.hook}.sh`;
   const entry = {
-    _captainObvious: true,
+    [CLAUDE_HOOK_TAG]: true,
     hooks: [{ type: "command", command, timeout: spec.timeout ?? 5 }],
   };
   return spec.matcher ? { matcher: spec.matcher, ...entry } : entry;
@@ -27,7 +30,7 @@ export async function installClaudeHooks({ target, pkgRoot, claudeHooks }) {
   settings.hooks ??= {};
   for (const event of Object.keys(settings.hooks)) {
     settings.hooks[event] = settings.hooks[event].filter(
-      (entry) => !entry._captainObvious,
+      (entry) => !entry[CLAUDE_HOOK_TAG],
     );
   }
   for (const spec of claudeHooks) {

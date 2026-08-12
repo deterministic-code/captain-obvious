@@ -12,6 +12,13 @@ const STAGES = [
 ];
 
 /**
+ * Substring every installed hook carries (`relGitHooks` always ends in `hooks/git`),
+ * so `list-hooks` can tell our scripts apart from foreign ones. The git-hooks contract
+ * test pins that renderHook's output contains it.
+ */
+export const GIT_HOOK_MARKER = "hooks/git/dispatch.mjs";
+
+/**
  * `run: <cmd>` entries are arbitrary shell passthroughs (e.g. test tiers). Rule
  * entries are ignored here — the dispatcher selects the enabled rules from the
  * registry DB, so the config no longer decides which rules run.

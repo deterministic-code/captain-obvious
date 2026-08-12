@@ -76,6 +76,33 @@ Wire it to run on every `npm install` so a fresh clone is gated automatically:
 Run any hook directly with the bin: `captain-obvious-lint <name> --staged` (e.g.
 `captain-obvious-lint comments --staged` runs `hooks/git/lint-comments.mjs`).
 
+### Inspecting installed hooks
+
+`captain-obvious-hooks` lists **every** hook wired into a repo — git hooks and Claude Code
+guard hooks — flagging which captain-obvious installed (`captain-obvious`) and which came from
+elsewhere (`external`, e.g. husky, lefthook, or a hand-written hook):
+
+```sh
+npx captain-obvious-hooks            # inspect the current repo
+npx captain-obvious-hooks --target ../other-repo
+npx captain-obvious-hooks --json     # machine-readable inventory
+```
+
+```
+git hooks (/repo/.git/hooks):
+  commit-msg       external
+  pre-commit       captain-obvious
+  pre-push         captain-obvious
+
+Claude Code hooks (/repo/.claude/settings.json):
+  PreToolUse   Edit|Write   captain-obvious
+  Stop         *            captain-obvious
+```
+
+It honors `core.hooksPath` (so husky/lefthook hooks show up), skips git's `*.sample` stubs, and
+flags any hook that isn't executable (git silently skips those). It reads only — it never
+changes anything.
+
 ## Control panel
 
 Configure rules (enable/disable, thresholds, advisory-vs-blocking, order) and view Activity
