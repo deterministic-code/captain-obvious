@@ -72,6 +72,23 @@ function looksLikeToolError(text) {
   return /^\[error\]/m.test(text);
 }
 
+/**
+ * Parse `prettier --write` output into the files it touched, split by whether
+ * prettier actually rewrote them. Each line is `<path> <n>ms` with an optional
+ * ` (unchanged)`/` (error)` suffix; only the unsuffixed lines were reformatted.
+ */
+export function parsePrettierWriteOutput(text) {
+  const changed = [];
+  const unchanged = [];
+  for (const line of text.split("\n")) {
+    const m = line.match(/^(.+?)\s+\d+ms(?:\s+\((\w+)\))?$/);
+    if (!m) continue;
+    if (m[2]) unchanged.push(m[1]);
+    else changed.push(m[1]);
+  }
+  return { changed, unchanged };
+}
+
 async function selectFiles(selector, files, repoRoot) {
   let list;
   if (selector === "--staged") list = await listStagedFiles(repoRoot);
@@ -138,18 +155,15 @@ async function runFix(bin, targets, repoRoot) {
       maxBuffer: 64 * 1024 * 1024,
     },
   );
-  const lines = stdout
-    .trim()
-    .split("\n")
-    .filter((l) => l.length > 0);
-  if (lines.length > 0) {
-    process.stdout.write("lint-prettier: formatted and saved:\n");
-    for (const line of lines) process.stdout.write(`  ${line}\n`);
-  } else {
+  const { changed } = parsePrettierWriteOutput(stdout);
+  if (changed.length === 0) {
     process.stdout.write(
-      `lint-prettier: formatted ${targets.length} file(s) with prettier --write.\n`,
+      `lint-prettier: ${targets.length} file(s) already formatted; nothing changed.\n`,
     );
+    return;
   }
+  process.stdout.write(`lint-prettier: formatted ${changed.length} file(s):\n`);
+  for (const file of changed) process.stdout.write(`  ${file}\n`);
   process.stdout.write("Re-stage them with `git add`.\n");
 }
 
