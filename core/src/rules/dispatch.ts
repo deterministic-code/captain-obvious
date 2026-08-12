@@ -260,22 +260,34 @@ export async function runDispatch(argv: string[]): Promise<void> {
     for (const { slug, action, fix } of selected) {
       const behavior = actionBehavior(action);
       const startedMs = Date.now();
-      if (fix && stage === "pre-commit") {
-        await runRuleFix(slug, fix, cwd, args, staged);
-        if (staged.length) await runGit(["add", "--", ...staged], cwd);
+      let code = 0;
+      let found: number | null = null;
+      // Default failure: a run that throws before it completes (killed child,
+      // failed fix or re-stage) leaves this untouched, so the finally still logs
+      // it. Every rule the loop begins gets exactly one hook_run row.
+      let status: "success" | "failure" = "failure";
+      try {
+        if (fix && stage === "pre-commit") {
+          await runRuleFix(slug, fix, cwd, args, staged);
+          if (staged.length) await runGit(["add", "--", ...staged], cwd);
+        }
+        if (behavior.checks) {
+          const result = await runRule(slug, args);
+          code = result.code;
+          found = result.found;
+        }
+        status = code === 0 ? "success" : "failure";
+      } finally {
+        recordHookRun(auditDb, {
+          slug,
+          stage,
+          status,
+          startedMs,
+          durationMs: Date.now() - startedMs,
+          found,
+        });
       }
-      const result = behavior.checks
-        ? await runRule(slug, args)
-        : { code: 0, found: null };
-      recordHookRun(auditDb, {
-        slug,
-        stage,
-        status: result.code === 0 ? "success" : "failure",
-        startedMs,
-        durationMs: Date.now() - startedMs,
-        found: result.found,
-      });
-      if (result.code !== 0 && behavior.blocks) process.exit(result.code);
+      if (code !== 0 && behavior.blocks) process.exit(code);
     }
   } finally {
     auditDb.close();
