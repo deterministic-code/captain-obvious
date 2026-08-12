@@ -113,17 +113,55 @@ async function packageDirs(nodeModules: string): Promise<string[]> {
   return out;
 }
 
-/** A `RulePlugin` from a package that opts in via {@link RULE_KEYWORD}, else null. */
-async function ruleFromPackage(dir: string): Promise<RulePlugin | null> {
+interface RuleManifest {
+  name?: string;
+  version?: string;
+  keywords?: unknown;
+}
+
+/** Parsed package.json of the rule package at `dir` if it opts in via {@link RULE_KEYWORD}, else null. */
+async function readRuleManifest(dir: string): Promise<RuleManifest | null> {
   const manifest = resolve(dir, "package.json");
   if (!(await exists(manifest))) return null;
-  const pkg = JSON.parse(await readFile(manifest, "utf8")) as {
-    keywords?: unknown;
-  };
+  const pkg = JSON.parse(await readFile(manifest, "utf8")) as RuleManifest;
   if (!Array.isArray(pkg.keywords) || !pkg.keywords.includes(RULE_KEYWORD)) {
     return null;
   }
-  return loadDescriptor(dir, null);
+  return pkg;
+}
+
+/** A `RulePlugin` from a package that opts in via {@link RULE_KEYWORD}, else null. */
+async function ruleFromPackage(dir: string): Promise<RulePlugin | null> {
+  return (await readRuleManifest(dir)) === null ? null : loadDescriptor(dir, null);
+}
+
+export interface InstalledRulePackage {
+  name: string;
+  version: string;
+}
+
+/**
+ * Name + version of every installed rule package (keyword opt-in) — the input to the
+ * install-time engine/rules version-skew check. Distinct from {@link discoverInstalledPlugins}:
+ * it needs the manifest's version, not a validated descriptor. `roots` is overridable for tests.
+ */
+export async function installedRulePackages(
+  roots: string[] = nodeModulesRoots(),
+): Promise<InstalledRulePackage[]> {
+  const out: InstalledRulePackage[] = [];
+  for (const nodeModules of roots) {
+    for (const dir of await packageDirs(nodeModules)) {
+      const pkg = await readRuleManifest(dir);
+      if (
+        pkg !== null &&
+        typeof pkg.name === "string" &&
+        typeof pkg.version === "string"
+      ) {
+        out.push({ name: pkg.name, version: pkg.version });
+      }
+    }
+  }
+  return out;
 }
 
 /**

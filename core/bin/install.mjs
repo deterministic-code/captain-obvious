@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { access } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadConfig } from "../lib/config.mjs";
@@ -22,6 +22,30 @@ async function loadDistRules() {
   if (!(await exists(indexPath))) return null;
   const { RULES } = await import(pathToFileURL(indexPath).href);
   return RULES;
+}
+
+// Loud warning when the engine and installed rule packages are on ^-incompatible versions
+// (e.g. an old core left pinned while rules were upgraded). Skipped if dist isn't built.
+async function warnVersionSkew() {
+  const vcPath = resolve(pkgRoot, "dist", "rules", "versionCheck.js");
+  const loadPath = resolve(pkgRoot, "dist", "rules", "load.js");
+  if (!(await exists(vcPath)) || !(await exists(loadPath))) return;
+  const { detectVersionSkew } = await import(pathToFileURL(vcPath).href);
+  const { installedRulePackages } = await import(pathToFileURL(loadPath).href);
+  const { version } = JSON.parse(
+    await readFile(resolve(pkgRoot, "package.json"), "utf8"),
+  );
+  const skew = detectVersionSkew(version, await installedRulePackages());
+  if (skew.length === 0) return;
+  process.stdout.write(
+    `captain-obvious: WARNING — engine is ${version} but ${skew.length} rule package(s) are on an incompatible version:\n`,
+  );
+  for (const p of skew) {
+    process.stdout.write(`captain-obvious:   ${p.name}@${p.version}\n`);
+  }
+  process.stdout.write(
+    "captain-obvious:   align them — `npm install @deterministic-code/captain-obvious@latest` and the matching rules.\n",
+  );
 }
 
 // Best-effort warnings for external tools a rule's check needs (skipped if dist isn't built).
@@ -155,6 +179,7 @@ async function main() {
       "captain-obvious: dist not built — skipping lint:* (run `npm run build` then re-install)\n",
     );
   }
+  await warnVersionSkew();
 
   await installHooks({ config, target, pkgRoot, rules });
   const registry = await initRegistry({ target, pkgRoot, rules });

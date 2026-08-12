@@ -73,6 +73,12 @@ Wire it to run on every `npm install` so a fresh clone is gated automatically:
   `captainObvious.managedScripts` so re-runs stay idempotent and dropped hooks get pruned, and
 - initializes and seeds the registry DB so rules are live on the first hook run.
 
+It also **warns loudly if the engine and your rule packages are on `^`-incompatible versions**
+(e.g. an old `@deterministic-code/captain-obvious` left pinned while the rules were upgraded) —
+the lockstep release keeps everything on one version, so a mismatch means a half-upgraded install.
+Fix it by aligning the versions (`npm install @deterministic-code/captain-obvious@latest` and the
+matching rules).
+
 Run any hook directly with the bin: `captain-obvious-lint <name> --staged` (e.g.
 `captain-obvious-lint comments --staged` runs `hooks/git/lint-comments.mjs`).
 
