@@ -187,7 +187,7 @@ describe("runDispatch", () => {
     expect(exitSpy).not.toHaveBeenCalled();
   });
 
-  it("rejects when the child is killed by a signal", async () => {
+  it("rejects when the child is killed by a signal, still logging a failure", async () => {
     isolatePreCommit("lint-naming");
     spawnMock.mockImplementationOnce(
       () => fakeChild((c) => c.emit("exit", null, "SIGKILL")) as never,
@@ -195,14 +195,20 @@ describe("runDispatch", () => {
     await expect(runDispatch(["pre-commit"])).rejects.toThrow(
       /killed by SIGKILL/,
     );
+    expect(recordedRuns()).toEqual([
+      { slug: "lint-naming", stage: "pre-commit", status: "failure" },
+    ]);
   });
 
-  it("rejects when the child emits an error", async () => {
+  it("rejects when the child emits an error, still logging a failure", async () => {
     isolatePreCommit("lint-naming");
     spawnMock.mockImplementationOnce(
       () => fakeChild((c) => c.emit("error", new Error("boom"))) as never,
     );
     await expect(runDispatch(["pre-commit"])).rejects.toThrow(/boom/);
+    expect(recordedRuns()).toEqual([
+      { slug: "lint-naming", stage: "pre-commit", status: "failure" },
+    ]);
   });
 
   it("records the violation count a check reports on fd 3", async () => {
@@ -444,7 +450,7 @@ describe("runDispatch fix actions", () => {
     expect(exitSpy).not.toHaveBeenCalled();
   });
 
-  it("rejects when the fix child is killed by a signal", async () => {
+  it("rejects when the fix child is killed by a signal, still logging a failure", async () => {
     isolatePreCommit("lint-prettier");
     bindDefault("lint-prettier", "fix_and_halt");
     spawnMock.mockImplementation(((cmd: string, args: string[]) => {
@@ -458,6 +464,20 @@ describe("runDispatch fix actions", () => {
     await expect(runDispatch(["pre-commit"])).rejects.toThrow(
       /fix killed by SIGTERM/,
     );
+    expect(recordedRuns()).toEqual([
+      { slug: "lint-prettier", stage: "pre-commit", status: "failure" },
+    ]);
+  });
+
+  it("rejects when re-staging fails, still logging a failure", async () => {
+    isolatePreCommit("lint-prettier");
+    bindDefault("lint-prettier", "fix_and_halt");
+    mockFixRun({ addCode: 1 });
+
+    await expect(runDispatch(["pre-commit"])).rejects.toThrow(/git add exited 1/);
+    expect(recordedRuns()).toEqual([
+      { slug: "lint-prettier", stage: "pre-commit", status: "failure" },
+    ]);
   });
 
   it("runs a shell scriptBody fix over the staged files", async () => {
@@ -491,5 +511,8 @@ describe("runDispatch fix actions", () => {
     await expect(runDispatch(["pre-commit"])).rejects.toThrow(
       /git diff exited 1/,
     );
+    // Staged-file collection precedes the per-rule loop, so no rule ran — the
+    // guaranteed-log applies per rule the loop begins, not to setup failures.
+    expect(recordedRuns()).toEqual([]);
   });
 });
