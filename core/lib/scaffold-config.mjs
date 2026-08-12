@@ -10,45 +10,38 @@ async function fileExists(p) {
   );
 }
 
-async function promptAnswers(input, output) {
-  let mode = "local";
-  let wireGitHooks = true;
-  let wireClaudeHooks = true;
+// Prompts only for values the caller didn't pin via `overrides`, mutating `resolved` in place.
+async function promptMissing(input, output, resolved, overrides) {
   const rl = createInterface({ input, output });
   try {
-    const modeAnswer = await rl.question(
-      'Registry DB location — "local" (per-repo) or "global" (shared)? [local]: ',
-    );
-    if (modeAnswer.trim().toLowerCase() === "global") {
-      mode = "global";
+    if (overrides.mode === undefined) {
+      const answer = await rl.question(
+        'Registry DB location — "local" (per-repo) or "global" (shared)? [local]: ',
+      );
+      if (answer.trim().toLowerCase() === "global") {
+        resolved.mode = "global";
+      }
     }
-
-    const gitAnswer = await rl.question(
-      "Wire git pre-commit/pre-push hooks? [Y/n]: ",
-    );
-    if (gitAnswer.trim().toLowerCase().startsWith("n")) {
-      wireGitHooks = false;
-    }
-
-    const claudeAnswer = await rl.question(
-      "Wire Claude Code guard hooks (main-branch-guard, stop-unmerged-guard)? [Y/n]: ",
-    );
-    if (claudeAnswer.trim().toLowerCase().startsWith("n")) {
-      wireClaudeHooks = false;
+    if (overrides.wireHooks === undefined) {
+      const answer = await rl.question(
+        "Wire git + Claude Code guard hooks? [Y/n]: ",
+      );
+      if (answer.trim().toLowerCase().startsWith("n")) {
+        resolved.wireHooks = false;
+      }
     }
   } finally {
     rl.close();
   }
-  return { mode, wireGitHooks, wireClaudeHooks };
 }
 
-function buildConfig(mode, wireGitHooks, wireClaudeHooks) {
+function buildConfig({ mode, wireHooks }) {
   const config = {};
   if (mode === "global") {
     config.mode = "global";
   }
-  config.gitHooks = wireGitHooks ? {} : { enabled: false };
-  if (wireClaudeHooks) {
+  config.gitHooks = wireHooks ? {} : { enabled: false };
+  if (wireHooks) {
     config.claudeHooks = [
       {
         event: "PreToolUse",
@@ -67,18 +60,22 @@ function buildConfig(mode, wireGitHooks, wireClaudeHooks) {
  * Returns { path, created: boolean }. If `created` is false, the file already
  * existed and was not modified.
  *
- * When interactive (`isTTY` true) and config is missing, prompts for:
+ * When interactive (`isTTY` true and `yes` false), prompts for anything not
+ * pinned via `defaults`:
  * - Registry DB mode (local/global) [default: local]
- * - Wire git hooks? [default: yes]
- * - Wire Claude Code guard hooks? [default: yes]
+ * - Wire git + Claude Code guard hooks? [default: yes]
  *
- * When non-interactive (`isTTY` false), uses these same defaults without prompting.
+ * `yes` (or a non-TTY stdin) skips all prompts and takes the defaults. `defaults`
+ * ({ mode, wireHooks }) pins individual answers from CLI flags — a pinned value
+ * is never prompted for, so `--mode global` still asks about hooks but not mode.
  */
 export async function scaffoldConfig({
   target,
   input = process.stdin,
   output = process.stdout,
   isTTY = input.isTTY === true,
+  yes = false,
+  defaults = {},
 }) {
   const configPath = join(target, "captain-obvious.config.json");
 
@@ -86,18 +83,16 @@ export async function scaffoldConfig({
     return { path: configPath, created: false };
   }
 
-  let mode = "local";
-  let wireGitHooks = true;
-  let wireClaudeHooks = true;
+  const overrides = { mode: defaults.mode, wireHooks: defaults.wireHooks };
+  const resolved = {
+    mode: overrides.mode ?? "local",
+    wireHooks: overrides.wireHooks ?? true,
+  };
 
-  if (isTTY) {
-    ({ mode, wireGitHooks, wireClaudeHooks } = await promptAnswers(
-      input,
-      output,
-    ));
+  if (isTTY && !yes) {
+    await promptMissing(input, output, resolved, overrides);
   }
 
-  const config = buildConfig(mode, wireGitHooks, wireClaudeHooks);
-  await writeJson(configPath, config);
+  await writeJson(configPath, buildConfig(resolved));
   return { path: configPath, created: true };
 }

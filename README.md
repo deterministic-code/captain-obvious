@@ -34,11 +34,16 @@ npx captain-obvious-install
 ```
 
 `captain-obvious-install` scaffolds `captain-obvious.config.json` if it doesn't exist,
-asking you a few quick questions (DB mode, wire git hooks, wire Claude Code guard hooks)
-with sensible defaults; then it wires the hooks, merges Claude Code settings, rewrites npm
-scripts, and initializes + seeds the registry DB in one shot. On a fresh clone with a
-committed config, it runs non-interactively in your `prepare` script; on a new consumer
-repo, it prompts once and produces a working gate immediately.
+asking you two quick questions (DB mode, and whether to wire the git + Claude Code guard
+hooks) with sensible defaults; then it wires the hooks, merges Claude Code settings,
+rewrites npm scripts, and initializes + seeds the registry DB in one shot. On a fresh clone
+with a committed config, it runs non-interactively in your `prepare` script; on a new
+consumer repo, it prompts once and produces a working gate immediately.
+
+Skip the prompts with flags — handy for scripted installs: `--yes` (or `-y`) takes every
+default without asking, `--mode <local|global>` pins the DB location, and `--no-hooks`
+scaffolds without wiring any hooks. A pinned flag is never prompted for, so `--mode global`
+still asks about hooks but not the mode. A non-TTY stdin (CI, `prepare`) implies `--yes`.
 
 Rules are discovered from `node_modules`: any installed package whose `package.json`
 carries the `"captain-obvious-rule"` keyword is picked up and seeded into the registry —
@@ -88,10 +93,10 @@ collides with one of yours, or drop it with `npmScripts.panelScript: false`.
 
 ## Config
 
-`captain-obvious-install` scaffolds `captain-obvious.config.json` on first run, asking a few
-questions (DB mode, git hooks, Claude Code guard hooks) and filling in sensible defaults. You
-don't need to hand-author it — the scaffolding picks good defaults and you can customize
-afterward if needed:
+`captain-obvious-install` scaffolds `captain-obvious.config.json` on first run, asking two
+questions (DB mode, and whether to wire the git + Claude Code guard hooks) and filling in
+sensible defaults. You don't need to hand-author it — the scaffolding picks good defaults and
+you can customize afterward if needed:
 
 ```json
 {

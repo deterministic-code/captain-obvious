@@ -7,6 +7,33 @@ import { scaffoldConfig } from "../scaffold-config.mjs";
 
 const SCRATCH = tmpdir();
 
+const CLAUDE_HOOKS = [
+  {
+    event: "PreToolUse",
+    matcher: "Edit|Write",
+    hook: "main-branch-guard",
+    timeout: 5,
+  },
+  { event: "Stop", hook: "stop-unmerged-guard", timeout: 15 },
+];
+
+async function readConfig(path) {
+  return JSON.parse(await readFile(path, "utf8"));
+}
+
+// readline/promises only captures input written while a question is pending, so
+// answer each prompt reactively as its text is written to `output`.
+function autoRespond(input, output, { mode, hooks }) {
+  output.on("data", (chunk) => {
+    const text = chunk.toString();
+    if (text.includes("Registry DB location")) {
+      input.write(`${mode}\n`);
+    } else if (text.includes("Wire git")) {
+      input.write(`${hooks}\n`);
+    }
+  });
+}
+
 describe("scaffold-config / scaffoldConfig", () => {
   let target;
 
@@ -27,44 +54,81 @@ describe("scaffold-config / scaffoldConfig", () => {
 
     expect(result.created).toBe(false);
     expect(result.path).toBe(configPath);
-    const written = JSON.parse(await readFile(configPath, "utf8"));
-    expect(written).toEqual(original);
+    expect(await readConfig(configPath)).toEqual(original);
   });
 
   test("creates config with all defaults when non-interactive", async () => {
-    const input = new PassThrough();
-    const result = await scaffoldConfig({ target, input, isTTY: false });
+    const result = await scaffoldConfig({ target, isTTY: false });
 
-    expect(result.created).toBe(true);
-    const written = JSON.parse(await readFile(result.path, "utf8"));
-    expect(written).toEqual({
-      gitHooks: {},
-      claudeHooks: [
-        {
-          event: "PreToolUse",
-          matcher: "Edit|Write",
-          hook: "main-branch-guard",
-          timeout: 5,
-        },
-        { event: "Stop", hook: "stop-unmerged-guard", timeout: 15 },
-      ],
+    expect(result).toEqual({
+      path: join(target, "captain-obvious.config.json"),
+      created: true,
     });
+    const written = await readConfig(result.path);
+    expect(written).toEqual({ gitHooks: {}, claudeHooks: CLAUDE_HOOKS });
     expect(written.mode).toBeUndefined();
   });
 
-  test("returns { path, created: true } when scaffolding succeeds", async () => {
-    const result = await scaffoldConfig({ target, isTTY: false });
-    expect(result).toHaveProperty("path");
-    expect(result).toHaveProperty("created", true);
-    expect(result.path).toBe(join(target, "captain-obvious.config.json"));
+  test("interactive: empty answers take the defaults", async () => {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    autoRespond(input, output, { mode: "", hooks: "" });
+    const result = await scaffoldConfig({ target, input, output, isTTY: true });
+
+    expect(await readConfig(result.path)).toEqual({
+      gitHooks: {},
+      claudeHooks: CLAUDE_HOOKS,
+    });
+  });
+
+  test("interactive: 'global' + 'n' opts into global mode and no hooks", async () => {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    autoRespond(input, output, { mode: "global", hooks: "no" });
+    const result = await scaffoldConfig({ target, input, output, isTTY: true });
+
+    expect(await readConfig(result.path)).toEqual({
+      mode: "global",
+      gitHooks: { enabled: false },
+    });
+  });
+
+  test("yes: skips every prompt even on a TTY", async () => {
+    const input = new PassThrough();
+    input.write("global\n");
+    const result = await scaffoldConfig({
+      target,
+      input,
+      output: new PassThrough(),
+      isTTY: true,
+      yes: true,
+    });
+
+    expect(await readConfig(result.path)).toEqual({
+      gitHooks: {},
+      claudeHooks: CLAUDE_HOOKS,
+    });
+  });
+
+  test("defaults: pinned mode/wireHooks are never prompted for", async () => {
+    const input = new PassThrough();
+    const result = await scaffoldConfig({
+      target,
+      input,
+      output: new PassThrough(),
+      isTTY: true,
+      defaults: { mode: "global", wireHooks: false },
+    });
+
+    expect(await readConfig(result.path)).toEqual({
+      mode: "global",
+      gitHooks: { enabled: false },
+    });
   });
 
   test("writes valid JSON with 2-space indentation", async () => {
-    await scaffoldConfig({ target, isTTY: false });
-    const content = await readFile(
-      join(target, "captain-obvious.config.json"),
-      "utf8",
-    );
+    const { path } = await scaffoldConfig({ target, isTTY: false });
+    const content = await readFile(path, "utf8");
     expect(content).toContain("  ");
     expect(() => JSON.parse(content)).not.toThrow();
   });
