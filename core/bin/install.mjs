@@ -77,12 +77,25 @@ async function initRegistry({ target, pkgRoot, rules }) {
 }
 
 function parseArgs(argv) {
-  const opts = { target: process.cwd(), config: undefined };
+  const opts = {
+    target: process.cwd(),
+    config: undefined,
+    yes: false,
+    mode: undefined,
+    wireHooks: undefined,
+  };
   for (let i = 0; i < argv.length; i += 1) {
-    if (argv[i] === "--target") {
+    const arg = argv[i];
+    if (arg === "--target") {
       opts.target = resolve(argv[(i += 1)]);
-    } else if (argv[i] === "--config") {
+    } else if (arg === "--config") {
       opts.config = resolve(argv[(i += 1)]);
+    } else if (arg === "--yes" || arg === "-y") {
+      opts.yes = true;
+    } else if (arg === "--mode") {
+      opts.mode = argv[(i += 1)];
+    } else if (arg === "--no-hooks") {
+      opts.wireHooks = false;
     }
   }
   return opts;
@@ -117,10 +130,16 @@ async function installHooks({ config, target, pkgRoot, rules }) {
 }
 
 async function main() {
-  const { target, config: configPath } = parseArgs(process.argv.slice(2));
+  const { target, config: configPath, yes, mode, wireHooks } = parseArgs(
+    process.argv.slice(2),
+  );
 
   if (!configPath) {
-    const { created } = await scaffoldConfig({ target });
+    const { created } = await scaffoldConfig({
+      target,
+      yes,
+      defaults: { mode, wireHooks },
+    });
     if (created) {
       process.stdout.write(
         `captain-obvious: wrote ${resolve(target, "captain-obvious.config.json")}\n`,
