@@ -158,8 +158,10 @@ export function spawnRule(spec: RunSpec): Promise<RunOutcome> {
       if (signal) return reject(new Error(`${spec.slug} killed by ${signal}`));
       const c = code ?? 0;
       const merged = `${stdout}${stderr}`.trim();
+      // A formatter lists reformatted files on stdout; stderr carries warnings
+      // (e.g. npx's install notice) that must not be mistaken for filenames.
       const fixedFiles =
-        spec.mode === "fix" && c === 0 ? modifiedFiles(merged) : null;
+        spec.mode === "fix" && c === 0 ? modifiedFiles(stdout) : null;
       resolveOutcome({
         code: c,
         found: spec.mode === "check" ? parseFound(fd3) : null,
