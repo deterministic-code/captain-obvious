@@ -13,6 +13,7 @@ export default {
     ratchetable: false,
     modes: ["push", "warn"],
     stages: ["pre-push"],
+    supportStages: ["pre-push", "git-pre-push"],
     defaultAction: "warn",
     order: 27,
     actions: [],

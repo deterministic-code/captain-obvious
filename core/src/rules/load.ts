@@ -132,7 +132,9 @@ async function readRuleManifest(dir: string): Promise<RuleManifest | null> {
 
 /** A `RulePlugin` from a package that opts in via {@link RULE_KEYWORD}, else null. */
 async function ruleFromPackage(dir: string): Promise<RulePlugin | null> {
-  return (await readRuleManifest(dir)) === null ? null : loadDescriptor(dir, null);
+  return (await readRuleManifest(dir)) === null
+    ? null
+    : loadDescriptor(dir, null);
 }
 
 export interface InstalledRulePackage {
@@ -239,6 +241,7 @@ export function assertRulePlugin(
     throw new Error(`rule ${label}: meta.stages must be an array`);
   }
   for (const stage of m.stages) requireStage(String(stage));
+  assertSupportStages(m, label);
 
   if (m.defaultAction !== undefined && typeof m.defaultAction !== "string") {
     throw new Error(`rule ${label}: meta.defaultAction must be a string`);
@@ -250,6 +253,27 @@ export function assertRulePlugin(
   }
   if (control !== undefined) assertControl(control, label);
   return plugin as unknown as RulePlugin;
+}
+
+/**
+ * Validate `meta.supportStages` when present: an array of known stages that is a
+ * superset of `meta.stages` (a rule can't default-enable at a stage it can't run
+ * at). `m.stages` is already validated by the caller.
+ */
+function assertSupportStages(m: Record<string, unknown>, label: string): void {
+  if (m.supportStages === undefined) return;
+  if (!Array.isArray(m.supportStages)) {
+    throw new Error(`rule ${label}: meta.supportStages must be an array`);
+  }
+  for (const stage of m.supportStages) requireStage(String(stage));
+  const support = new Set(m.supportStages.map(String));
+  for (const stage of m.stages as unknown[]) {
+    if (!support.has(String(stage))) {
+      throw new Error(
+        `rule ${label}: stage ${JSON.stringify(String(stage))} is not in supportStages`,
+      );
+    }
+  }
 }
 
 function assertControl(

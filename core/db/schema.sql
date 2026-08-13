@@ -78,6 +78,19 @@ CREATE TABLE IF NOT EXISTS rule_stages (
   PRIMARY KEY (rule_id, stage)
 ) STRICT;
 
+-- Rule <-> Support-stage (many-to-many) -----------------------------------
+-- The stages a rule's check is CAPABLE of running at — a capability allowlist
+-- and superset of rule_stages. Setup, the CLI, and the panel constrain a rule's
+-- rule_stages bindings to this set. Seeded from RuleMeta.supportStages (default
+-- RuleMeta.stages). Free text validated against the canonical stage list
+-- (src/rules/stages.ts); no stage lookup table.
+
+CREATE TABLE IF NOT EXISTS rule_support_stages (
+  rule_id INTEGER NOT NULL REFERENCES rules(id) ON DELETE CASCADE,
+  stage   TEXT NOT NULL,
+  PRIMARY KEY (rule_id, stage)
+) STRICT;
+
 -- What a rule does when it fires ------------------------------------------
 -- environment_id NULL = default binding for all envs; a row with an env
 -- overrides the default for that env.
@@ -167,6 +180,7 @@ CREATE TABLE IF NOT EXISTS project_rule_actions (
 
 CREATE INDEX IF NOT EXISTS idx_rule_categories  ON rule_categories(rule_id);
 CREATE INDEX IF NOT EXISTS idx_rule_stages      ON rule_stages(rule_id);
+CREATE INDEX IF NOT EXISTS idx_rule_support_stages ON rule_support_stages(rule_id);
 CREATE INDEX IF NOT EXISTS idx_rule_actions    ON rule_actions(rule_id);
 CREATE INDEX IF NOT EXISTS idx_fixes_rule      ON fixes(rule_id);
 CREATE INDEX IF NOT EXISTS idx_project_rules_project ON project_rules(project_id);

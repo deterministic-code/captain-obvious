@@ -220,6 +220,40 @@ describe("assertRulePlugin", () => {
     expect(() => assertRulePlugin(p, "r")).toThrow(/unknown stage/);
   });
 
+  it("accepts a supportStages superset of stages", () => {
+    const p = validPlugin();
+    p.meta.stages = ["pre-commit" as never];
+    (p.meta as { supportStages?: string[] }).supportStages = [
+      "pre-commit",
+      "pre-push",
+      "tool",
+    ];
+    expect(() => assertRulePlugin(p, "r")).not.toThrow();
+  });
+
+  it("rejects non-array supportStages", () => {
+    const p = validPlugin();
+    (p.meta as { supportStages: unknown }).supportStages = "pre-commit";
+    expect(() => assertRulePlugin(p, "r")).toThrow(
+      /meta.supportStages must be an array/,
+    );
+  });
+
+  it("rejects an unknown supportStages slug", () => {
+    const p = validPlugin();
+    (p.meta as { supportStages: string[] }).supportStages = ["nope"];
+    expect(() => assertRulePlugin(p, "r")).toThrow(/unknown stage/);
+  });
+
+  it("rejects a stage not contained in supportStages", () => {
+    const p = validPlugin();
+    p.meta.stages = ["pre-push" as never];
+    (p.meta as { supportStages: string[] }).supportStages = ["pre-commit"];
+    expect(() => assertRulePlugin(p, "r")).toThrow(
+      /stage "pre-push" is not in supportStages/,
+    );
+  });
+
   it("accepts a string defaultAction", () => {
     const p = validPlugin();
     (p.meta as { defaultAction?: string }).defaultAction = "warn";

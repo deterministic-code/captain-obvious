@@ -33,12 +33,16 @@ export function addRule(db: Db, opts: AddRuleOpts): RuleRow {
     languagesFixed,
     config,
     stages,
+    supportStages,
   } = opts;
   if (!slug || !name) throw new Error("add-rule requires --slug and --name");
   const configJson = normalizeConfig(config);
 
   const languageIds = (languages ?? []).map((s) => requireLanguageId(db, s));
   const stageSlugs = (stages ?? []).map((s) => requireStage(s));
+  const supportStageSlugs = (supportStages ?? stages ?? []).map((s) =>
+    requireStage(s),
+  );
 
   const insert = db.transaction((): RuleRow => {
     let ruleId: number | bigint;
@@ -66,6 +70,7 @@ export function addRule(db: Db, opts: AddRuleOpts): RuleRow {
     for (const id of languageIds) linkLang.run(ruleId, id);
     linkCategories(db, ruleId, categorySet(category, categories));
     linkStages(db, ruleId, stageSlugs);
+    linkSupportStages(db, ruleId, supportStageSlugs);
     return db
       .prepare("SELECT * FROM rules WHERE id = ?")
       .get(ruleId) as RuleRow;
@@ -108,6 +113,28 @@ function linkStages(db: Db, ruleId: number | bigint, stages: string[]): void {
     "INSERT INTO rule_stages (rule_id, stage) VALUES (?, ?)",
   );
   for (const s of stages) link.run(ruleId, s);
+}
+
+/** Replace a rule's support-stage links with the given set (callers validate the slugs). */
+function linkSupportStages(
+  db: Db,
+  ruleId: number | bigint,
+  stages: string[],
+): void {
+  db.prepare("DELETE FROM rule_support_stages WHERE rule_id = ?").run(ruleId);
+  const link = db.prepare(
+    "INSERT INTO rule_support_stages (rule_id, stage) VALUES (?, ?)",
+  );
+  for (const s of stages) link.run(ruleId, s);
+}
+
+/** The stage slugs a rule is capable of running at, from rule_support_stages. */
+function ruleSupportStages(db: Db, ruleId: number): string[] {
+  return (
+    db
+      .prepare("SELECT stage FROM rule_support_stages WHERE rule_id = ?")
+      .all(ruleId) as { stage: string }[]
+  ).map((r) => r.stage);
 }
 
 /**
@@ -153,6 +180,15 @@ export function configureRule(
     requireLanguageId(db, s),
   );
   const setStageSlugs = opts.setStages?.map((s) => requireStage(s));
+  if (setStageSlugs !== undefined) {
+    const support = new Set(ruleSupportStages(db, rule.id));
+    const unsupported = setStageSlugs.filter((s) => !support.has(s));
+    if (unsupported.length > 0) {
+      throw new Error(
+        `cannot bind ${slug} to unsupported stage(s): ${unsupported.join(", ")}`,
+      );
+    }
+  }
   const binding = opts.setAction
     ? resolveBinding(db, opts.setAction)
     : undefined;
@@ -473,6 +509,7 @@ export function registerRule(db: Db, plugin: RulePlugin): void {
 
     linkCategories(db, ruleId, categorySet(meta.category, meta.categories));
     linkStages(db, ruleId, meta.stages);
+    linkSupportStages(db, ruleId, meta.supportStages ?? meta.stages);
 
     if (meta.actions !== undefined) setRuleFixesTx(db, ruleId, meta.actions);
     if (meta.defaultAction !== undefined)

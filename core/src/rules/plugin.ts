@@ -86,6 +86,13 @@ export interface RulePluginMeta {
   ratchetable: boolean;
   modes: LintMode[];
   stages: Stage[];
+  /**
+   * The stages this check is CAPABLE of running at — a capability allowlist and a
+   * superset of `stages`. Setup, the CLI, and the panel constrain a rule's stage
+   * bindings to this set (you can't add a rule to a stage it can't run at).
+   * Intrinsic to the check, not user-editable. Omit to default to `stages`.
+   */
+  supportStages?: Stage[];
   /** Execution/display order, ascending; ties break by slug. Seeds sort_index on first
    *  register only, so a later CLI/panel reorder survives re-seed (like `enabled`). */
   order?: number;

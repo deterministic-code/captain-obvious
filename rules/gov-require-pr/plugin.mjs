@@ -14,6 +14,7 @@ export default {
     ratchetable: false,
     modes: [],
     stages: ["server"],
+    supportStages: ["server"],
     defaultAction: "warn",
     order: 29,
     actions: [],

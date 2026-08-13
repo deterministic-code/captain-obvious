@@ -19,7 +19,7 @@ commands:
   add-language     --slug <s> --name <n> [--ext <csv>]
   add-rule         --slug <s> --name <n> [--category <c>] [--categories <csv>]
                    [--description <d>] [--lang <csv>] [--languages-fixed]
-                   [--config <json>] [--stages <csv>]
+                   [--config <json>] [--stages <csv>] [--support-stages <csv>]
   configure-rule   <rule-slug> [--set-config <json>] [--enable | --disable]
                    [--add-lang <csv>] [--remove-lang <csv>]
                    [--add-category <csv>] [--remove-category <csv>] [--set-stages <csv>]
@@ -104,6 +104,9 @@ function runAddRule(args: ParsedArgs): void {
       languagesFixed: args.flags.has("languages-fixed"),
       config: args.values.get("config"),
       stages: csv(args.values.get("stages")),
+      supportStages: args.values.has("support-stages")
+        ? csv(args.values.get("support-stages"))
+        : undefined,
     });
     done(`added rule ${row.slug}`, row);
   });

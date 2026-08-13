@@ -84,6 +84,16 @@ function ruleStages(slug: string): string[] {
   ).map((r) => r.stage);
 }
 
+function ruleSupportStages(slug: string): string[] {
+  return (
+    db
+      .prepare(
+        "SELECT rss.stage FROM rule_support_stages rss JOIN rules r ON r.id = rss.rule_id WHERE r.slug = ? ORDER BY rss.stage",
+      )
+      .all(slug) as { stage: string }[]
+  ).map((r) => r.stage);
+}
+
 describe("addRule", () => {
   it("inserts a rule and links languages", () => {
     const row = addRule(db, {
@@ -176,6 +186,39 @@ describe("addRule", () => {
     ).toThrow(/unknown stage: nope/);
   });
 
+  it("links an explicit supportStages set", () => {
+    addRule(db, {
+      slug: "lint-sup",
+      name: "Sup",
+      stages: ["pre-commit"],
+      supportStages: ["pre-commit", "pre-push", "tool"],
+    });
+    expect(ruleSupportStages("lint-sup")).toEqual([
+      "pre-commit",
+      "pre-push",
+      "tool",
+    ]);
+  });
+
+  it("defaults supportStages to stages when omitted", () => {
+    addRule(db, {
+      slug: "lint-supdef",
+      name: "SupDef",
+      stages: ["pre-commit", "tool"],
+    });
+    expect(ruleSupportStages("lint-supdef")).toEqual(["pre-commit", "tool"]);
+  });
+
+  it("rejects an unknown supportStages slug", () => {
+    expect(() =>
+      addRule(db, {
+        slug: "lint-badsup",
+        name: "BadSup",
+        supportStages: ["nope"],
+      }),
+    ).toThrow(/unknown stage: nope/);
+  });
+
   it("rethrows a non-unique insert error unchanged", () => {
     // Dropping the rules table makes the INSERT fail with a non-UNIQUE error,
     // so the transaction's catch must rethrow it as-is.
@@ -192,6 +235,7 @@ describe("configureRule", () => {
       slug: "lint-max-lines",
       name: "Max lines",
       languages: ["typescript"],
+      supportStages: ["pre-commit", "pre-push", "tool"],
     });
   });
 
@@ -232,6 +276,17 @@ describe("configureRule", () => {
     expect(() =>
       configureRule(db, "lint-max-lines", { setStages: ["nope"] }),
     ).toThrow(/unknown stage: nope/);
+  });
+
+  it("rejects setStages to a stage outside the rule's support set", () => {
+    // The fixture supports pre-commit/pre-push/tool but not commit-msg.
+    expect(() =>
+      configureRule(db, "lint-max-lines", {
+        setStages: ["pre-commit", "commit-msg"],
+      }),
+    ).toThrow(
+      /cannot bind lint-max-lines to unsupported stage\(s\): commit-msg/,
+    );
   });
 
   it("sets the absolute order with setOrder", () => {
