@@ -173,6 +173,27 @@ describe("fixRule — scriptBody (shell command prefix)", () => {
     expect(res.fixedFiles).toEqual(["a.ts", "c.ts"]);
   });
 
+  it("ignores stderr noise (e.g. npx install warnings) when listing reformatted files", async () => {
+    spawnMock.mockImplementation(
+      () =>
+        fakeChild({
+          stdout: "a.ts 12ms\n",
+          stderr: "npm warn exec installing prettier@3.9.6\n",
+          code: 0,
+        }) as never,
+    );
+    const res = await fixRule(db, auditDb, {
+      slug: "lint-prettier",
+      path: dir,
+    });
+    expect(res.fixedFiles).toEqual(["a.ts"]);
+    expect(
+      listLogs(auditDb)
+        .filter((l) => l.logType === "fix.applied")
+        .map((l) => l.message),
+    ).toEqual(["a.ts formatted"]);
+  });
+
   it("appends '.' as the target for a folder run and records success", async () => {
     const res = await fixRule(db, auditDb, {
       slug: "lint-prettier",
