@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // @ts-expect-error - plain ESM test helper shared with the .mjs hook suites
 import {
@@ -131,5 +132,22 @@ describe("dispatch integration — real hooks run and log activity", () => {
     } finally {
       audit.close();
     }
+  }, 30_000);
+
+  it("fails loud, not silent, when the audit DB schema has drifted", async () => {
+    // A divergent branch's migration left hook_runs without `duration`.
+    const stale = new Database(process.env.CAPTAIN_OBVIOUS_AUDIT_DB as string);
+    stale.exec(
+      `CREATE TABLE hook_runs (id INTEGER PRIMARY KEY, slug TEXT NOT NULL,
+         stage TEXT NOT NULL, status TEXT NOT NULL, started INTEGER NOT NULL,
+         ended INTEGER NOT NULL, found INTEGER, fixed INTEGER) STRICT;`,
+    );
+    stale.close();
+
+    // openAuditDb throws before the run loop, so the whole dispatch rejects loudly, not per-INSERT.
+    await expect(runDispatch(["pre-commit"])).rejects.toThrow(
+      /hook_runs is missing column\(s\) duration/,
+    );
+    expect(exitSpy).not.toHaveBeenCalled();
   }, 30_000);
 });

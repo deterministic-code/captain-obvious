@@ -31,6 +31,40 @@ export function resolveAuditDbPath(opts: AuditDbPathOpts = {}): string {
   return DEFAULT_AUDIT_DB_PATH;
 }
 
+/**
+ * The columns each audit writer/reader depends on. Asserted at open so a DB whose
+ * schema drifted — e.g. a branch that renamed `hook_runs.duration` — fails with one
+ * clear error here instead of a cryptic "no column named X" on the first INSERT,
+ * which the fail-open guard hooks would otherwise swallow into silence.
+ */
+const REQUIRED_AUDIT_COLUMNS: Record<string, readonly string[]> = {
+  hook_runs: ["slug", "stage", "status", "started", "duration", "found", "fixed"],
+  logs: ["log_type", "message", "created"],
+};
+
+/** The column names of `table`, as SQLite reports them. */
+function tableColumns(db: Db, table: string): Set<string> {
+  return new Set(
+    (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map(
+      (c) => c.name,
+    ),
+  );
+}
+
+/** Throw if any audit table lacks a column its writer uses — i.e. the file drifted. */
+function assertAuditShape(db: Db, dbPath: string): void {
+  for (const [table, required] of Object.entries(REQUIRED_AUDIT_COLUMNS)) {
+    const cols = tableColumns(db, table);
+    const missing = required.filter((c) => !cols.has(c));
+    if (missing.length > 0) {
+      throw new Error(
+        `audit DB ${dbPath}: table ${table} is missing column(s) ${missing.join(", ")} — ` +
+          "its schema drifted from this build. The audit log is disposable; delete it to rebuild.",
+      );
+    }
+  }
+}
+
 /** Open (creating if missing) the audit-log DB and apply its schema idempotently. */
 export function openAuditDb(dbPath: string): Db {
   if (dbPath !== ":memory:") {
@@ -39,6 +73,7 @@ export function openAuditDb(dbPath: string): Db {
   const db = new Database(dbPath);
   db.exec(readFileSync(AUDIT_SCHEMA_PATH, "utf8"));
   migrateHookRuns(db);
+  assertAuditShape(db, dbPath);
   return db;
 }
 
@@ -49,11 +84,7 @@ export function openAuditDb(dbPath: string): Db {
  * it never fails on the count SELECT. Idempotent (guarded by table_info).
  */
 export function migrateHookRuns(db: Db): void {
-  const cols = new Set(
-    (
-      db.prepare("PRAGMA table_info(hook_runs)").all() as { name: string }[]
-    ).map((c) => c.name),
-  );
+  const cols = tableColumns(db, "hook_runs");
   if (!cols.has("found")) {
     db.exec("ALTER TABLE hook_runs ADD COLUMN found INTEGER");
   }
