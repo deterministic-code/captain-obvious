@@ -117,6 +117,31 @@ It honors `core.hooksPath` (so husky/lefthook hooks show up), skips git's `*.sam
 flags any hook that isn't executable (git silently skips those). It reads only — it never
 changes anything.
 
+### Uninstalling
+
+`captain-obvious-hooks uninstall` removes every hook captain-obvious installed — the managed git
+hooks, the `_captainObvious`-tagged entries in `.claude/settings.json`, and the managed `lint:*` /
+`panel` aliases in `package.json` — and leaves hand-authored hooks and scripts untouched. It only
+ever removes what it wrote (detected by the same markers `list` uses):
+
+```sh
+npx captain-obvious-hooks uninstall            # dry run — prints what it would remove
+npx captain-obvious-hooks uninstall --yes      # actually remove them
+```
+
+`captain-obvious-uninstall` goes one step further: it removes the hooks **and** the local
+registry + audit DBs (`<repo>/.captain-obvious/`). It leaves `captain-obvious.config.json` in place
+so a re-install is one command; delete that by hand for zero trace, then `npm rm
+@deterministic-code/captain-obvious`. Global-mode data (`mode: "global"`) is shared machine-wide, so
+it is reported but never auto-deleted:
+
+```sh
+npx captain-obvious-uninstall                  # dry run
+npx captain-obvious-uninstall --yes            # remove hooks + local .captain-obvious/ data
+```
+
+Both default to a dry run and require `--yes` to touch anything; both accept `--target <dir>`.
+
 ## Control panel
 
 Configure rules (enable/disable, thresholds, advisory-vs-blocking, order) and view Activity
