@@ -63,9 +63,14 @@ Wire it to run on every `npm install` so a fresh clone is gated automatically:
 `captain-obvious-install` owns all the reference wiring so you never hand-edit it:
 
 - scaffolds `captain-obvious.config.json` if missing (or skips if `--config` is explicit),
-- writes `.git/hooks/pre-commit` and `pre-push` that dispatch the **enabled** rules for
-  each stage from the registry DB (plus any `run:` passthroughs) — so toggling a rule in
-  the control panel changes what runs with no reinstall,
+- writes the client-side git hooks (`pre-commit`, `commit-msg`, `pre-merge-commit`,
+  `pre-rebase`, `pre-push`) that dispatch the **enabled** rules for each stage from the
+  registry DB (plus any `run:` passthroughs) — so toggling a rule in the control panel
+  changes what runs with no reinstall. Each hook picks its stage by **who ran git**: the
+  Claude-context stage (`pre-commit`, …) when `CLAUDECODE=1` (git invoked by Claude Code),
+  the CLI-context stage (`git-pre-commit`, …) for a human terminal — so a repo can lint
+  Claude's commits while leaving human commits ungated by default (the `git-*` stages start
+  empty; opt human commits in per-rule from the panel),
 - merges the configured Claude hooks into `.claude/settings.json` (idempotently — it
   only ever rewrites entries it previously added, tagged `_captainObvious`),
 - rewrites the `lint:*` scripts in your `package.json` to run through the package's
@@ -96,9 +101,12 @@ npx captain-obvious-hooks --json     # machine-readable inventory
 
 ```
 git hooks (/repo/.git/hooks):
-  commit-msg       external
-  pre-commit       captain-obvious
-  pre-push         captain-obvious
+  commit-msg         captain-obvious
+  post-checkout      external
+  pre-commit         captain-obvious
+  pre-merge-commit   captain-obvious
+  pre-push           captain-obvious
+  pre-rebase         captain-obvious
 
 Claude Code hooks (/repo/.claude/settings.json):
   PreToolUse   Edit|Write   captain-obvious
@@ -158,15 +166,20 @@ you can customize afterward if needed:
 ```
 
 - **Which rules run is driven by the registry, not this config.** Each git hook dispatches
-  the rules that are `enabled` for its stage (`pre-commit` / `pre-push`) from the DB; enable
-  or disable a rule in the control panel and the change takes effect on the next hook run.
-  Advisory-vs-blocking is likewise a per-rule binding in the panel (a default `warn` action
-  makes a rule advisory), not a config flag.
+  the rules that are `enabled` for its stage from the DB; enable or disable a rule in the
+  control panel and the change takes effect on the next hook run. Every git hook has two
+  stages — a Claude-context stage (`pre-commit`, `commit-msg`, `pre-merge-commit`,
+  `pre-rebase`, `pre-push`) dispatched when `CLAUDECODE=1`, and a `git-`prefixed CLI-context
+  stage (`git-pre-commit`, …) for human commits — so a rule can be assigned to run for
+  Claude, for the CLI, or both. Advisory-vs-blocking is likewise a per-rule binding in the
+  panel (a default `warn` action makes a rule advisory), not a config flag.
 - **Each `gitHooks` entry is `<hook-name> <args>`** — these entries no longer select what the
   git hooks run; they drive the managed `lint:*` npm aliases (see `npmScripts` below) so you
   can invoke a hook by hand.
 - **`run: <command>`** passes a shell command through verbatim into the git hook (e.g. your
-  test tiers), after the rule dispatch line. Blocking (`|| exit 1`).
+  test tiers), after the rule dispatch line. Blocking (`|| exit 1`). Attach passthroughs to a
+  hook by its config key: `preCommit`, `commitMsg`, `preMergeCommit`, `preRebase`, `prePush`.
+  Passthroughs run in both contexts (they're explicit repo commands, not context-split rules).
 - **Each `claudeHooks` entry** names a script in `hooks/claude/` (drop the `.sh`), the
   Claude event, an optional tool `matcher`, and a `timeout` in seconds.
 - **`npmScripts.extraScripts`** (optional, `key → bin args`) adds or overrides managed

@@ -249,7 +249,7 @@ describe("runDispatch", () => {
 
   it("rejects on an invalid stage before spawning", async () => {
     await expect(runDispatch(["bogus"])).rejects.toThrow(
-      /expected stage 'pre-commit' or 'pre-push'/,
+      /expected a git stage \(pre-commit, /,
     );
     expect(spawnMock).not.toHaveBeenCalled();
   });

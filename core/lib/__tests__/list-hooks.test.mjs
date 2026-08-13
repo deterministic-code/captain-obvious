@@ -180,9 +180,8 @@ describe("list-hooks", () => {
   });
 
   it("renderHook output carries the marker list-hooks detects", () => {
-    expect(renderHook("pre-commit", "x/hooks/git", [])).toContain(
-      GIT_HOOK_MARKER,
-    );
+    const spec = { claude: "pre-commit", cli: "git-pre-commit" };
+    expect(renderHook(spec, "x/hooks/git", [])).toContain(GIT_HOOK_MARKER);
   });
 
   it("installClaudeHooks tags entries with the constant list-hooks detects", async () => {

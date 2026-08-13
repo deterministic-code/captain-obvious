@@ -1,33 +1,49 @@
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import { installGitHooks, renderHook } from "../git-hooks.mjs";
 
 const execFileAsync = promisify(execFile);
 
+const PRE_COMMIT = {
+  hook: "pre-commit",
+  claude: "pre-commit",
+  cli: "git-pre-commit",
+  configKey: "preCommit",
+};
+const PRE_PUSH = {
+  hook: "pre-push",
+  claude: "pre-push",
+  cli: "git-pre-push",
+  configKey: "prePush",
+};
+
 describe("renderHook", () => {
-  it("dispatches the named stage through dispatch.mjs and fails on non-zero", () => {
-    const script = renderHook("pre-commit", "hooks/git", []);
+  it("branches on CLAUDECODE and dispatches the resolved stage, failing on non-zero", () => {
+    const script = renderHook(PRE_COMMIT, "hooks/git", []);
     expect(script).toContain(
-      'node "$ROOT/hooks/git/dispatch.mjs" pre-commit || exit 1',
+      'if [ "$CLAUDECODE" = "1" ]; then stage=pre-commit; else stage=git-pre-commit; fi',
+    );
+    expect(script).toContain(
+      'node "$ROOT/hooks/git/dispatch.mjs" "$stage" || exit 1',
     );
     expect(script.startsWith("#!/bin/sh\n")).toBe(true);
   });
 
-  it("passes the stage name straight through (pre-push)", () => {
-    expect(renderHook("pre-push", "hooks/git", [])).toContain(
-      'dispatch.mjs" pre-push || exit 1',
+  it("uses the hook's own Claude/CLI stage pair (pre-push)", () => {
+    expect(renderHook(PRE_PUSH, "hooks/git", [])).toContain(
+      "then stage=pre-push; else stage=git-pre-push; fi",
     );
   });
 
   it("appends run: passthroughs after the dispatch line, each blocking", () => {
-    const script = renderHook("pre-push", "hooks/git", ["npm run test:unit"]);
+    const script = renderHook(PRE_PUSH, "hooks/git", ["npm run test:unit"]);
     const lines = script.trim().split("\n");
     expect(lines.at(-2)).toBe(
-      'node "$ROOT/hooks/git/dispatch.mjs" pre-push || exit 1',
+      'node "$ROOT/hooks/git/dispatch.mjs" "$stage" || exit 1',
     );
     expect(lines.at(-1)).toBe("npm run test:unit || exit 1");
   });
@@ -48,7 +64,7 @@ describe("installGitHooks", () => {
     return dir;
   }
 
-  it("writes executable pre-commit/pre-push hooks with only run: passthroughs", async () => {
+  it("writes every client-side hook, with only run: passthroughs per hook", async () => {
     const target = await tempRepo();
     const written = await installGitHooks({
       target,
@@ -59,17 +75,23 @@ describe("installGitHooks", () => {
       },
     });
 
-    expect(written).toHaveLength(2);
-    const [preCommitPath, prePushPath] = written;
+    const byName = Object.fromEntries(written.map((p) => [basename(p), p]));
+    expect(Object.keys(byName).sort()).toEqual([
+      "commit-msg",
+      "pre-commit",
+      "pre-merge-commit",
+      "pre-push",
+      "pre-rebase",
+    ]);
 
-    const preCommit = await readFile(preCommitPath, "utf8");
-    expect(preCommit).toContain('dispatch.mjs" pre-commit || exit 1');
+    const preCommit = await readFile(byName["pre-commit"], "utf8");
+    expect(preCommit).toContain("then stage=pre-commit; else stage=git-pre-commit");
     expect(preCommit).toContain("npm test || exit 1");
     // Rule entries are filtered out; only run: passthroughs survive.
     expect(preCommit).not.toContain("lint-naming");
 
-    const prePush = await readFile(prePushPath, "utf8");
-    expect(prePush).toContain('dispatch.mjs" pre-push || exit 1');
+    const prePush = await readFile(byName["pre-push"], "utf8");
+    expect(prePush).toContain("then stage=pre-push; else stage=git-pre-push");
     expect(prePush).toContain("npm run build || exit 1");
 
     for (const file of written) {
