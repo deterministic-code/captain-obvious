@@ -170,6 +170,7 @@ describe("fixRule — scriptBody (shell command prefix)", () => {
       path: dir,
     });
     expect(res.fixed).toBe(2);
+    expect(res.fixedFiles).toEqual(["a.ts", "c.ts"]);
   });
 
   it("appends '.' as the target for a folder run and records success", async () => {
@@ -182,6 +183,7 @@ describe("fixRule — scriptBody (shell command prefix)", () => {
       ok: true,
       output: "formatted",
       fixed: 1,
+      fixedFiles: ["formatted"],
     });
     const [cmd, args, opts] = spawnMock.mock.calls[0] as [
       string,
@@ -200,14 +202,37 @@ describe("fixRule — scriptBody (shell command prefix)", () => {
     });
   });
 
-  it("passes the file itself as the target for a file run and logs a summary", async () => {
-    await fixRule(db, auditDb, { slug: "lint-prettier", path: filePath });
+  it("passes the file itself as the target for a file run and logs each reformatted file", async () => {
+    spawnMock.mockImplementation(
+      () => fakeChild({ stdout: "src/a.ts\nsrc/b.ts\n", code: 0 }) as never,
+    );
+    const res = await fixRule(db, auditDb, {
+      slug: "lint-prettier",
+      path: filePath,
+    });
     const args = spawnMock.mock.calls[0][1] as string[];
     expect(args).toEqual(["prettier", "--write", filePath]);
-    const logs = listLogs(auditDb);
-    expect(logs[0]).toMatchObject({
+    expect(res.fixedFiles).toEqual(["src/a.ts", "src/b.ts"]);
+    expect(
+      listLogs(auditDb)
+        .filter((l) => l.logType === "fix.applied")
+        .map((l) => l.message)
+        .reverse(),
+    ).toEqual(["src/a.ts formatted", "src/b.ts formatted"]);
+  });
+
+  it("logs an 'already formatted' line when the fix rewrote nothing", async () => {
+    spawnMock.mockImplementation(
+      () => fakeChild({ stdout: "a.ts 3ms (unchanged)\n", code: 0 }) as never,
+    );
+    const res = await fixRule(db, auditDb, {
+      slug: "lint-prettier",
+      path: filePath,
+    });
+    expect(res.fixedFiles).toEqual([]);
+    expect(listLogs(auditDb)[0]).toMatchObject({
       logType: "fix.applied",
-      message: "script fix lint-prettier on a.ts — success",
+      message: "a.ts — already formatted",
     });
   });
 });
@@ -319,6 +344,7 @@ describe("fixRule — failures", () => {
       ok: false,
       output: "boom",
       fixed: null,
+      fixedFiles: null,
       error: "boom",
     });
     expect(listHookRuns(auditDb)[0]).toMatchObject({ status: "failure" });
@@ -349,6 +375,7 @@ describe("fixRule — failures", () => {
       ok: false,
       output: "nope",
       fixed: null,
+      fixedFiles: null,
       error: "nope",
     });
   });
@@ -363,7 +390,10 @@ describe("planFix — Tier A (delegate to Claude Code)", () => {
 
   it("builds a prompt even for a rule with no inferred fix (AI fix is universal), omitting the guidance line", async () => {
     setRuleFixes(db, "lint-prettier", [{ kind: "script", scriptBody: "x" }]);
-    const plan = await planFix(db, auditDb, { slug: "lint-prettier", path: filePath });
+    const plan = await planFix(db, auditDb, {
+      slug: "lint-prettier",
+      path: filePath,
+    });
     expect(plan.slug).toBe("lint-prettier");
     expect(plan.prompt).toContain("Rule intent:");
     expect(plan.prompt).not.toContain("Fix guidance:");
@@ -377,7 +407,10 @@ describe("planFix — Tier A (delegate to Claude Code)", () => {
   });
 
   it("builds a prompt from fresh violations and writes it under .claude/tmp", async () => {
-    const plan = await planFix(db, auditDb, { slug: "lint-naming", path: filePath });
+    const plan = await planFix(db, auditDb, {
+      slug: "lint-naming",
+      path: filePath,
+    });
     expect(plan.slug).toBe("lint-naming");
     expect(plan.path).toBe(filePath);
     expect(plan.prompt).toContain("Naming conventions");
@@ -394,7 +427,10 @@ describe("planFix — Tier A (delegate to Claude Code)", () => {
     spawnMock.mockImplementation(
       () => fakeChild({ stdout: jsonLine([]), code: 0 }) as never,
     );
-    const plan = await planFix(db, auditDb, { slug: "lint-naming", path: filePath });
+    const plan = await planFix(db, auditDb, {
+      slug: "lint-naming",
+      path: filePath,
+    });
     expect(plan.prompt).toContain("(no violations reported for this file)");
   });
 

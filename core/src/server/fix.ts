@@ -59,6 +59,8 @@ export interface FixResult {
   output: string;
   /** Files the fix reported reformatting (prettier-style output); null when it failed. */
   fixed: number | null;
+  /** The paths the fix reformatted; null when it failed. `fixed` is its length. */
+  fixedFiles: string[] | null;
   error?: string;
 }
 
@@ -116,20 +118,38 @@ async function runScriptFix(
   const action = requireAction(db, slug, "script");
   const rel = relative(process.cwd(), resolved.target);
   try {
-    const outcome = await dispatchRule(auditDb, fixSpec(action, slug, resolved));
+    const outcome = await dispatchRule(
+      auditDb,
+      fixSpec(action, slug, resolved),
+    );
     const ok = outcome.code === 0;
-    logEvent("fix.applied", `script fix ${slug} on ${rel} — ${ok ? "success" : "failed"}`);
+    if (!ok) {
+      logEvent("fix.applied", `script fix ${slug} on ${rel} — failed`);
+    } else if (outcome.fixedFiles?.length) {
+      for (const file of outcome.fixedFiles)
+        logEvent("fix.applied", `${file} formatted`);
+    } else {
+      logEvent("fix.applied", `${rel} — already formatted`);
+    }
     return {
       slug,
       ok,
       output: outcome.output,
       fixed: outcome.fixed,
+      fixedFiles: outcome.fixedFiles,
       ...(ok ? {} : { error: outcome.output || "fix command failed" }),
     };
   } catch (e) {
     const msg = (e as Error).message;
     logEvent("fix.applied", `script fix ${slug} on ${rel} — failed`);
-    return { slug, ok: false, output: msg, fixed: null, error: msg };
+    return {
+      slug,
+      ok: false,
+      output: msg,
+      fixed: null,
+      fixedFiles: null,
+      error: msg,
+    };
   }
 }
 

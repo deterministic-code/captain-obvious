@@ -14,7 +14,9 @@ import { RULES } from "./index.js";
 import type { Violation } from "./types.js";
 
 /** A rule's absolute check-runner path (rules/<slug>/check.mjs), stamped by the loader. */
-const CHECK_PATH = new Map(RULES.map((r) => [r.meta.slug, r.checkPath ?? null]));
+const CHECK_PATH = new Map(
+  RULES.map((r) => [r.meta.slug, r.checkPath ?? null]),
+);
 
 /** Absolute path to a rule's check runner, as stamped by the loader. */
 export function checkScriptPath(slug: string): string {
@@ -38,11 +40,7 @@ export type RunSpec = {
   cwd: string;
   /** Selector/mode args passed to the child (e.g. `--staged`, `--all`, `--files <p>`). */
   args: string[];
-} & (
-  | { mode: "check" }
-  | { mode: "json" }
-  | { mode: "fix"; command?: string }
-);
+} & ({ mode: "check" } | { mode: "json" } | { mode: "fix"; command?: string });
 
 export interface RunOutcome {
   code: number;
@@ -50,6 +48,8 @@ export interface RunOutcome {
   found: number | null;
   /** Files a fix reformatted (fix mode, on success); null otherwise. */
   fixed: number | null;
+  /** The paths a fix reformatted (fix mode, on success); null otherwise. `fixed` is its length. */
+  fixedFiles: string[] | null;
   /** Structured violations parsed off stdout (json mode); null when the hook emitted none. */
   violations: Violation[] | null;
   /** Merged stdout+stderr, trimmed (json/fix modes); empty for the stdio-inherit check mode. */
@@ -120,16 +120,21 @@ function parseViolations(out: string): Violation[] | null {
   return Array.isArray(violations) ? (violations as Violation[]) : null;
 }
 
-/** Count files a formatter reformatted (prettier-style output; lines without "(unchanged)"). */
-export function countModifiedFiles(output: string): number {
-  let count = 0;
+/**
+ * The files a formatter reformatted (prettier-style output; lines without
+ * "(unchanged)"), each stripped of a trailing ` <n>ms` timing suffix so a raw
+ * formatter's `path 12ms` line yields a clean path.
+ */
+export function modifiedFiles(output: string): string[] {
+  const files: string[] = [];
   for (const line of output.split("\n")) {
     const trimmed = line.trim();
-    if (trimmed && !line.startsWith("lint-") && !trimmed.startsWith("Re-stage")) {
-      if (!trimmed.includes("(unchanged)")) count++;
-    }
+    if (!trimmed || line.startsWith("lint-") || trimmed.startsWith("Re-stage"))
+      continue;
+    if (trimmed.includes("(unchanged)")) continue;
+    files.push(trimmed.replace(/\s+\d+ms$/, ""));
   }
-  return count;
+  return files;
 }
 
 /** The one child spawn. Rejects on spawn error or kill signal (→ run.error); resolves on any exit code. */
@@ -153,13 +158,17 @@ export function spawnRule(spec: RunSpec): Promise<RunOutcome> {
       if (signal) return reject(new Error(`${spec.slug} killed by ${signal}`));
       const c = code ?? 0;
       const merged = `${stdout}${stderr}`.trim();
+      const fixedFiles =
+        spec.mode === "fix" && c === 0 ? modifiedFiles(merged) : null;
       resolveOutcome({
         code: c,
         found: spec.mode === "check" ? parseFound(fd3) : null,
-        fixed: spec.mode === "fix" && c === 0 ? countModifiedFiles(merged) : null,
+        fixed: fixedFiles?.length ?? null,
+        fixedFiles,
         // Violations parse from stdout alone — a rule's human/error text on stderr
         // must not be mistaken for the structured JSON line.
-        violations: spec.mode === "json" && c === 0 ? parseViolations(stdout) : null,
+        violations:
+          spec.mode === "json" && c === 0 ? parseViolations(stdout) : null,
         output: merged,
         stderr: stderr.trim(),
       });

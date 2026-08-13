@@ -6,7 +6,7 @@ vi.mock("node:child_process", () => ({ spawn: vi.fn() }));
 import { spawn } from "node:child_process";
 import { listHookRuns, listLogs, openAuditDb } from "../../db/audit.js";
 import type { Db } from "../../db/open.js";
-import { dispatchGuard, dispatchRule } from "../runner.js";
+import { dispatchGuard, dispatchRule, modifiedFiles } from "../runner.js";
 
 const spawnMock = vi.mocked(spawn);
 
@@ -99,7 +99,30 @@ describe("dispatchRule", () => {
     );
     const outcome = await dispatchRule(audit, spec("json"));
     expect(outcome.violations).toHaveLength(2);
-    expect(listLogs(audit)[0].message).toBe("pre-commit/lint-naming — 2 issue(s)");
+    expect(listLogs(audit)[0].message).toBe(
+      "pre-commit/lint-naming — 2 issue(s)",
+    );
+  });
+});
+
+describe("modifiedFiles", () => {
+  it("extracts the reformatted paths from the runner's fix output", () => {
+    const out = [
+      "lint-prettier: formatted 2 file(s):",
+      "  src/a.ts",
+      "  src/b.ts",
+      "Re-stage them with `git add`.",
+    ].join("\n");
+    expect(modifiedFiles(out)).toEqual(["src/a.ts", "src/b.ts"]);
+  });
+
+  it("strips ` <n>ms` timings and skips (unchanged) lines from a raw formatter", () => {
+    const out = "a.ts 12ms\nb.ts 3ms (unchanged)\nc.ts 5ms\n";
+    expect(modifiedFiles(out)).toEqual(["a.ts", "c.ts"]);
+  });
+
+  it("returns nothing when the formatter rewrote no files", () => {
+    expect(modifiedFiles("")).toEqual([]);
   });
 });
 
