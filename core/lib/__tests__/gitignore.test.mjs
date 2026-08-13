@@ -2,9 +2,13 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { DB_DIR_IGNORE, ensureDbIgnored } from "../gitignore.mjs";
+import {
+  DB_DIR_IGNORE,
+  ensureDbIgnored,
+  removeDbIgnore,
+} from "../gitignore.mjs";
 
-describe("gitignore / ensureDbIgnored", () => {
+describe("gitignore", () => {
   const dirs = [];
 
   afterEach(async () => {
@@ -105,5 +109,84 @@ describe("gitignore / ensureDbIgnored", () => {
     const { mkdir } = await import("node:fs/promises");
     await mkdir(join(dir, ".gitignore"));
     await expect(ensureDbIgnored(dir)).rejects.toThrow();
+  });
+
+  describe("removeDbIgnore", () => {
+    it("removes the managed block and restores surrounding content", async () => {
+      const dir = await tempDir();
+      await writeFile(join(dir, ".gitignore"), "node_modules\ndist\n");
+      await ensureDbIgnored(dir);
+      const res = await removeDbIgnore(dir);
+      expect(res).toMatchObject({
+        changed: true,
+        reason: "removed",
+        emptied: false,
+      });
+      expect(await read(dir)).toBe("node_modules\ndist\n");
+    });
+
+    it("deletes the file when the managed block was all it held", async () => {
+      const dir = await tempDir();
+      await ensureDbIgnored(dir); // creates .gitignore with only our block
+      const res = await removeDbIgnore(dir);
+      expect(res).toMatchObject({
+        changed: true,
+        reason: "removed",
+        emptied: true,
+      });
+      await expect(read(dir)).rejects.toThrow();
+    });
+
+    it("is a no-op when .gitignore is absent", async () => {
+      const dir = await tempDir();
+      expect(await removeDbIgnore(dir)).toMatchObject({
+        changed: false,
+        reason: "no-file",
+      });
+    });
+
+    it("leaves a marker-less .captain-obvious/ line alone", async () => {
+      const dir = await tempDir();
+      await writeFile(join(dir, ".gitignore"), "dist\n.captain-obvious/\n");
+      const res = await removeDbIgnore(dir);
+      expect(res).toMatchObject({ changed: false, reason: "not-present" });
+      expect(await read(dir)).toBe("dist\n.captain-obvious/\n");
+    });
+
+    it("removes a bare marker whose pattern line was deleted by hand", async () => {
+      const dir = await tempDir();
+      await writeFile(
+        join(dir, ".gitignore"),
+        "dist\n\n# captain-obvious — local registry + audit DBs\n",
+      );
+      const res = await removeDbIgnore(dir);
+      expect(res).toMatchObject({ changed: true, reason: "removed" });
+      expect(await read(dir)).toBe("dist\n");
+    });
+
+    it("apply:false previews without writing", async () => {
+      const dir = await tempDir();
+      await writeFile(join(dir, ".gitignore"), "dist\n");
+      await ensureDbIgnored(dir);
+      const before = await read(dir);
+      const res = await removeDbIgnore(dir, { apply: false });
+      expect(res).toMatchObject({ changed: true, reason: "removed" });
+      expect(await read(dir)).toBe(before);
+    });
+
+    it("apply:false does not delete a would-be-emptied file", async () => {
+      const dir = await tempDir();
+      await ensureDbIgnored(dir);
+      const res = await removeDbIgnore(dir, { apply: false });
+      expect(res).toMatchObject({ changed: true, emptied: true });
+      expect(await read(dir)).toContain(DB_DIR_IGNORE);
+    });
+
+    it("rethrows non-ENOENT read errors", async () => {
+      const dir = await tempDir();
+      const { mkdir } = await import("node:fs/promises");
+      await mkdir(join(dir, ".gitignore"));
+      await expect(removeDbIgnore(dir)).rejects.toThrow();
+    });
   });
 });

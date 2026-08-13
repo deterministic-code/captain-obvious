@@ -9,6 +9,7 @@ import {
   removeData,
   uninstallHooks,
 } from "../lib/uninstall.mjs";
+import { DB_DIR_IGNORE, removeDbIgnore } from "../lib/gitignore.mjs";
 
 const pkgRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -58,10 +59,21 @@ async function main() {
   const data = loc.skip ? null : await removeData(loc.location, { apply: yes });
   if (data) process.stdout.write(`\n${formatDataRemoval(data, yes)}`);
 
+  const gitignore = await removeDbIgnore(target, { apply: yes });
+  if (gitignore.changed) {
+    const verb = yes ? "removed" : "would remove";
+    process.stdout.write(
+      `.gitignore (${gitignore.path}): ${verb} the ${DB_DIR_IGNORE} entry\n`,
+    );
+  }
+
   process.stdout.write(
     "\nkept: captain-obvious.config.json (delete it by hand to remove all trace)\n",
   );
-  if (!yes && (anyManaged(hooks) || (data && data.removed))) {
+  if (
+    !yes &&
+    (anyManaged(hooks) || (data && data.removed) || gitignore.changed)
+  ) {
     process.stdout.write("\nRe-run with --yes to apply.\n");
   }
 }

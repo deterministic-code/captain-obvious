@@ -150,8 +150,10 @@ npx captain-obvious-hooks uninstall --yes      # actually remove them
 ```
 
 `captain-obvious-uninstall` goes one step further: it removes the hooks **and** the local
-registry + audit DBs (`<repo>/.captain-obvious/`). It leaves `captain-obvious.config.json` in place
-so a re-install is one command; delete that by hand for zero trace, then `npm rm
+registry + audit DBs (`<repo>/.captain-obvious/`), **and** strips the managed `.captain-obvious/`
+block it added to `.gitignore` (deleting the file if that was all it held; a marker-less
+`.captain-obvious/` line you wrote by hand is left alone). It leaves `captain-obvious.config.json`
+in place so a re-install is one command; delete that by hand for zero trace, then `npm rm
 @deterministic-code/captain-obvious`. Global-mode data (`mode: "global"`) is shared machine-wide, so
 it is reported but never auto-deleted:
 
