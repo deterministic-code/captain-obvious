@@ -48,7 +48,10 @@ are workspace packages. Dependency DAG: **rule package → `rules/_kit` → `cor
     `configure-rule`, `configure-action`, `seed-rules`, `check-deps`, `show-rule`, `init`, `serve`,
     `add-language`).
   - `core/lib/*.mjs` — install-time helpers. `core/bin/install.mjs` / `core/bin/lint.mjs` — the
-    `captain-obvious-install` / `captain-obvious-lint` bins, shipped as-is. `core/hooks/git/dispatch.mjs`
+    `captain-obvious-install` / `captain-obvious-lint` bins, shipped as-is; `core/bin/list-hooks.mjs`
+    — the `captain-obvious-hooks` bin (`list` inventory + `uninstall` removes the managed hooks);
+    `core/bin/uninstall.mjs` — the `captain-obvious-uninstall` bin (hooks + local `.captain-obvious/`
+    data). All three delegate to `core/lib/list-hooks.mjs`/`uninstall.mjs` where the tested logic lives. `core/hooks/git/dispatch.mjs`
     — the thin git-hook entry that spawns each rule's `check.mjs`; `core/hooks/claude/*.sh` — the Claude
     Code guard hooks. `core/db/schema.sql` — registry schema. `core/web/dist/` — the prebuilt panel.
   - The core publishes runtime subpaths for the kit's bridges: `./runtime/db`, `./runtime/config`,
