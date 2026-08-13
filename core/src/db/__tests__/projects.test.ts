@@ -199,6 +199,12 @@ describe("configureProject", () => {
     expect(row.protected).toBeNull();
   });
 
+  it("leaves protected untouched when the option is omitted", () => {
+    configureProject(db, id, { protected: ["src/**"] });
+    const row = configureProject(db, id, { description: "only desc" });
+    expect(JSON.parse(row.protected as string)).toEqual(["src/**"]);
+  });
+
   it("throws when renaming onto an existing project's slug", () => {
     addProject(db, { name: "Taken" });
     expect(() => configureProject(db, id, { name: "taken" })).toThrow(

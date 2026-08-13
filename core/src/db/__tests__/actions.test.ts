@@ -34,6 +34,11 @@ describe("configureActionType", () => {
     expect(row).toMatchObject({ slug: "delay_halt", name: "Deferred halt" });
   });
 
+  it("leaves an existing type unchanged when no name is given", () => {
+    const row = configureActionType(db, "delay_halt", {});
+    expect(row).toMatchObject({ slug: "delay_halt", name: "Delayed halt" });
+  });
+
   it("creates a new action type with --add", () => {
     const row = configureActionType(db, "quarantine", {
       add: true,
