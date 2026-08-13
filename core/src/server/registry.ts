@@ -72,6 +72,13 @@ export interface RuleView {
    */
   stages: string[];
   /**
+   * The stages the rule's check is capable of running at (rule_support_stages),
+   * in canonical order — a superset of `stages`. Additive field — the prebuilt
+   * panel ignores it; panelExt reads it to constrain the Stage picker to the
+   * stages a rule can actually run at.
+   */
+  supportStages: string[];
+  /**
    * The rule's execution/display order (rules.sort_index), ascending. Additive
    * field — the prebuilt panel ignores it; panelExt reads it and renders the
    * per-row reorder arrows (PATCH `{ move }`) and drag-and-drop (PATCH
@@ -135,6 +142,27 @@ function orderCategories(primary: string | null, all: string[]): string[] {
   return [primary, ...all.filter((c) => c !== primary)];
 }
 
+/**
+ * Group a rule<->stage join table (`rule_stages` / `rule_support_stages`) into a
+ * ruleId -> stage[] map, each list in canonical stage order. The table name is a
+ * fixed internal literal, not user input.
+ */
+function stagesByRuleFrom(db: Db, table: string): Map<number, string[]> {
+  const rows = db
+    .prepare(`SELECT rule_id AS ruleId, stage FROM ${table}`)
+    .all() as { ruleId: number; stage: string }[];
+  const byRule = new Map<number, string[]>();
+  for (const s of rows) {
+    const list = byRule.get(s.ruleId) ?? [];
+    list.push(s.stage);
+    byRule.set(s.ruleId, list);
+  }
+  for (const list of byRule.values()) {
+    list.sort((a, b) => stageOrder(a) - stageOrder(b));
+  }
+  return byRule;
+}
+
 /** GET /api/rules — every rule with its actions resolved to slugs. */
 export function listRules(db: Db): RuleView[] {
   const rules = db
@@ -190,18 +218,8 @@ export function listRules(db: Db): RuleView[] {
     languagesByRule.set(l.ruleId, list);
   }
 
-  const stageRows = db
-    .prepare("SELECT rule_id AS ruleId, stage FROM rule_stages")
-    .all() as { ruleId: number; stage: string }[];
-  const stagesByRule = new Map<number, string[]>();
-  for (const s of stageRows) {
-    const list = stagesByRule.get(s.ruleId) ?? [];
-    list.push(s.stage);
-    stagesByRule.set(s.ruleId, list);
-  }
-  for (const list of stagesByRule.values()) {
-    list.sort((a, b) => stageOrder(a) - stageOrder(b));
-  }
+  const stagesByRule = stagesByRuleFrom(db, "rule_stages");
+  const supportStagesByRule = stagesByRuleFrom(db, "rule_support_stages");
 
   // Rule actions (fixes table): one grouped read, then split per rule.
   const fixRows = db
@@ -249,6 +267,7 @@ export function listRules(db: Db): RuleView[] {
       languagesFixed: r.languages_fixed === 1,
       stage: stages[0] ?? null,
       stages,
+      supportStages: supportStagesByRule.get(r.id) ?? [],
       order: r.sort_index,
       enabled: r.enabled === 1,
       config: parseConfig(r.config_json),

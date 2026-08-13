@@ -91,6 +91,9 @@ export interface AddRuleOpts {
   config?: string;
   /** Stage slugs this rule runs at; linked in rule_stages. Each must be a known stage. */
   stages?: string[];
+  /** Stage slugs this rule is capable of running at; linked in rule_support_stages.
+   *  Each must be a known stage. Defaults to `stages` when omitted. */
+  supportStages?: string[];
 }
 
 /** A parsed `--set-action <type>[:<env>][:<delayMs>]` value. */

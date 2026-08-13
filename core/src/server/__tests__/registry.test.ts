@@ -357,12 +357,34 @@ describe("patchRule", () => {
   });
 
   it("replaces the stage set (canonical order) via setStages", () => {
-    addRule(db, { slug: "lint-pst", name: "PSt", stages: ["pre-commit"] });
+    addRule(db, {
+      slug: "lint-pst",
+      name: "PSt",
+      stages: ["pre-commit"],
+      supportStages: ["pre-commit", "pre-push", "tool"],
+    });
     const v = patchRule(db, "lint-pst", {
       stages: ["pre-push", "tool"],
     });
     expect(v.stages).toEqual(["pre-push", "tool"]);
     expect(v.stage).toBe("pre-push");
+  });
+
+  it("exposes supportStages in canonical order and rejects an out-of-set setStages", () => {
+    addRule(db, {
+      slug: "lint-psup",
+      name: "PSup",
+      stages: ["pre-push"],
+      supportStages: ["tool", "pre-commit", "pre-push"],
+    });
+    expect(view("lint-psup").supportStages).toEqual([
+      "pre-commit",
+      "pre-push",
+      "tool",
+    ]);
+    expect(() => patchRule(db, "lint-psup", { stages: ["server"] })).toThrow(
+      /unsupported stage\(s\): server/,
+    );
   });
 
   it("moves a rule in the global order via move, exposing the new order", () => {

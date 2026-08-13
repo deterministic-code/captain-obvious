@@ -21,6 +21,9 @@ export const PANEL_EXT = `(() => {
   let langFixedBySlug = {};
   let catsBySlug = {};
   let stagesBySlug = {};
+  // Per-rule capability allowlist (rule.supportStages) — the Stage picker only
+  // offers these, so a rule can't be bound to a stage its check can't run at.
+  let supportStagesBySlug = {};
   let supportedLangs = [];
   let nameBySlug = {};
   let allCategories = [];
@@ -559,9 +562,11 @@ export const PANEL_EXT = `(() => {
 
   function buildStageCell(cell, slug) {
     const current = stagesBySlug[slug] || [];
+    const supported = supportStagesBySlug[slug] || [];
+    const offered = supported.length ? allStages.filter((s) => supported.includes(s.slug)) : allStages;
     const ed = buildPillEditor({
       values: current,
-      options: allStages.map((s) => ({ value: s.slug, label: s.name })),
+      options: offered.map((s) => ({ value: s.slug, label: s.name })),
       allowCreate: false,
       onChange: async (vals) => {
         try {
@@ -3943,6 +3948,7 @@ export const PANEL_EXT = `(() => {
     langFixedBySlug = {};
     catsBySlug = {};
     stagesBySlug = {};
+    supportStagesBySlug = {};
     enabledBySlug = {};
     ruleBySlug = {};
     const cats = new Set();
@@ -3953,6 +3959,7 @@ export const PANEL_EXT = `(() => {
       langFixedBySlug[r.slug] = !!r.languagesFixed;
       catsBySlug[r.slug] = r.categories || [];
       stagesBySlug[r.slug] = r.stages || [];
+      supportStagesBySlug[r.slug] = r.supportStages || [];
       enabledBySlug[r.slug] = !!r.enabled;
       ruleBySlug[r.slug] = r;
       for (const c of r.categories || []) cats.add(c);
