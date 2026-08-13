@@ -7,15 +7,23 @@ git repo under the OS temp dir, **attaches the real captain-obvious hooks** to i
 
 | Hook | How it's fired |
 | --- | --- |
-| git **pre-commit** | a real `git commit` (in a Claude context, `CLAUDECODE=1`) |
-| git **pre-push** | a real `git push` to a local bare remote |
-| Claude **PreToolUse** | a real headless `claude -p` doing one `Write` |
+| Claude **PreToolUse** | a real headless `claude -p` writing two files |
+| Claude **PostToolUse** | Prettier `--write` (`tool-fix`) reformats each file as Claude writes it |
 | Claude **Stop** | the same `claude -p` session ending |
+| git **pre-commit** | a real `git commit` of those files (Claude context, `CLAUDECODE=1`) |
+| git **pre-push** | a real `git push` to a local bare remote |
+
+The `claude -p` session writes two files containing the **same messy, duplicated
+function**. That drives the whole point of captain-obvious:
+
+- **PostToolUse Prettier** reformats each messy file the moment it's written (`fix/lint-prettier — N file(s) fixed`).
+- **pre-push dup ratchet** flags the duplicated function as newly-introduced vs the
+  `origin/main` baseline (`pre-push/lint-dup — N issue(s) found`).
 
 Each fired hook runs through the single runner, which logs `run.start` + `run.end`.
 The suite serves the panel over the sandbox DBs and asserts, in the browser, that the
-**Activity feed shows the start+end pair** for every hook — and that the offline
-governance rules (`gov-require-pr`, `gov-main-ci-green`, `gov-tests-green`) never ran.
+**Activity feed shows the start+end pair** for every hook (plus the Prettier fix and
+the dup finding) — and that the disabled rules never ran.
 
 `claude -p` runs with `--disallowedTools Bash` so it stays offline (no git/gh) and
 can't merge away the unmerged work — which keeps the Stop guard blocking
