@@ -5,10 +5,12 @@ import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   listHookRuns,
+  listLogs,
   logEvent,
   logEventTo,
   migrateHookRuns,
   openAuditDb,
+  openAuditDbReadonly,
   recordHookRun,
   resolveAuditDbPath,
   useAuditLog,
@@ -276,6 +278,41 @@ describe("openAuditDb against a real file", () => {
       } finally {
         db.close();
       }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("openAuditDbReadonly", () => {
+  it("opens an existing audit DB read-only and reads its rows", () => {
+    const dir = mkdtempSync(join(tmpdir(), "co-audit-ro-"));
+    try {
+      const dbPath = join(dir, "audit.db");
+      const writer = openAuditDb(dbPath);
+      logEventTo(writer, "run.start", "pre-commit/lint-naming (check)");
+      writer.close();
+
+      const ro = openAuditDbReadonly(dbPath);
+      try {
+        expect(listLogs(ro).map((r) => r.logType)).toContain("run.start");
+        expect(() =>
+          ro
+            .prepare("INSERT INTO logs (log_type, message) VALUES ('x', 'y')")
+            .run(),
+        ).toThrow();
+      } finally {
+        ro.close();
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("throws when the audit file does not exist", () => {
+    const dir = mkdtempSync(join(tmpdir(), "co-audit-ro-miss-"));
+    try {
+      expect(() => openAuditDbReadonly(join(dir, "absent.db"))).toThrow();
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
