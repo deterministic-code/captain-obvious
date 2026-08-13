@@ -120,6 +120,34 @@ describe("slug ↔ key mapping", () => {
   });
 });
 
+describe("activityFeed fixed-count message", () => {
+  it("formats the files-fixed count for a fix run, singular and plural", () => {
+    const now = Date.now();
+    recordHookRun(audit, {
+      slug: "lint-dup",
+      stage: "fix",
+      status: "success",
+      startedMs: now,
+      durationMs: 5,
+      fixed: 1,
+    });
+    recordHookRun(audit, {
+      slug: "lint-naming",
+      stage: "fix",
+      status: "success",
+      startedMs: now,
+      durationMs: 5,
+      fixed: 3,
+    });
+    const feed = activityFeed(undefined, audit, db, { last: "24h" });
+    const msg = new Map(
+      feed.filter((e) => e.source === "hook").map((e) => [e.key, e.message]),
+    );
+    expect(msg.get("lint:dup")).toBe("1 file fixed");
+    expect(msg.get("lint:naming")).toBe("3 files fixed");
+  });
+});
+
 describe("activitySummary", () => {
   it("ranks keys by run count, counts failures, and lists all keys sorted", () => {
     const now = Date.now();

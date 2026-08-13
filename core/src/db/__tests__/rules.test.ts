@@ -3,9 +3,11 @@ import { openDb, type Db } from "../open.js";
 import {
   addRule,
   configureRule,
+  registerRule,
   reorderRule,
   reorderRuleBefore,
 } from "../rules.js";
+import type { RulePlugin } from "../../rules/plugin.js";
 import type { RuleActionRow } from "../types.js";
 
 let db: Db;
@@ -46,6 +48,40 @@ function categories(slug: string): string[] {
       .all(slug) as { category: string }[]
   ).map((r) => r.category);
 }
+
+function fixCount(slug: string): number {
+  return (
+    db
+      .prepare(
+        "SELECT count(*) AS n FROM fixes f JOIN rules r ON r.id = f.rule_id WHERE r.slug = ?",
+      )
+      .get(slug) as { n: number }
+  ).n;
+}
+
+describe("registerRule", () => {
+  it("registers a plugin with no actions, leaving the fixes table empty", () => {
+    const plugin: RulePlugin = {
+      meta: {
+        slug: "reg-no-actions",
+        name: "Reg No Actions",
+        category: "naming",
+        description: "exercises the undefined-actions branch",
+        languages: ["typescript"],
+        config: null,
+        ratchetable: false,
+        modes: ["staged"],
+        stages: ["pre-commit"],
+      },
+      checkEntry: null,
+    };
+    registerRule(db, plugin);
+    expect(
+      db.prepare("SELECT slug FROM rules WHERE slug = ?").get("reg-no-actions"),
+    ).toMatchObject({ slug: "reg-no-actions" });
+    expect(fixCount("reg-no-actions")).toBe(0);
+  });
+});
 
 function sortIndex(slug: string): number {
   return (

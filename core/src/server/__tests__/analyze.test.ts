@@ -1,4 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -38,6 +44,7 @@ describe("analyzeProject", () => {
     write("README"); // no extension
     write("node_modules/x.ts"); // HIDDEN_DIRS
     write(".cache/y.ts"); // dotfile dir
+    symlinkSync(join(root, "a.ts"), join(root, "link.ts")); // neither file nor dir dirent
 
     const result = await analyzeProject(root);
 

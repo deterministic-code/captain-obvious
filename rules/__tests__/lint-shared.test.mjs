@@ -139,6 +139,12 @@ describe("stripStringsAndComments", () => {
     expect(stripStringsAndComments('x = "ab"')).toBe('x = "  "');
     expect(stripStringsAndComments("x = `ab`")).toBe("x = `  `");
   });
+  test("an unterminated string runs to EOF with no closing quote to emit", () => {
+    expect(stripStringsAndComments("x = 'ab")).toBe("x = '  ");
+  });
+  test("an unterminated block comment runs to EOF with no close to emit", () => {
+    expect(stripStringsAndComments("a /* bc")).toBe("a      ");
+  });
   test("a multi-line block comment preserves interior newlines", () => {
     expect(stripStringsAndComments("/* a\nb */x")).toBe("    \n    x");
   });

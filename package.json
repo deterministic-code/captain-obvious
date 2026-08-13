@@ -104,9 +104,9 @@
     "panel": "captain-obvious serve"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "^2.1.9",
+    "@vitest/coverage-v8": "^4.1.10",
     "happy-dom": "^20.11.1",
-    "vitest": "^2.1.0"
+    "vitest": "^4.1.10"
   },
   "captainObvious": {
     "managedScripts": [

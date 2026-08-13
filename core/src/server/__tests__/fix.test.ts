@@ -157,6 +157,21 @@ describe("fixRule — scriptBody (shell command prefix)", () => {
     );
   });
 
+  it("counts only changed files, skipping (unchanged) lines, in the fixed total", async () => {
+    spawnMock.mockImplementation(
+      () =>
+        fakeChild({
+          stdout: "a.ts 12ms\nb.ts 3ms (unchanged)\nc.ts 5ms\n",
+          code: 0,
+        }) as never,
+    );
+    const res = await fixRule(db, auditDb, {
+      slug: "lint-prettier",
+      path: dir,
+    });
+    expect(res.fixed).toBe(2);
+  });
+
   it("appends '.' as the target for a folder run and records success", async () => {
     const res = await fixRule(db, auditDb, {
       slug: "lint-prettier",

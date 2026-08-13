@@ -39,6 +39,11 @@ describe("lint-comments / findViolations", () => {
     expect(findViolations(src)).toEqual([]);
   });
 
+  test("an unterminated string literal runs to EOL without a close", () => {
+    const src = `const s = "no closing quote;\nconst y = 2;\n`;
+    expect(findViolations(src)).toEqual([]);
+  });
+
   test("doc block /** ... */ on multiple lines is exempt", () => {
     const src = `/**\n * Public API.\n */\nexport function f() {}\n`;
     expect(findViolations(src)).toEqual([]);
