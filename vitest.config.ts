@@ -14,6 +14,7 @@ export default defineConfig({
       "**/.{idea,git,cache,output,temp}/**",
       "**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build,eslint,prettier}.config.*",
       ".worktrees/**",
+      "e2e/**", // Playwright suite (own runner); not part of the vitest gate
     ],
     coverage: {
       provider: "v8",
