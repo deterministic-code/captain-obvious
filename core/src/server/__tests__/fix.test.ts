@@ -19,7 +19,7 @@ vi.mock("node:child_process", () => ({
 }));
 
 import { spawn } from "node:child_process";
-import { checkScriptPath } from "../../rules/dispatch.js";
+import { checkScriptPath } from "../../rules/runner.js";
 import {
   listHookRuns,
   listLogs,
@@ -363,7 +363,7 @@ describe("planFix — Tier A (delegate to Claude Code)", () => {
 
   it("builds a prompt even for a rule with no inferred fix (AI fix is universal), omitting the guidance line", async () => {
     setRuleFixes(db, "lint-prettier", [{ kind: "script", scriptBody: "x" }]);
-    const plan = await planFix(db, { slug: "lint-prettier", path: filePath });
+    const plan = await planFix(db, auditDb, { slug: "lint-prettier", path: filePath });
     expect(plan.slug).toBe("lint-prettier");
     expect(plan.prompt).toContain("Rule intent:");
     expect(plan.prompt).not.toContain("Fix guidance:");
@@ -372,12 +372,12 @@ describe("planFix — Tier A (delegate to Claude Code)", () => {
 
   it("rejects a folder target", async () => {
     await expect(
-      planFix(db, { slug: "lint-naming", path: dir }),
+      planFix(db, auditDb, { slug: "lint-naming", path: dir }),
     ).rejects.toThrow("AI fix needs a single file, not a folder");
   });
 
   it("builds a prompt from fresh violations and writes it under .claude/tmp", async () => {
-    const plan = await planFix(db, { slug: "lint-naming", path: filePath });
+    const plan = await planFix(db, auditDb, { slug: "lint-naming", path: filePath });
     expect(plan.slug).toBe("lint-naming");
     expect(plan.path).toBe(filePath);
     expect(plan.prompt).toContain("Naming conventions");
@@ -394,7 +394,7 @@ describe("planFix — Tier A (delegate to Claude Code)", () => {
     spawnMock.mockImplementation(
       () => fakeChild({ stdout: jsonLine([]), code: 0 }) as never,
     );
-    const plan = await planFix(db, { slug: "lint-naming", path: filePath });
+    const plan = await planFix(db, auditDb, { slug: "lint-naming", path: filePath });
     expect(plan.prompt).toContain("(no violations reported for this file)");
   });
 
@@ -403,7 +403,7 @@ describe("planFix — Tier A (delegate to Claude Code)", () => {
       () => fakeChild({ stderr: "check blew up\n", code: 2 }) as never,
     );
     await expect(
-      planFix(db, { slug: "lint-naming", path: filePath }),
+      planFix(db, auditDb, { slug: "lint-naming", path: filePath }),
     ).rejects.toThrow("check blew up");
   });
 });
@@ -425,7 +425,7 @@ describe("aiProposeFix — Tier B/C (server-side model)", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const proposal = await aiProposeFix(db, {
+    const proposal = await aiProposeFix(db, auditDb, {
       slug: "lint-naming",
       path: filePath,
     });
@@ -455,7 +455,7 @@ describe("aiProposeFix — Tier B/C (server-side model)", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const proposal = await aiProposeFix(db, {
+    const proposal = await aiProposeFix(db, auditDb, {
       slug: "lint-max-lines",
       path: filePath,
     });
@@ -478,7 +478,7 @@ describe("aiProposeFix — Tier B/C (server-side model)", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const proposal = await aiProposeFix(db, {
+    const proposal = await aiProposeFix(db, auditDb, {
       slug: "lint-naming",
       path: filePath,
     });
@@ -499,7 +499,7 @@ describe("aiProposeFix — Tier B/C (server-side model)", () => {
       }),
     );
     vi.stubGlobal("fetch", fetchMock);
-    const proposal = await aiProposeFix(db, {
+    const proposal = await aiProposeFix(db, auditDb, {
       slug: "lint-naming",
       path: filePath,
     });
@@ -525,7 +525,7 @@ describe("aiProposeFix — Tier B/C (server-side model)", () => {
         }),
       ),
     );
-    const proposal = await aiProposeFix(db, {
+    const proposal = await aiProposeFix(db, auditDb, {
       slug: "lint-naming",
       path: filePath,
     });
@@ -545,7 +545,7 @@ describe("aiProposeFix — Tier B/C (server-side model)", () => {
         }),
       ),
     );
-    const proposal = await aiProposeFix(db, {
+    const proposal = await aiProposeFix(db, auditDb, {
       slug: "lint-naming",
       path: filePath,
     });
@@ -564,7 +564,7 @@ describe("aiProposeFix — Tier B/C (server-side model)", () => {
       ),
     );
     await expect(
-      aiProposeFix(db, { slug: "lint-naming", path: filePath }),
+      aiProposeFix(db, auditDb, { slug: "lint-naming", path: filePath }),
     ).rejects.toThrow("model returned empty output");
   });
 
@@ -579,7 +579,7 @@ describe("aiProposeFix — Tier B/C (server-side model)", () => {
         ),
     );
     await expect(
-      aiProposeFix(db, { slug: "lint-naming", path: filePath }),
+      aiProposeFix(db, auditDb, { slug: "lint-naming", path: filePath }),
     ).rejects.toThrow(/429/);
   });
 });
@@ -721,7 +721,7 @@ describe("planAllFixes — one plan for the whole run", () => {
       ],
     });
 
-    const plan = await planAllFixes(db, {
+    const plan = await planAllFixes(db, auditDb, {
       slugs: ["lint-naming", "lint-max-lines"],
       path: dir,
     });
@@ -742,7 +742,7 @@ describe("planAllFixes — one plan for the whole run", () => {
   it("throws when the run surfaced no violations", async () => {
     spawnBySlug({});
     await expect(
-      planAllFixes(db, { slugs: ["lint-naming"], path: dir }),
+      planAllFixes(db, auditDb, { slugs: ["lint-naming"], path: dir }),
     ).rejects.toThrow("no violations to plan");
   });
 
@@ -751,7 +751,7 @@ describe("planAllFixes — one plan for the whole run", () => {
       () => fakeChild({ stderr: "check blew up\n", code: 2 }) as never,
     );
     await expect(
-      planAllFixes(db, { slugs: ["lint-naming"], path: dir }),
+      planAllFixes(db, auditDb, { slugs: ["lint-naming"], path: dir }),
     ).rejects.toThrow("check blew up");
   });
 
@@ -760,7 +760,7 @@ describe("planAllFixes — one plan for the whole run", () => {
       "lint-naming": [{ line: 1, col: 1, kind: "k", detail: "pathless" }],
     });
     await expect(
-      planAllFixes(db, { slugs: ["lint-naming"], path: dir }),
+      planAllFixes(db, auditDb, { slugs: ["lint-naming"], path: dir }),
     ).rejects.toThrow("lint-naming reported a violation with no file path");
   });
 });
@@ -793,7 +793,7 @@ describe("aiProposeAllFixes — model proposals for the whole run", () => {
     });
     const fetchMock = stubModel("fixed\n");
 
-    const { proposals, skipped } = await aiProposeAllFixes(db, {
+    const { proposals, skipped } = await aiProposeAllFixes(db, auditDb, {
       slugs: ["lint-naming", "lint-max-lines"],
       path: dir,
     });
@@ -823,7 +823,7 @@ describe("aiProposeAllFixes — model proposals for the whole run", () => {
     spawnBySlug({ "lint-naming": [vio(md, "bad")] });
     stubModel("fixed\n");
 
-    const { proposals, skipped } = await aiProposeAllFixes(db, {
+    const { proposals, skipped } = await aiProposeAllFixes(db, auditDb, {
       slugs: ["lint-naming"],
       path: dir,
     });
@@ -834,7 +834,7 @@ describe("aiProposeAllFixes — model proposals for the whole run", () => {
   it("throws when there is no key for a remote endpoint", async () => {
     spawnBySlug({ "lint-naming": [vio(filePath, "rename")] });
     await expect(
-      aiProposeAllFixes(db, { slugs: ["lint-naming"], path: dir }),
+      aiProposeAllFixes(db, auditDb, { slugs: ["lint-naming"], path: dir }),
     ).rejects.toThrow(/no API key for anthropic/);
   });
 
@@ -842,7 +842,7 @@ describe("aiProposeAllFixes — model proposals for the whole run", () => {
     vi.stubEnv("CO_FIX_API_KEY", "sk-test");
     spawnBySlug({});
     await expect(
-      aiProposeAllFixes(db, { slugs: ["lint-naming"], path: dir }),
+      aiProposeAllFixes(db, auditDb, { slugs: ["lint-naming"], path: dir }),
     ).rejects.toThrow("no violations to fix");
   });
 });

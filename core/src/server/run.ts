@@ -4,11 +4,11 @@
  * a human report and exit; here we spawn each with CO_JSON=1 so it emits one JSON
  * line of violations instead, and collect that. Display-only — no fixes applied.
  */
-import { spawn } from "node:child_process";
 import { readFile, readdir } from "node:fs/promises";
 import { dirname, extname, join, resolve } from "node:path";
-import { checkScriptPath } from "../rules/dispatch.js";
+import type { Db } from "../db/open.js";
 import { RULES } from "../rules/index.js";
+import { dispatchRule } from "../rules/runner.js";
 import type { Violation } from "../rules/types.js";
 import { repoRoot, resolveRunTarget } from "./target.js";
 import { JS_TS_EXTS as LINTABLE_EXTS } from "../../lib/languages.mjs";
@@ -137,82 +137,51 @@ export async function readSource(rawPath?: string): Promise<FileView> {
   return { path, text };
 }
 
-function errResult(
-  slug: string,
-  stderr: string,
-  code: number | null,
-): RunResult {
-  return {
-    slug,
-    ok: false,
-    violations: [],
-    error: stderr.trim() || `exited ${code} without JSON output`,
-  };
-}
-
-/** Parse a `{"violations":[...]}` line; null when it isn't that shape (surfaced as an error upstream). */
-function parseViolations(line: string): Violation[] | null {
-  // A non-JSON line means the hook didn't emit structured output — signal null, reported as an error.
-  let value: unknown;
-  try {
-    value = JSON.parse(line);
-  } catch {
-    return null;
-  }
-  const violations = (value as { violations?: unknown } | null)?.violations;
-  return Array.isArray(violations) ? (violations as Violation[]) : null;
-}
-
-/** Spawn one rule's hook in JSON mode with `modeArgs` against `cwd` and collect its violations. */
-function runRuleCollect(
-  slug: string,
-  cwd: string,
-  modeArgs: string[],
-): Promise<RunResult> {
-  const child = spawn(process.execPath, [checkScriptPath(slug), ...modeArgs], {
-    cwd,
-    env: { ...process.env, CO_JSON: "1" },
-  });
-  return new Promise((resolvePromise) => {
-    let out = "";
-    let err = "";
-    child.stdout.on("data", (d) => (out += d));
-    child.stderr.on("data", (d) => (err += d));
-    child.on("error", (e) =>
-      resolvePromise({ slug, ok: false, violations: [], error: e.message }),
-    );
-    child.on("close", (code) => {
-      const line = out.trim().split("\n").filter(Boolean).pop();
-      const violations = code === 0 && line ? parseViolations(line) : null;
-      if (violations === null)
-        return resolvePromise(errResult(slug, err, code));
-      resolvePromise({ slug, ok: true, violations });
-    });
-  });
-}
-
-function runOne(
+/**
+ * Run one rule in JSON mode through the single runner (so the scan is logged like
+ * every other rule run) and shape its outcome into a RunResult. A non-runnable or
+ * unknown slug, a spawn failure, or a hook that emitted no `{"violations":[…]}`
+ * line all surface as an error result the panel renders per-rule (never a throw
+ * that would fail the whole request).
+ */
+async function runOne(
+  auditDb: Db,
   slug: string,
   cwd: string,
   modeArgs: string[],
 ): Promise<RunResult> {
   if (!KNOWN.has(slug)) {
-    return Promise.resolve({
-      slug,
-      ok: false,
-      violations: [],
-      error: "unknown rule",
-    });
+    return { slug, ok: false, violations: [], error: "unknown rule" };
   }
   if (!RUNNABLE.has(slug)) {
-    return Promise.resolve({
+    return {
       slug,
       ok: false,
       violations: [],
       error: "rule is not runnable from the panel yet",
-    });
+    };
   }
-  return runRuleCollect(slug, cwd, modeArgs);
+  try {
+    const outcome = await dispatchRule(auditDb, {
+      slug,
+      stage: "run",
+      cwd,
+      args: modeArgs,
+      mode: "json",
+    });
+    if (outcome.violations === null) {
+      return {
+        slug,
+        ok: false,
+        violations: [],
+        error:
+          outcome.stderr || `exited ${outcome.code} without JSON output`,
+      };
+    }
+    return { slug, ok: true, violations: outcome.violations };
+  } catch (e) {
+    return { slug, ok: false, violations: [], error: (e as Error).message };
+  }
 }
 
 /** Run each slug against `cwd` with a small pool — the rules re-scan the whole tree, so don't unbounded-fan-out. */
@@ -240,14 +209,17 @@ export async function mapPool<T, R>(
  * rule over its whole tree (`--all`); a single file runs them over just that
  * file (`--files`). Results keep request order.
  */
-export async function runRules(body: RunRequest): Promise<RunResult[]> {
+export async function runRules(
+  auditDb: Db,
+  body: RunRequest,
+): Promise<RunResult[]> {
   const requested = body.slugs;
   if (!Array.isArray(requested) || requested.length === 0) {
     throw new Error("slugs is required");
   }
   const { cwd, modeArgs } = await resolveRunTarget(body.path);
   const slugs = [...new Set(requested)];
-  return mapPool(slugs, 4, (slug) => runOne(slug, cwd, modeArgs));
+  return mapPool(slugs, 4, (slug) => runOne(auditDb, slug, cwd, modeArgs));
 }
 
 /**
@@ -256,9 +228,10 @@ export async function runRules(body: RunRequest): Promise<RunResult[]> {
  * rather than trusting whatever the panel last rendered.
  */
 export async function runRuleOnFile(
+  auditDb: Db,
   slug: string,
   file: string,
 ): Promise<RunResult> {
   const { cwd, modeArgs } = await resolveRunTarget(file);
-  return runOne(slug, cwd, modeArgs);
+  return runOne(auditDb, slug, cwd, modeArgs);
 }

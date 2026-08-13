@@ -103,12 +103,23 @@ export function useAuditLog(db: Db | undefined): void {
   sink = db;
 }
 
-/** Record one state-change event. No-op when the audit log is disabled. */
+/**
+ * Append one event to an explicitly-handed audit DB. The rule runner and the
+ * git/Claude hooks own their audit DB directly (they run as short-lived processes
+ * outside the server's module sink), so they log through this rather than the
+ * sink-based logEvent.
+ */
+export function logEventTo(db: Db, logType: string, message: string): void {
+  db.prepare("INSERT INTO logs (log_type, message) VALUES (?, ?)").run(
+    logType,
+    message,
+  );
+}
+
+/** Record one state-change event on the module sink. No-op when the audit log is disabled. */
 export function logEvent(logType: string, message: string): void {
   if (!sink) return;
-  sink
-    .prepare("INSERT INTO logs (log_type, message) VALUES (?, ?)")
-    .run(logType, message);
+  logEventTo(sink, logType, message);
 }
 
 export interface LogRow {

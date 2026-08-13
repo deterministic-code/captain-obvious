@@ -12,13 +12,7 @@
     {
       "event": "PreToolUse",
       "matcher": "Edit|Write|NotebookEdit|Bash",
-      "hook": "main-branch-guard",
-      "timeout": 5
-    },
-    {
-      "event": "PreToolUse",
-      "matcher": "Edit|Write|NotebookEdit",
-      "hook": "protected-paths-guard",
+      "hook": "pre-tool-guard",
       "timeout": 5
     },
     {
@@ -29,7 +23,7 @@
     },
     {
       "event": "Stop",
-      "hook": "stop-unmerged-guard",
+      "hook": "stop-guard",
       "timeout": 15
     }
   ]

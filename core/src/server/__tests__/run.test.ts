@@ -13,7 +13,9 @@ vi.mock("node:child_process", () => ({
 }));
 
 import { execFile, spawn } from "node:child_process";
-import { checkScriptPath } from "../../rules/dispatch.js";
+import { openAuditDb } from "../../db/audit.js";
+import type { Db } from "../../db/open.js";
+import { checkScriptPath } from "../../rules/runner.js";
 import {
   browse,
   readSource,
@@ -24,6 +26,7 @@ import {
 
 const spawnMock = vi.mocked(spawn);
 const execFileMock = vi.mocked(execFile);
+let auditDb: Db;
 
 interface ChildOpts {
   stdout?: string;
@@ -57,6 +60,7 @@ let dir: string;
 let filePath: string;
 
 beforeEach(() => {
+  auditDb = openAuditDb(":memory:");
   dir = mkdtempSync(join(tmpdir(), "co-run-"));
   mkdirSync(join(dir, "sub"));
   mkdirSync(join(dir, "node_modules"));
@@ -83,6 +87,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  auditDb.close();
   rmSync(dir, { recursive: true, force: true });
   vi.restoreAllMocks();
   spawnMock.mockReset();
@@ -151,17 +156,17 @@ describe("readSource", () => {
 
 describe("runRules — validation", () => {
   it("throws when slugs is missing", async () => {
-    await expect(runRules({})).rejects.toThrow("slugs is required");
+    await expect(runRules(auditDb, {})).rejects.toThrow("slugs is required");
     expect(spawnMock).not.toHaveBeenCalled();
   });
 
   it("throws when slugs is empty", async () => {
-    await expect(runRules({ slugs: [] })).rejects.toThrow("slugs is required");
+    await expect(runRules(auditDb, { slugs: [] })).rejects.toThrow("slugs is required");
   });
 
   it("throws a clean error when the target does not exist", async () => {
     await expect(
-      runRules({ slugs: ["lint-naming"], path: join(dir, "nope/x") }),
+      runRules(auditDb, { slugs: ["lint-naming"], path: join(dir, "nope/x") }),
     ).rejects.toThrow(/no such file or folder/);
     expect(spawnMock).not.toHaveBeenCalled();
   });
@@ -178,7 +183,7 @@ describe("runRules — validation", () => {
         ? cb(null, { stdout: `${process.cwd()}\n`, stderr: "" })
         : cb(new Error("fatal: not a git repository"), null)) as never);
     await expect(
-      runRules({ slugs: ["lint-naming"], path: dir }),
+      runRules(auditDb, { slugs: ["lint-naming"], path: dir }),
     ).rejects.toThrow(`not a git repository (or missing folder): ${dir}`);
     expect(spawnMock).not.toHaveBeenCalled();
   });
@@ -186,7 +191,7 @@ describe("runRules — validation", () => {
 
 describe("runRules — folder mode (--all)", () => {
   it("runs each rule over the whole folder", async () => {
-    const results = await runRules({ slugs: ["lint-naming"], path: dir });
+    const results = await runRules(auditDb, { slugs: ["lint-naming"], path: dir });
     expect(results).toEqual([
       { slug: "lint-naming", ok: true, violations: [V] },
     ]);
@@ -202,13 +207,13 @@ describe("runRules — folder mode (--all)", () => {
   });
 
   it("defaults the target to the repo root", async () => {
-    await runRules({ slugs: ["lint-naming"] });
+    await runRules(auditDb, { slugs: ["lint-naming"] });
     const opts = spawnMock.mock.calls[0][2] as { cwd: string };
     expect(opts.cwd).toBe(process.cwd());
   });
 
   it("dedupes slugs and preserves request order", async () => {
-    const results = await runRules({
+    const results = await runRules(auditDb, {
       slugs: ["lint-naming", "lint-naming", "lint-max-lines"],
       path: dir,
     });
@@ -222,7 +227,7 @@ describe("runRules — folder mode (--all)", () => {
 
 describe("runRules — file mode (--files)", () => {
   it("runs each rule over just the chosen file, from its parent dir", async () => {
-    const results = await runRules({ slugs: ["lint-naming"], path: filePath });
+    const results = await runRules(auditDb, { slugs: ["lint-naming"], path: filePath });
     expect(results[0]).toEqual({
       slug: "lint-naming",
       ok: true,
@@ -249,7 +254,7 @@ describe("runRules — file mode (--files)", () => {
         stdout: args.includes("--show-toplevel") ? `${dir}\n` : "true\n",
         stderr: "",
       })) as never);
-    const results = await runRules({ slugs: ["lint-naming"], path: "a.ts" });
+    const results = await runRules(auditDb, { slugs: ["lint-naming"], path: "a.ts" });
     expect(results[0].ok).toBe(true);
     const [, args, opts] = spawnMock.mock.calls[0] as [
       string,
@@ -266,7 +271,7 @@ describe("runRules — per-rule outcomes", () => {
     spawnMock.mockImplementation(
       () => fakeChild({ stdout: jsonLine([]), code: 0 }) as never,
     );
-    const results = await runRules({ slugs: ["lint-naming"], path: dir });
+    const results = await runRules(auditDb, { slugs: ["lint-naming"], path: dir });
     expect(results[0]).toEqual({
       slug: "lint-naming",
       ok: true,
@@ -275,7 +280,7 @@ describe("runRules — per-rule outcomes", () => {
   });
 
   it("flags an unknown slug without spawning", async () => {
-    const results = await runRules({ slugs: ["bogus"], path: dir });
+    const results = await runRules(auditDb, { slugs: ["bogus"], path: dir });
     expect(results[0]).toEqual({
       slug: "bogus",
       ok: false,
@@ -286,7 +291,7 @@ describe("runRules — per-rule outcomes", () => {
   });
 
   it("flags a known-but-not-wired rule without spawning", async () => {
-    const results = await runRules({ slugs: ["lint-comments"], path: dir });
+    const results = await runRules(auditDb, { slugs: ["lint-comments"], path: dir });
     expect(results[0].ok).toBe(false);
     expect(results[0].error).toBe("rule is not runnable from the panel yet");
     expect(spawnMock).not.toHaveBeenCalled();
@@ -296,7 +301,7 @@ describe("runRules — per-rule outcomes", () => {
     spawnMock.mockImplementation(
       () => fakeChild({ stderr: "boom\n", code: 2 }) as never,
     );
-    const results = await runRules({ slugs: ["lint-naming"], path: dir });
+    const results = await runRules(auditDb, { slugs: ["lint-naming"], path: dir });
     expect(results[0]).toEqual({
       slug: "lint-naming",
       ok: false,
@@ -307,7 +312,7 @@ describe("runRules — per-rule outcomes", () => {
 
   it("reports a generic error when a non-zero exit has no stderr", async () => {
     spawnMock.mockImplementation(() => fakeChild({ code: 1 }) as never);
-    const results = await runRules({ slugs: ["lint-naming"], path: dir });
+    const results = await runRules(auditDb, { slugs: ["lint-naming"], path: dir });
     expect(results[0].error).toBe("exited 1 without JSON output");
   });
 
@@ -315,7 +320,7 @@ describe("runRules — per-rule outcomes", () => {
     spawnMock.mockImplementation(
       () => fakeChild({ stdout: "", code: 0 }) as never,
     );
-    const results = await runRules({ slugs: ["lint-naming"], path: dir });
+    const results = await runRules(auditDb, { slugs: ["lint-naming"], path: dir });
     expect(results[0].error).toBe("exited 0 without JSON output");
   });
 
@@ -323,7 +328,7 @@ describe("runRules — per-rule outcomes", () => {
     spawnMock.mockImplementation(
       () => fakeChild({ stdout: "not json\n", code: 0 }) as never,
     );
-    const results = await runRules({ slugs: ["lint-naming"], path: dir });
+    const results = await runRules(auditDb, { slugs: ["lint-naming"], path: dir });
     expect(results[0].error).toBe("exited 0 without JSON output");
   });
 
@@ -331,7 +336,7 @@ describe("runRules — per-rule outcomes", () => {
     spawnMock.mockImplementation(
       () => fakeChild({ stdout: '{"violations":5}\n', code: 0 }) as never,
     );
-    const results = await runRules({ slugs: ["lint-naming"], path: dir });
+    const results = await runRules(auditDb, { slugs: ["lint-naming"], path: dir });
     expect(results[0].ok).toBe(false);
   });
 
@@ -339,7 +344,7 @@ describe("runRules — per-rule outcomes", () => {
     spawnMock.mockImplementation(
       () => fakeChild({ stdout: "null\n", code: 0 }) as never,
     );
-    const results = await runRules({ slugs: ["lint-naming"], path: dir });
+    const results = await runRules(auditDb, { slugs: ["lint-naming"], path: dir });
     expect(results[0].ok).toBe(false);
   });
 
@@ -347,7 +352,7 @@ describe("runRules — per-rule outcomes", () => {
     spawnMock.mockImplementation(
       () => fakeChild({ err: new Error("spawnfail") }) as never,
     );
-    const results = await runRules({ slugs: ["lint-naming"], path: dir });
+    const results = await runRules(auditDb, { slugs: ["lint-naming"], path: dir });
     expect(results[0]).toEqual({
       slug: "lint-naming",
       ok: false,

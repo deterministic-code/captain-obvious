@@ -348,8 +348,10 @@ function mockFixRun({
     if (cmd === "git" && args[0] === "add") {
       return fakeChild((c) => c.emit("exit", addCode, null));
     }
-    if (args.includes("--fix"))
-      return fakeChild((c) => c.emit("exit", fixCode, null));
+    // A shell scriptBody fix (e.g. `prettier`) is fix mode; the runner resolves it
+    // on `close`. So does a node `--fix`. The plain check resolves on `exit`.
+    if (cmd !== process.execPath || args.includes("--fix"))
+      return fakeChild((c) => c.emit("close", fixCode, null));
     return fakeChild((c) => c.emit("exit", checkCode, null));
   }) as never);
 }
@@ -442,7 +444,7 @@ describe("runDispatch fix actions", () => {
       if (cmd === "git" && args[0] === "diff")
         return childWithStdout("a.ts\n", 0);
       if (args.includes("--fix"))
-        return fakeChild((c) => c.emit("exit", null, null));
+        return fakeChild((c) => c.emit("close", null, null));
       return fakeChild((c) => c.emit("exit", 0, null));
     }) as never);
 
@@ -457,12 +459,12 @@ describe("runDispatch fix actions", () => {
       if (cmd === "git" && args[0] === "diff")
         return childWithStdout("a.ts\n", 0);
       if (args.includes("--fix"))
-        return fakeChild((c) => c.emit("exit", null, "SIGTERM"));
+        return fakeChild((c) => c.emit("close", null, "SIGTERM"));
       return fakeChild((c) => c.emit("exit", 0, null));
     }) as never);
 
     await expect(runDispatch(["pre-commit"])).rejects.toThrow(
-      /fix killed by SIGTERM/,
+      /killed by SIGTERM/,
     );
     expect(recordedRuns()).toEqual([
       { slug: "lint-prettier", stage: "pre-commit", status: "failure" },

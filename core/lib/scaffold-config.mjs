@@ -56,11 +56,11 @@ function buildConfig({ mode, wireHooks, gitignore }) {
     config.claudeHooks = [
       {
         event: "PreToolUse",
-        matcher: "Edit|Write",
-        hook: "main-branch-guard",
+        matcher: "Edit|Write|NotebookEdit|Bash",
+        hook: "pre-tool-guard",
         timeout: 5,
       },
-      { event: "Stop", hook: "stop-unmerged-guard", timeout: 15 },
+      { event: "Stop", hook: "stop-guard", timeout: 15 },
     ];
   }
   return config;

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   listHookRuns,
   logEvent,
+  logEventTo,
   migrateHookRuns,
   openAuditDb,
   recordHookRun,
@@ -42,6 +43,17 @@ function logs(): { log_type: string; message: string }[] {
 }
 
 describe("audit logging", () => {
+  it("logEventTo writes to an explicitly-handed db, bypassing the sink", () => {
+    useAuditLog(undefined); // the sink is off; the explicit handle still writes
+    logEventTo(audit, "run.start", "pre-commit/lint-naming (check)");
+    expect(logs()).toEqual([
+      {
+        log_type: "run.start",
+        message: "pre-commit/lint-naming (check)",
+      },
+    ]);
+  });
+
   it("records disabling a rule", () => {
     audit.prepare("DELETE FROM logs").run(); // drop the seedRules event
     configureRule(db, "lint-naming", { enabled: false });

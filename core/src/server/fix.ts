@@ -13,14 +13,13 @@
  * AI edits are non-deterministic, so they are always proposed-then-reviewed —
  * only `aiApplyFix` touches disk, and only for a file the user confirmed.
  */
-import { spawn } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, relative, resolve } from "node:path";
-import { logEvent, recordHookRun } from "../db/audit.js";
+import { logEvent } from "../db/audit.js";
 import { getRuleFixes, type RuleAction } from "../db/fixes.js";
 import type { Db } from "../db/open.js";
 import { RULES } from "../rules/index.js";
-import { checkScriptPath } from "../rules/dispatch.js";
+import { dispatchRule, type RunSpec } from "../rules/runner.js";
 import type { RuleMeta, Violation } from "../rules/types.js";
 import { repoRoot, resolveRunTarget } from "./target.js";
 import { mapPool, runRuleOnFile, runRules, type RunRequest } from "./run.js";
@@ -54,56 +53,6 @@ function requireAction(
   return action;
 }
 
-interface SpawnOutcome {
-  ok: boolean;
-  output: string;
-}
-
-/** Collect a child's merged stdout+stderr; resolve ok on a zero exit. */
-function collect(child: ReturnType<typeof spawn>): Promise<SpawnOutcome> {
-  return new Promise((resolvePromise) => {
-    let out = "";
-    child.stdout?.on("data", (d) => (out += d));
-    child.stderr?.on("data", (d) => (out += d));
-    child.on("error", (e) => resolvePromise({ ok: false, output: e.message }));
-    child.on("close", (code) =>
-      resolvePromise({ ok: code === 0, output: out.trim() }),
-    );
-  });
-}
-
-/**
- * A `script` action with `scriptPath`: the rule's own check runner in fix mode.
- * Convention (see lint-prettier): `node <runner> --fix <selector>`, where the
- * selector is the run's mode args (`--all`, or `--files <path>`). The runner is
- * the loader-stamped absolute `checkScriptPath`, never the DB's repo-relative
- * `scriptPath` — `cwd` is the lint target, so a relative path would resolve
- * against the wrong tree (ENOENT for any file/subfolder target).
- */
-function runNodeFix(
-  runner: string,
-  cwd: string,
-  modeArgs: string[],
-): Promise<SpawnOutcome> {
-  return collect(
-    spawn(process.execPath, [runner, "--fix", ...modeArgs], { cwd }),
-  );
-}
-
-/**
- * A `script` action with `scriptBody`: a command prefix (e.g. `npx prettier
- * --write`) that receives the target as a final argv element. Split on
- * whitespace and spawned without a shell, so a path with spaces stays one arg.
- */
-function runShellFix(
-  scriptBody: string,
-  cwd: string,
-  targetArg: string,
-): Promise<SpawnOutcome> {
-  const parts = scriptBody.trim().split(/\s+/);
-  return collect(spawn(parts[0], [...parts.slice(1), targetArg], { cwd }));
-}
-
 export interface FixResult {
   slug: string;
   ok: boolean;
@@ -122,61 +71,66 @@ function summarizeLineDelta(oldSrc: string, newSrc: string): string {
   return `+${added}/-${removed} lines`;
 }
 
-/** Count files modified in prettier/formatter output (lines without "(unchanged)"). */
-function countModifiedFiles(output: string): number {
-  const lines = output.split("\n");
-  let count = 0;
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (
-      trimmed &&
-      !line.startsWith("lint-") &&
-      !trimmed.startsWith("Re-stage")
-    ) {
-      if (!trimmed.includes("(unchanged)")) count++;
-    }
-  }
-  return count;
-}
-
 type ResolvedTarget = Awaited<ReturnType<typeof resolveRunTarget>>;
 
 /**
- * Run one rule's `script` fix against an already-resolved target and log it to
- * the audit log (so it shows in Activity, like a check). The target is resolved
- * by the caller so a whole-run sweep resolves it once and reuses it per rule.
+ * The fix RunSpec for a rule's `script` action. A `scriptPath` fix is the rule's
+ * own check runner in fix mode (`node <runner> --fix <selector>`); the runner
+ * resolves the loader-stamped absolute check path, never the DB's repo-relative
+ * `scriptPath` (cwd is the lint target). A `scriptBody` fix is a command prefix
+ * (e.g. `npx prettier --write`) handed the target as its final argv element,
+ * spawned without a shell so a path with spaces stays one arg.
+ */
+function fixSpec(
+  action: RuleAction,
+  slug: string,
+  { cwd, isDir, target, modeArgs }: ResolvedTarget,
+): RunSpec {
+  if (action.scriptPath) {
+    return { slug, stage: "fix", cwd, args: modeArgs, mode: "fix" };
+  }
+  const parts = (action.scriptBody as string).trim().split(/\s+/);
+  return {
+    slug,
+    stage: "fix",
+    cwd,
+    args: [...parts.slice(1), isDir ? "." : target],
+    mode: "fix",
+    command: parts[0],
+  };
+}
+
+/**
+ * Run one rule's `script` fix against an already-resolved target through the
+ * single runner (so it logs run.start/run.end + a hook_run, like a check) and
+ * shape the outcome into a FixResult. The target is resolved by the caller so a
+ * whole-run sweep resolves it once and reuses it per rule. A spawn failure is
+ * caught here (the panel renders it per-rule) rather than thrown.
  */
 async function runScriptFix(
   db: Db,
   auditDb: Db,
   slug: string,
-  { cwd, isDir, target, modeArgs }: ResolvedTarget,
+  resolved: ResolvedTarget,
 ): Promise<FixResult> {
   const action = requireAction(db, slug, "script");
-  const started = Date.now();
-  const outcome = action.scriptPath
-    ? await runNodeFix(checkScriptPath(slug), cwd, modeArgs)
-    : await runShellFix(action.scriptBody as string, cwd, isDir ? "." : target);
-  const fixed = outcome.ok ? countModifiedFiles(outcome.output) : null;
-  recordHookRun(auditDb, {
-    slug,
-    stage: "fix",
-    status: outcome.ok ? "success" : "failure",
-    startedMs: started,
-    durationMs: Date.now() - started,
-    fixed,
-  });
-  logEvent(
-    "fix.applied",
-    `script fix ${slug} on ${relative(process.cwd(), target)} — ${outcome.ok ? "success" : "failed"}`,
-  );
-  return {
-    slug,
-    ok: outcome.ok,
-    output: outcome.output,
-    fixed,
-    ...(outcome.ok ? {} : { error: outcome.output || "fix command failed" }),
-  };
+  const rel = relative(process.cwd(), resolved.target);
+  try {
+    const outcome = await dispatchRule(auditDb, fixSpec(action, slug, resolved));
+    const ok = outcome.code === 0;
+    logEvent("fix.applied", `script fix ${slug} on ${rel} — ${ok ? "success" : "failed"}`);
+    return {
+      slug,
+      ok,
+      output: outcome.output,
+      fixed: outcome.fixed,
+      ...(ok ? {} : { error: outcome.output || "fix command failed" }),
+    };
+  } catch (e) {
+    const msg = (e as Error).message;
+    logEvent("fix.applied", `script fix ${slug} on ${rel} — failed`);
+    return { slug, ok: false, output: msg, fixed: null, error: msg };
+  }
 }
 
 /**
@@ -245,10 +199,11 @@ async function resolveFileTarget(rawPath?: string): Promise<string> {
 }
 
 async function fileViolations(
+  auditDb: Db,
   slug: string,
   file: string,
 ): Promise<Violation[]> {
-  const result = await runRuleOnFile(slug, file);
+  const result = await runRuleOnFile(auditDb, slug, file);
   if (!result.ok) throw new Error(result.error);
   return result.violations;
 }
@@ -338,7 +293,11 @@ export interface FixPlan {
  * and hand it back (also written under `.claude/tmp/`) so the running Claude Code
  * agent can apply it. No model call, no API key.
  */
-export async function planFix(db: Db, body: FixRequest): Promise<FixPlan> {
+export async function planFix(
+  db: Db,
+  auditDb: Db,
+  body: FixRequest,
+): Promise<FixPlan> {
   const slug = requireSlug(body.slug);
   const { meta, action } = await fileFixContext(db, slug);
   const target = await resolveFileTarget(body.path);
@@ -346,7 +305,7 @@ export async function planFix(db: Db, body: FixRequest): Promise<FixPlan> {
     meta,
     action,
     target,
-    await fileViolations(slug, target),
+    await fileViolations(auditDb, slug, target),
   );
   const file = resolve(
     process.cwd(),
@@ -483,12 +442,13 @@ export interface AiProposal {
  */
 export async function aiProposeFix(
   db: Db,
+  auditDb: Db,
   body: FixRequest,
 ): Promise<AiProposal> {
   const slug = requireSlug(body.slug);
   const { meta, action } = await fileFixContext(db, slug);
   const target = await resolveFileTarget(body.path);
-  const violations = await fileViolations(slug, target);
+  const violations = await fileViolations(auditDb, slug, target);
   const source = await readFile(target, "utf8");
   const cfg = resolveFixModelConfig(process.env);
   const prompt = buildModelFixPrompt(relative(process.cwd(), target), source, [
@@ -557,9 +517,10 @@ interface FileFixGroup {
  */
 async function collectRunViolationsByFile(
   db: Db,
+  auditDb: Db,
   body: RunRequest,
 ): Promise<FileFixGroup[]> {
-  const results = await runRules(body);
+  const results = await runRules(auditDb, body);
   const root = await repoRoot();
   const byPath = new Map<string, FileFixGroup>();
   for (const r of results) {
@@ -614,9 +575,10 @@ export interface FixPlanAll {
  */
 export async function planAllFixes(
   db: Db,
+  auditDb: Db,
   body: RunRequest,
 ): Promise<FixPlanAll> {
-  const groups = await collectRunViolationsByFile(db, body);
+  const groups = await collectRunViolationsByFile(db, auditDb, body);
   if (groups.length === 0) throw new Error("no violations to plan");
   const prompt = buildAllAgentFixPrompt(groups);
   const file = resolve(process.cwd(), ".claude", "tmp", "co-fix-all.md");
@@ -661,9 +623,10 @@ async function proposeFileFix(
  */
 export async function aiProposeAllFixes(
   db: Db,
+  auditDb: Db,
   body: RunRequest,
 ): Promise<AiProposalAll> {
-  const groups = await collectRunViolationsByFile(db, body);
+  const groups = await collectRunViolationsByFile(db, auditDb, body);
   if (groups.length === 0) throw new Error("no violations to fix");
   const cfg = resolveFixModelConfig(process.env);
   const skipped: AiProposalAll["skipped"] = [];
