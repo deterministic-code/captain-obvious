@@ -34,15 +34,18 @@ npx captain-obvious-install
 ```
 
 `captain-obvious-install` scaffolds `captain-obvious.config.json` if it doesn't exist,
-asking you two quick questions (DB mode, and whether to wire the git + Claude Code guard
-hooks) with sensible defaults; then it wires the hooks, merges Claude Code settings,
-rewrites npm scripts, and initializes + seeds the registry DB in one shot. On a fresh clone
-with a committed config, it runs non-interactively in your `prepare` script; on a new
+asking you three quick questions (DB mode; whether to wire the git + Claude Code guard
+hooks; and — in local mode — whether to add `.captain-obvious/` to your `.gitignore`) with
+sensible defaults; then it wires the hooks, merges Claude Code settings, rewrites npm
+scripts, ignores the DB dir, and initializes + seeds the registry DB in one shot. On a fresh
+clone with a committed config, it runs non-interactively in your `prepare` script; on a new
 consumer repo, it prompts once and produces a working gate immediately.
 
 Skip the prompts with flags — handy for scripted installs: `--yes` (or `-y`) takes every
-default without asking, `--mode <local|global>` pins the DB location, and `--no-hooks`
-scaffolds without wiring any hooks. A pinned flag is never prompted for, so `--mode global`
+default without asking, `--mode <local|global>` pins the DB location, `--no-hooks` scaffolds
+without wiring any hooks, and `--gitignore` / `--no-gitignore` force the `.gitignore` entry
+on or off (the flag wins over the config's `gitignore` key, so `--gitignore` on a repo that
+already has a config adds the entry). A pinned flag is never prompted for, so `--mode global`
 still asks about hooks but not the mode. A non-TTY stdin (CI, `prepare`) implies `--yes`.
 
 Rules are discovered from `node_modules`: any installed package whose `package.json`
@@ -75,7 +78,10 @@ Wire it to run on every `npm install` so a fresh clone is gated automatically:
   only ever rewrites entries it previously added, tagged `_captainObvious`),
 - rewrites the `lint:*` scripts in your `package.json` to run through the package's
   `captain-obvious-lint` bin (plus a `panel` alias, below), tracking the keys it owns under
-  `captainObvious.managedScripts` so re-runs stay idempotent and dropped hooks get pruned, and
+  `captainObvious.managedScripts` so re-runs stay idempotent and dropped hooks get pruned,
+- adds `.captain-obvious/` to your `.gitignore` in local mode (unless you opted out) so the
+  registry + audit DBs never get committed — idempotent, and skipped in global mode where the
+  DBs live outside the repo, and
 - initializes and seeds the registry DB so rules are live on the first hook run.
 
 It also **warns loudly if the engine and your rule packages are on `^`-incompatible versions**
@@ -86,6 +92,20 @@ matching rules).
 
 Run any hook directly with the bin: `captain-obvious-lint <name> --staged` (e.g.
 `captain-obvious-lint comments --staged` runs `hooks/git/lint-comments.mjs`).
+
+### Ignoring the DB directory
+
+`captain-obvious-gitignore` adds `.captain-obvious/` (the local-mode registry + audit DBs) to
+the repo's `.gitignore`, creating the file if it doesn't exist. It's idempotent — any spelling
+that already excludes the directory is left alone — so it's safe to re-run. Install does this
+for you in local mode; use the standalone bin to add it to a repo set up before this option
+existed, or after switching a global-mode repo to local:
+
+```sh
+npx captain-obvious-gitignore              # add .captain-obvious/ to .gitignore
+npx captain-obvious-gitignore --check      # preview without writing
+npx captain-obvious-gitignore --target ../other-repo
+```
 
 ### Inspecting installed hooks
 

@@ -13,7 +13,8 @@
     "captain-obvious-install": "bin/install.mjs",
     "captain-obvious-lint": "bin/lint.mjs",
     "captain-obvious-hooks": "bin/list-hooks.mjs",
-    "captain-obvious-uninstall": "bin/uninstall.mjs"
+    "captain-obvious-uninstall": "bin/uninstall.mjs",
+    "captain-obvious-gitignore": "bin/gitignore.mjs"
   },
   "exports": {
     "./install": "./bin/install.mjs",
