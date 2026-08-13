@@ -1,24 +1,14 @@
 #!/usr/bin/env node
 import { resolve } from "node:path";
 import { collectHooks, formatHooks } from "../lib/list-hooks.mjs";
-import {
-  anyManaged,
-  formatHooksUninstall,
-  uninstallHooks,
-} from "../lib/uninstall.mjs";
+import { formatHooksUninstall, uninstallHooks } from "../lib/uninstall.mjs";
 
 function parseArgs(argv) {
-  const opts = {
-    command: "list",
-    target: process.cwd(),
-    json: false,
-    yes: false,
-  };
+  const opts = { command: "list", target: process.cwd(), json: false };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--target") opts.target = resolve(argv[(i += 1)]);
     else if (arg === "--json") opts.json = true;
-    else if (arg === "--yes" || arg === "-y") opts.yes = true;
     else if (!arg.startsWith("-")) opts.command = arg;
   }
   return opts;
@@ -33,17 +23,13 @@ async function runList({ target, json }) {
   );
 }
 
-async function runUninstall({ target, yes }) {
-  const result = await uninstallHooks(target, { apply: yes });
-  const header = yes
-    ? "removing managed hooks in"
-    : "dry run — managed hooks in";
+// Uninstall applies immediately — no confirmation gate. Removing the managed hooks is
+// safely reversible: `captain-obvious-install` wires them all back.
+async function runUninstall({ target }) {
+  const result = await uninstallHooks(target, { apply: true });
   process.stdout.write(
-    `captain-obvious: ${header} ${target}\n\n${formatHooksUninstall(result, yes)}`,
+    `captain-obvious: removing managed hooks in ${target}\n\n${formatHooksUninstall(result, true)}`,
   );
-  if (!yes && anyManaged(result)) {
-    process.stdout.write("\nRe-run with --yes to remove them.\n");
-  }
 }
 
 async function main() {
