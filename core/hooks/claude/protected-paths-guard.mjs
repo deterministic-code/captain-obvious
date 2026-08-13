@@ -31,7 +31,7 @@ async function runClaudeGuard() {
   if (!filePath) return;
   const root = await repoRootOf(input.cwd || dirname(filePath));
   if (!root) return;
-  const { guardDecision, formatDeny } =
+  const { guardDecision, formatGuardOutput } =
     await import("../../dist/rules/claudeGuard.js");
   const { openDb, resolveDbPath } = await import("../../dist/db/open.js");
   const db = openDb(resolveDbPath());
@@ -42,25 +42,32 @@ async function runClaudeGuard() {
   } finally {
     db.close();
   }
-  // Emit the decision before logging so an audit-write failure (which the
-  // top-level fail-open catch swallows) can never turn a deny into an allow.
-  if (decision.deny) process.stdout.write(`${formatDeny(decision.reason)}\n`);
+  // Catch audit failures so the deny still emits; surface them, don't swallow to stderr.
+  let auditError;
   if (run) {
     const { openAuditDb, recordHookRun, resolveAuditDbPath } =
       await import("../../dist/db/audit.js");
-    const auditDb = openAuditDb(resolveAuditDbPath());
     try {
-      recordHookRun(auditDb, {
-        ...run,
-        startedMs,
-        durationMs: Date.now() - startedMs,
-      });
-    } finally {
-      auditDb.close();
+      const auditDb = openAuditDb(resolveAuditDbPath());
+      try {
+        recordHookRun(auditDb, {
+          ...run,
+          startedMs,
+          durationMs: Date.now() - startedMs,
+        });
+      } finally {
+        auditDb.close();
+      }
+    } catch (err) {
+      auditError = err?.message ?? String(err);
     }
   }
+  const output = formatGuardOutput(decision, auditError);
+  if (output) process.stdout.write(`${output}\n`);
 }
 
 runClaudeGuard().catch((err) => {
-  process.stderr.write(`protected-paths-guard: ${err.message ?? err}\n`);
+  // Fail open (no decision = allow) but loud: visible systemMessage, not stderr-only.
+  const systemMessage = `captain-obvious protected-paths-guard failed — ${err?.message ?? err}`;
+  process.stdout.write(`${JSON.stringify({ systemMessage })}\n`);
 });

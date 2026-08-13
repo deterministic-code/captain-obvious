@@ -269,3 +269,44 @@ describe("openAuditDb against a real file", () => {
     }
   });
 });
+
+describe("openAuditDb shape guard", () => {
+  // Fresh temp dir per call so `toThrow` re-invoking the thunk can't hit a cleaned-up dir.
+  function openDrifted(seed: (db: Database.Database) => void): void {
+    const dir = mkdtempSync(join(tmpdir(), "co-audit-drift-"));
+    const dbPath = join(dir, "audit.db");
+    const stale = new Database(dbPath);
+    seed(stale);
+    stale.close();
+    try {
+      openAuditDb(dbPath).close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it("throws a clear error when hook_runs drifted (a writer column is gone)", () => {
+    // The exact incident: a divergent branch renamed `duration` -> `ended`.
+    const open = () =>
+      openDrifted((db) =>
+        db.exec(
+          `CREATE TABLE hook_runs (id INTEGER PRIMARY KEY, slug TEXT NOT NULL,
+             stage TEXT NOT NULL, status TEXT NOT NULL, started INTEGER NOT NULL,
+             ended INTEGER NOT NULL, found INTEGER, fixed INTEGER) STRICT;`,
+        ),
+      );
+    expect(open).toThrow(/hook_runs is missing column\(s\) duration/);
+    expect(open).toThrow(/drifted from this build/);
+  });
+
+  it("throws when the logs table drifted", () => {
+    // Drop a non-indexed column so db.exec's CREATE INDEX doesn't throw before the guard.
+    const open = () =>
+      openDrifted((db) =>
+        db.exec(
+          "CREATE TABLE logs (id INTEGER PRIMARY KEY, log_type TEXT, created TEXT)",
+        ),
+      );
+    expect(open).toThrow(/logs is missing column\(s\) message/);
+  });
+});

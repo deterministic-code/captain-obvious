@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { openDb, type Db } from "../../db/open.js";
 import { configureProject, ensureDefaultProject } from "../../db/projects.js";
 import { seedRules } from "../../db/seed.js";
-import { evaluateGuard, formatDeny, guardDecision } from "../claudeGuard.js";
+import {
+  evaluateGuard,
+  formatGuardOutput,
+  guardDecision,
+} from "../claudeGuard.js";
 import { RULES } from "../index.js";
 
 const REPO = "/repo";
@@ -115,15 +119,38 @@ describe("guardDecision", () => {
   });
 });
 
-describe("formatDeny", () => {
-  it("builds the PreToolUse deny decision JSON", () => {
-    expect(JSON.parse(formatDeny("nope"))).toEqual({
-      hookSpecificOutput: {
-        hookEventName: "PreToolUse",
-        permissionDecision: "deny",
-        permissionDecisionReason: "nope",
-      },
-    });
+describe("formatGuardOutput", () => {
+  const denyPayload = {
+    hookEventName: "PreToolUse",
+    permissionDecision: "deny",
+    permissionDecisionReason: "nope",
+  };
+
+  it("returns null when the edit is allowed and logging succeeded", () => {
+    expect(formatGuardOutput({ deny: false })).toBeNull();
+  });
+
+  it("emits just the deny decision when logging succeeded", () => {
+    expect(
+      JSON.parse(formatGuardOutput({ deny: true, reason: "nope" }) as string),
+    ).toEqual({ hookSpecificOutput: denyPayload });
+  });
+
+  it("adds a visible systemMessage when the audit write failed", () => {
+    const out = JSON.parse(
+      formatGuardOutput({ deny: true, reason: "nope" }, "boom") as string,
+    );
+    expect(out.hookSpecificOutput).toEqual(denyPayload);
+    expect(out.systemMessage).toContain("audit logging failed");
+    expect(out.systemMessage).toContain("boom");
+  });
+
+  it("surfaces an audit failure even when the edit was allowed", () => {
+    const out = JSON.parse(
+      formatGuardOutput({ deny: false }, "boom") as string,
+    );
+    expect(out.hookSpecificOutput).toBeUndefined();
+    expect(out.systemMessage).toContain("boom");
   });
 });
 

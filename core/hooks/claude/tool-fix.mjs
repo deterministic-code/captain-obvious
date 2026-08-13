@@ -46,5 +46,7 @@ async function run() {
 }
 
 run().catch((err) => {
-  process.stderr.write(`tool-fix: ${err.message ?? err}\n`);
+  // Fails open (never break a benign edit) but loud — a visible systemMessage, not stderr-only.
+  const systemMessage = `captain-obvious tool-fix failed — ${err?.message ?? err}`;
+  process.stdout.write(`${JSON.stringify({ systemMessage })}\n`);
 });

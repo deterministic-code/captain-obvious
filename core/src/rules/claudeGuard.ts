@@ -86,13 +86,30 @@ export function guardDecision(
   };
 }
 
-/** The PreToolUse JSON that tells Claude Code to deny the tool call. */
-export function formatDeny(reason: string): string {
-  return JSON.stringify({
-    hookSpecificOutput: {
+/**
+ * The single stdout payload for a PreToolUse guard: the deny decision (when the
+ * guard blocks) plus, when the audit write failed, a user-visible `systemMessage`
+ * so a broken log surfaces loudly instead of vanishing into the shim's fail-open
+ * catch. Combined into one JSON object so the decision and the warning can't race
+ * as two lines. Returns null when there's nothing to say (allowed, log succeeded).
+ */
+export function formatGuardOutput(
+  decision: GuardDecision,
+  auditError?: string,
+): string | null {
+  const out: { systemMessage?: string; hookSpecificOutput?: unknown } = {};
+  if (decision.deny) {
+    out.hookSpecificOutput = {
       hookEventName: "PreToolUse",
       permissionDecision: "deny",
-      permissionDecisionReason: reason,
-    },
-  });
+      permissionDecisionReason: decision.reason,
+    };
+  }
+  if (auditError !== undefined) {
+    out.systemMessage = `captain-obvious: audit logging failed — ${auditError}`;
+  }
+  if (out.hookSpecificOutput === undefined && out.systemMessage === undefined) {
+    return null;
+  }
+  return JSON.stringify(out);
 }
