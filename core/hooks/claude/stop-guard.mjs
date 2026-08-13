@@ -17,19 +17,21 @@ async function run() {
   db.close();
   if (!staged.includes("gov-merge-before-stop")) return;
 
-  const { openAuditDb, resolveAuditDbPath } = await import(
-    "../../dist/db/audit.js"
-  );
-  const { dispatchRule } = await import("../../dist/rules/runner.js");
+  const { openAuditDb, resolveAuditDbPath } =
+    await import("../../dist/db/audit.js");
+  const { dispatch } = await import("../../dist/rules/runner.js");
   const auditDb = openAuditDb(resolveAuditDbPath());
   let outcome;
   try {
-    outcome = await dispatchRule(auditDb, {
-      slug: "gov-merge-before-stop",
-      stage: "stop",
-      cwd,
-      args: [],
-      mode: "json",
+    outcome = await dispatch(auditDb, {
+      kind: "spawn",
+      spec: {
+        slug: "gov-merge-before-stop",
+        stage: "stop",
+        cwd,
+        args: [],
+        mode: "json",
+      },
     });
   } finally {
     auditDb.close();

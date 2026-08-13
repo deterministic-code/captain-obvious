@@ -6,7 +6,7 @@ import { getDefaultProjectProtected } from "../db/projects.js";
 import type { Db } from "../db/open.js";
 import { selectDispatch } from "./dispatch.js";
 import { matchProtected } from "./protectedPaths.js";
-import { dispatchGuard, type GuardVerdict } from "./runner.js";
+import { dispatch, type GuardVerdict } from "./runner.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -146,8 +146,8 @@ export async function evaluateMainBranch(
 
 // ---------------------------------------------------------------------------
 // Generalized tool-stage guard dispatch — every enabled tool-stage guard rule
-// runs through the single runner (dispatchGuard), so each is logged, and the
-// first deny wins.
+// runs through the single runner (dispatch, kind "guard"), so each is logged,
+// and the first deny wins.
 // ---------------------------------------------------------------------------
 
 interface ToolCtx {
@@ -161,15 +161,19 @@ const TOOL_GUARDS: Record<
   (ctx: ToolCtx) => GuardVerdict | Promise<GuardVerdict>
 > = {
   "lint-protected-paths": (ctx) =>
-    evaluateGuard(ctx.inputJson, ctx.repoRoot, getDefaultProjectProtected(ctx.db)),
+    evaluateGuard(
+      ctx.inputJson,
+      ctx.repoRoot,
+      getDefaultProjectProtected(ctx.db),
+    ),
   "gov-no-push-to-main": (ctx) =>
     evaluateMainBranch(ctx.inputJson, ctx.repoRoot),
 };
 
 /**
  * Evaluate every enabled tool-stage guard rule for a PreToolUse event, each
- * through dispatchGuard (so it logs a run.start/run.end and a hook_run), and
- * return the first deny. Only rules with a registered evaluator participate;
+ * through dispatch (kind "guard", so it logs a run.start/run.end and a
+ * hook_run), and return the first deny. Only rules with a registered evaluator participate;
  * others tagged `tool` are ignored here.
  */
 export async function runToolGuards(
@@ -182,9 +186,12 @@ export async function runToolGuards(
   for (const d of selectDispatch(db, "tool")) {
     const evaluate = TOOL_GUARDS[d.slug];
     if (!evaluate) continue;
-    const verdict = await dispatchGuard(auditDb, d.slug, "tool", () =>
-      evaluate({ inputJson, repoRoot, db }),
-    );
+    const verdict = await dispatch(auditDb, {
+      kind: "guard",
+      slug: d.slug,
+      stage: "tool",
+      evaluate: () => evaluate({ inputJson, repoRoot, db }),
+    });
     if (verdict.deny && !decision.deny) decision = verdict;
   }
   return decision;

@@ -6,7 +6,7 @@ vi.mock("node:child_process", () => ({ spawn: vi.fn() }));
 import { spawn } from "node:child_process";
 import { listHookRuns, listLogs, openAuditDb } from "../../db/audit.js";
 import type { Db } from "../../db/open.js";
-import { dispatchGuard, dispatchRule, modifiedFiles } from "../runner.js";
+import { dispatch, modifiedFiles } from "../runner.js";
 
 const spawnMock = vi.mocked(spawn);
 
@@ -53,7 +53,7 @@ const spec = (mode: "check" | "json" | "fix") => ({
   mode,
 });
 
-describe("dispatchRule", () => {
+describe("dispatch — spawn", () => {
   it("brackets a check with run.start/run.end and records the found count", async () => {
     spawnMock.mockImplementation(
       () =>
@@ -62,7 +62,10 @@ describe("dispatchRule", () => {
           c.emit("exit", 0, null);
         }) as never,
     );
-    const outcome = await dispatchRule(audit, spec("check"));
+    const outcome = await dispatch(audit, {
+      kind: "spawn",
+      spec: spec("check"),
+    });
     expect(outcome.found).toBe(3);
     expect(logTypes()).toEqual(["run.start", "run.end"]);
     expect(listHookRuns(audit)[0]).toMatchObject({
@@ -79,9 +82,9 @@ describe("dispatchRule", () => {
     spawnMock.mockImplementation(
       () => fakeChild((c) => c.emit("exit", null, "SIGKILL")) as never,
     );
-    await expect(dispatchRule(audit, spec("check"))).rejects.toThrow(
-      /killed by SIGKILL/,
-    );
+    await expect(
+      dispatch(audit, { kind: "spawn", spec: spec("check") }),
+    ).rejects.toThrow(/killed by SIGKILL/);
     expect(logTypes()).toEqual(["run.start", "run.error"]);
     expect(listHookRuns(audit)[0]).toMatchObject({ status: "failure" });
   });
@@ -97,7 +100,10 @@ describe("dispatchRule", () => {
           c.emit("close", 0, null);
         }) as never,
     );
-    const outcome = await dispatchRule(audit, spec("json"));
+    const outcome = await dispatch(audit, {
+      kind: "spawn",
+      spec: spec("json"),
+    });
     expect(outcome.violations).toHaveLength(2);
     expect(listLogs(audit)[0].message).toBe(
       "pre-commit/lint-naming — 2 issue(s)",
@@ -126,11 +132,14 @@ describe("modifiedFiles", () => {
   });
 });
 
-describe("dispatchGuard", () => {
+describe("dispatch — guard", () => {
   it("logs an allow as a success run", async () => {
-    const verdict = await dispatchGuard(audit, "gov-x", "tool", () => ({
-      deny: false,
-    }));
+    const verdict = await dispatch(audit, {
+      kind: "guard",
+      slug: "gov-x",
+      stage: "tool",
+      evaluate: () => ({ deny: false }),
+    });
     expect(verdict.deny).toBe(false);
     expect(logTypes()).toEqual(["run.start", "run.end"]);
     expect(listHookRuns(audit)[0]).toMatchObject({
@@ -142,9 +151,12 @@ describe("dispatchGuard", () => {
   });
 
   it("logs a deny as a failure run and returns the verdict", async () => {
-    const verdict = await dispatchGuard(audit, "gov-x", "stop", () =>
-      Promise.resolve({ deny: true, reason: "blocked" }),
-    );
+    const verdict = await dispatch(audit, {
+      kind: "guard",
+      slug: "gov-x",
+      stage: "stop",
+      evaluate: () => Promise.resolve({ deny: true, reason: "blocked" }),
+    });
     expect(verdict).toEqual({ deny: true, reason: "blocked" });
     expect(listHookRuns(audit)[0]).toMatchObject({ status: "failure" });
     expect(listLogs(audit)[0].message).toBe("stop/gov-x — denied");
@@ -152,8 +164,13 @@ describe("dispatchGuard", () => {
 
   it("logs run.error when the evaluator throws", async () => {
     await expect(
-      dispatchGuard(audit, "gov-x", "tool", () => {
-        throw new Error("git blew up");
+      dispatch(audit, {
+        kind: "guard",
+        slug: "gov-x",
+        stage: "tool",
+        evaluate: () => {
+          throw new Error("git blew up");
+        },
       }),
     ).rejects.toThrow("git blew up");
     expect(logTypes()).toEqual(["run.start", "run.error"]);
