@@ -18,9 +18,15 @@ const RUNNER = resolve(
 const ROOTS = [
   resolve(dirname(fileURLToPath(import.meta.url)), "..", ".."), // core/src
   resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "hooks"), // core/hooks
+  resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "bin"), // core/bin
+  resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "lib"), // core/lib
 ];
 
-const RULE_TOKEN = /check\.mjs|checkScriptPath|--fix|CO_JSON|CO_RESULT_FD/;
+// The direct spawn indicators, plus the indirect ones a bin/lib helper used to
+// reach a check with (building a rules/<slug>/check.mjs path via a scriptFor-style
+// helper) — both must route through runner.ts instead.
+const RULE_TOKEN =
+  /check\.mjs|checkScriptPath|--fix|CO_JSON|CO_RESULT_FD|scriptFor|rules\/[^"']*\.mjs/;
 const SPAWN = /\b(spawn|execFile|execFileSync|exec)\s*\(/;
 
 function walk(dir: string): string[] {
@@ -39,7 +45,10 @@ describe("single rule runner", () => {
         if (file === RUNNER || file.endsWith(`${sep}runner.ts`)) continue;
         const lines = readFileSync(file, "utf8").split("\n");
         lines.forEach((line, i) => {
-          if (SPAWN.test(line) && RULE_TOKEN.test(lines.slice(i, i + 3).join("\n"))) {
+          if (
+            SPAWN.test(line) &&
+            RULE_TOKEN.test(lines.slice(i, i + 3).join("\n"))
+          ) {
             offenders.push(`${file}:${i + 1} — ${line.trim()}`);
           }
         });
