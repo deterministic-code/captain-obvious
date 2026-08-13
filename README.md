@@ -142,11 +142,12 @@ changes anything.
 `captain-obvious-hooks uninstall` removes every hook captain-obvious installed — the managed git
 hooks, the `_captainObvious`-tagged entries in `.claude/settings.json`, and the managed `lint:*` /
 `panel` aliases in `package.json` — and leaves hand-authored hooks and scripts untouched. It only
-ever removes what it wrote (detected by the same markers `list` uses):
+ever removes what it wrote (detected by the same markers `list` uses), and applies immediately —
+there's no confirmation gate, since `captain-obvious-install` wires everything back:
 
 ```sh
-npx captain-obvious-hooks uninstall            # dry run — prints what it would remove
-npx captain-obvious-hooks uninstall --yes      # actually remove them
+npx captain-obvious-hooks uninstall            # remove the managed hooks
+npx captain-obvious-install                    # ...and re-wire them
 ```
 
 `captain-obvious-uninstall` goes one step further: it removes the hooks **and** the local
@@ -154,8 +155,9 @@ registry + audit DBs (`<repo>/.captain-obvious/`), **and** strips the managed `.
 block it added to `.gitignore` (deleting the file if that was all it held; a marker-less
 `.captain-obvious/` line you wrote by hand is left alone). It leaves `captain-obvious.config.json`
 in place so a re-install is one command; delete that by hand for zero trace, then `npm rm
-@deterministic-code/captain-obvious`. Global-mode data (`mode: "global"`) is shared machine-wide, so
-it is reported but never auto-deleted:
+@deterministic-code/captain-obvious`. Because it also deletes the DB data (not trivially reversible),
+it keeps the dry-run-by-default + `--yes` safety. Global-mode data (`mode: "global"`) is shared
+machine-wide, so it is reported but never auto-deleted:
 
 ```sh
 npx captain-obvious-uninstall                  # dry run
