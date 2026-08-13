@@ -231,8 +231,13 @@ function parseStage(value: string | undefined): GitStage {
     return value as GitStage;
   }
   throw new Error(
-    `dispatch: expected stage 'pre-commit' or 'pre-push', got ${value ?? "(none)"}`,
+    `dispatch: expected a git stage (${Object.keys(GIT_STAGE_FLAG).join(", ")}), got ${value ?? "(none)"}`,
   );
+}
+
+/** Stages that form a staged tree, where a fix can rewrite + re-stage before the check. */
+function runsFixes(stage: GitStage): boolean {
+  return GIT_STAGE_FLAG[stage] === "--staged";
 }
 
 /**
@@ -240,7 +245,7 @@ function parseStage(value: string | undefined): GitStage {
  * hook `main()`s call process.exit, so they cannot share this one. A rule's
  * action binding decides what happens (action-behavior.ts): advisory rules print
  * but never fail; blocking rules fail the stage on the first non-zero exit; fix
- * rules run their deterministic fix first (pre-commit only, then re-stage the
+ * rules run their deterministic fix first (staged stages only, then re-stage the
  * rewritten files) and warn/halt on whatever the fix couldn't resolve.
  */
 export async function runDispatch(argv: string[]): Promise<void> {
@@ -250,9 +255,9 @@ export async function runDispatch(argv: string[]): Promise<void> {
   const selected = selectDispatch(db, stage);
   db.close();
 
-  // Fixes only run pre-commit — a pre-push fix can't reach the pushed commits.
+  // Fixes only run on a staged tree — a pre-push fix can't reach pushed commits.
   const cwd = process.cwd();
-  const fixing = stage === "pre-commit" && selected.some((d) => d.fix);
+  const fixing = runsFixes(stage) && selected.some((d) => d.fix);
   const staged = fixing ? await stagedFiles(cwd) : [];
 
   const auditDb = openAuditDb(resolveAuditDbPath());
@@ -267,7 +272,7 @@ export async function runDispatch(argv: string[]): Promise<void> {
       // it. Every rule the loop begins gets exactly one hook_run row.
       let status: "success" | "failure" = "failure";
       try {
-        if (fix && stage === "pre-commit") {
+        if (fix && runsFixes(stage)) {
           await runRuleFix(slug, fix, cwd, args, staged);
           if (staged.length) await runGit(["add", "--", ...staged], cwd);
         }
