@@ -9,6 +9,7 @@
     "rules/_kit",
     "rules/_recommended",
     "rules/gov-main-ci-green",
+    "rules/gov-merge-before-stop",
     "rules/gov-no-push-to-main",
     "rules/gov-require-pr",
     "rules/gov-tests-green",
@@ -48,6 +49,7 @@
     "dev": "npm run build && (tsc -p core/tsconfig.json --watch & TSC=$!; trap 'kill $TSC 2>/dev/null' EXIT INT TERM; cd core && node --watch dist/bin/captain-obvious.js serve)",
     "prepare": "tsc -p core/tsconfig.json && node core/bin/install.mjs",
     "test": "vitest run --coverage",
+    "test:e2e": "playwright test -c e2e/playwright.config.ts",
     "release": "node release.mjs",
     "lint:comments": "captain-obvious-lint comments --staged",
     "lint:comments:all": "captain-obvious-lint comments --all",
@@ -104,6 +106,7 @@
     "panel": "captain-obvious serve"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@vitest/coverage-v8": "^4.1.10",
     "happy-dom": "^20.11.1",
     "vitest": "^4.1.10"
