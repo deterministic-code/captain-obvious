@@ -1,6 +1,5 @@
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { realpathSync } from "node:fs";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,14 +15,8 @@ export const REPO_ROOT = dirname(HERE);
 export const CORE_ROOT = join(REPO_ROOT, "core");
 export const CLI = join(CORE_ROOT, "dist", "bin", "captain-obvious.js");
 
-/**
- * A throwaway repo + DBs under the OS temp dir, rebuilt from scratch each run.
- * `realpathSync` canonicalises the base (on macOS `os.tmpdir()` is the `/var`
- * symlink but `git rev-parse --show-toplevel` and Claude's `CLAUDE_PROJECT_DIR`
- * report the resolved `/private/var` path) so the relative hook paths the
- * installers bake in match what git/Claude resolve at runtime.
- */
-export const SANDBOX = join(realpathSync(tmpdir()), "co-e2e-hooks");
+/** A throwaway repo + DBs under the OS temp dir, rebuilt from scratch each run. */
+export const SANDBOX = join(tmpdir(), "co-e2e-hooks");
 export const REPO_DIR = join(SANDBOX, "repo");
 export const REMOTE_DIR = join(SANDBOX, "remote.git");
 export const DB_PATH = join(REPO_DIR, ".captain-obvious", "registry.db");
@@ -39,24 +32,39 @@ export const dbEnv = {
 };
 
 /**
- * Governance rules that can't run in an offline scratch repo: the two GitHub ones
- * (branch-protection / CI status) and gov-tests-green (spawns the repo's `npm test`,
- * which a fixture repo has no package.json for). Disabled in the seeded registry so
- * they neither fire nor appear in the feed.
+ * Rules disabled in the sandbox registry. The governance three can't run offline
+ * (GitHub branch-protection / CI status, and gov-tests-green spawns the repo's
+ * `npm test`, which a fixture repo has no package.json for). The last two are
+ * halting rules unrelated to this exercise that would otherwise abort the commit
+ * before the duplicated files reach HEAD — where pre-push's dup ratchet needs them.
+ * All disabled ones are asserted never to run.
  */
 export const DISABLED_RULES = [
   "gov-require-pr",
   "gov-main-ci-green",
   "gov-tests-green",
+  "lint-dead-code",
+  "lint-tests-with-code",
 ];
 
-/** The two Claude guard hooks, wired the same way `captain-obvious-install` does. */
+/**
+ * The Claude hooks, wired the same way `captain-obvious-install` does. PostToolUse
+ * `tool-fix` is what runs Prettier --write on every file Claude writes (and logs
+ * it) — the "a lint tool runs each time Claude writes a file" path this exercise
+ * demonstrates; PreToolUse guards + the Stop guard round out the four hook events.
+ */
 const CLAUDE_HOOKS = [
   {
     event: "PreToolUse",
     matcher: "Edit|Write|NotebookEdit|Bash",
     hook: "pre-tool-guard",
     timeout: 10,
+  },
+  {
+    event: "PostToolUse",
+    matcher: "Edit|Write|NotebookEdit",
+    hook: "tool-fix",
+    timeout: 20,
   },
   { event: "Stop", hook: "stop-guard", timeout: 20 },
 ];
@@ -89,24 +97,41 @@ export async function buildSandbox(): Promise<void> {
   await git(["init", "-q", "-b", "main"]);
   await git(["config", "user.email", "e2e@test.co"]);
   await git(["config", "user.name", "co-e2e"]);
+  // Keep the binary registry/audit DBs out of `git add -A` so commits stay to src.
+  await writeFile(join(REPO_DIR, ".gitignore"), ".captain-obvious/\n");
   await writeFile(join(REPO_DIR, "src", "a.ts"), 'export const a = "hello";\n');
   await git(["add", "-A"]);
   await git(["commit", "-qm", "init"]);
+
+  // Seed origin/main as the dup ratchet's baseline before the hooks exist (fires nothing).
+  await execFileAsync("git", ["init", "-q", "--bare", REMOTE_DIR]);
+  await git(["remote", "add", "origin", REMOTE_DIR]);
+  await git(["push", "-q", "origin", "main"]);
+
   await git(["checkout", "-q", "-b", "feature"]);
-  await writeFile(join(REPO_DIR, "src", "b.ts"), 'export const b = "unmerged";\n');
+  await writeFile(
+    join(REPO_DIR, "src", "b.ts"),
+    'export const b = "unmerged";\n',
+  );
 
-  await cli(["seed-rules"]);
-  for (const slug of DISABLED_RULES) await cli(["configure-rule", slug, "--disable"]);
+  await seedRegistry();
 
-  await installGitHooks({ target: REPO_DIR, pkgRoot: CORE_ROOT, gitHooks: {} });
+  // target must be the canonical path git/Claude resolve at runtime (macOS /var → /private/var).
+  const target = await realpath(REPO_DIR);
+  await installGitHooks({ target, pkgRoot: CORE_ROOT, gitHooks: {} });
   await installClaudeHooks({
-    target: REPO_DIR,
+    target,
     pkgRoot: CORE_ROOT,
     claudeHooks: CLAUDE_HOOKS,
   });
+}
 
-  await execFileAsync("git", ["init", "-q", "--bare", REMOTE_DIR]);
-  await git(["remote", "add", "origin", REMOTE_DIR]);
+/** Seed the registry from the discovered rules, then disable the offline-incompatible ones. */
+async function seedRegistry(): Promise<void> {
+  await cli(["seed-rules"]);
+  for (const slug of DISABLED_RULES) {
+    await cli(["configure-rule", slug, "--disable"]);
+  }
 }
 
 /**
@@ -126,8 +151,7 @@ function runCapturingExit(
       env: { ...process.env, ...env },
       stdio: "ignore",
     });
-    // Any exit code resolves (a hook abort is expected); only a failure to spawn
-    // the process at all is a real error worth surfacing.
+    // Any exit code resolves (a hook abort is expected); only a spawn failure rejects.
     child.on("close", () => resolve());
     child.on("error", reject);
   });
@@ -136,26 +160,48 @@ function runCapturingExit(
 /**
  * Fire the git hooks the way Claude Code drives them (`CLAUDECODE=1`, which selects
  * the `pre-commit`/`pre-push` stages the rules are registered on — the plain-CLI
- * `git-pre-commit`/`git-pre-push` stages carry no rules). One commit fires
- * pre-commit dispatch; the push to the bare remote fires pre-push dispatch.
+ * `git-pre-commit`/`git-pre-push` stages carry no rules). Stages everything Claude
+ * just wrote, commits (fires pre-commit: Prettier check + friends), and pushes to
+ * the bare remote (fires pre-push: the dup ratchet flags the duplicated functions).
  */
 export async function fireGitHooks(): Promise<void> {
   const claudeCtx = { ...dbEnv, CLAUDECODE: "1" };
-  await writeFile(
-    join(REPO_DIR, "src", "greeting.ts"),
-    'export const greeting = "hi";\n',
-  );
   await git(["add", "-A"]);
-  await runCapturingExit("git", ["commit", "-m", "trigger pre-commit"], claudeCtx);
+  await runCapturingExit(
+    "git",
+    ["commit", "-m", "commit claude's files"],
+    claudeCtx,
+  );
   await runCapturingExit("git", ["push", "-u", "origin", "feature"], claudeCtx);
 }
 
 /**
- * Fire the two Claude hooks with a real headless `claude -p` session. Bash is
+ * The messy, duplicated function Claude writes into two files. Its formatting
+ * (single quotes, missing semicolons, tight spacing) is what PostToolUse Prettier
+ * rewrites on each write; its identical body across two files is what pre-push's
+ * dup ratchet flags. Kept deliberately non-trivial so it clears the clone-size floor.
+ */
+const DUP_FN =
+  "export function summarize(rows) {\n" +
+  "let total = 0\n" +
+  "let count = 0\n" +
+  "for (const r of rows) {\n" +
+  "total = total + r.amount * r.quantity\n" +
+  "count = count + 1\n" +
+  "}\n" +
+  "const average = count === 0 ? 0 : total / count\n" +
+  "const label = 'grand total = ' + total + ' over ' + count + ' rows'\n" +
+  "const summary = { total: total, count: count, average: average, label: label }\n" +
+  "return summary\n" +
+  "}\n";
+
+/**
+ * Fire the Claude hooks with a real headless `claude -p` session. Bash is
  * disallowed so Claude can't run git/gh — that keeps the run offline and stops it
  * from merging away the unmerged work, so the Stop guard blocks deterministically.
- * A single Write triggers PreToolUse (both tool guards log); the session end
- * triggers Stop (the stop guard logs).
+ * Each Write triggers PreToolUse (the tool guards log) and PostToolUse (Prettier
+ * reformats the messy file and logs it); the session end triggers Stop. Writing the
+ * same function into two files seeds the duplication pre-push then flags.
  */
 export async function fireClaudeHooks(): Promise<void> {
   await assertClaudeAvailable();
@@ -170,8 +216,11 @@ export async function fireClaudeHooks(): Promise<void> {
     join(REPO_DIR, ".claude", "settings.json"),
   ];
   const prompt =
-    "Use the Write tool to create a file at src/from-claude.ts containing exactly: " +
-    "export const fromClaude = 1; Do not run any other tool. Do not explain.";
+    "Create two files with the Write tool, each containing EXACTLY the text " +
+    "between the markers verbatim — do not reformat it, do not fix it, do not add " +
+    "or remove anything. Do not run any other tool. Do not explain.\n\n" +
+    `--- write this into src/orders.ts ---\n${DUP_FN}\n` +
+    `--- write this into src/billing.ts ---\n${DUP_FN}`;
   await new Promise<void>((resolve, reject) => {
     const child = spawn("claude", args, {
       cwd: REPO_DIR,

@@ -14,8 +14,9 @@ import {
  */
 export default async function globalSetup(): Promise<() => void> {
   await buildSandbox();
-  await fireGitHooks();
+  // Claude writes the messy, duplicated files first, then the git hooks commit + push them.
   await fireClaudeHooks();
+  await fireGitHooks();
   const server: ChildProcess = await startServe();
   return () => {
     server.kill();
