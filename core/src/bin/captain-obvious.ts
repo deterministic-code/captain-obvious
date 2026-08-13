@@ -1,7 +1,17 @@
 #!/usr/bin/env node
 import { configureActionType } from "../db/actions.js";
+import { join, resolve } from "node:path";
 import { csv, parseArgs, type ParsedArgs } from "../db/args.js";
-import { openAuditDb, resolveAuditDbPath, useAuditLog } from "../db/audit.js";
+import {
+  listHookRuns,
+  listLogs,
+  openAuditDb,
+  openAuditDbReadonly,
+  resolveAuditDbPath,
+  useAuditLog,
+  type HookRunEntry,
+  type LogEntry,
+} from "../db/audit.js";
 import { addLanguage } from "../db/languages.js";
 import { openDb, resolveDbPath, type Db } from "../db/open.js";
 import { addRule, configureRule } from "../db/rules.js";
@@ -32,6 +42,8 @@ commands:
   init             create and seed the registry DB
   serve            [--port <n>] [--host <h>]   run the web control panel + /api
   prune-logs       [--days <n>]      delete audit logs older than n days (default 30, max 60)
+  dump-logs        [<dir|file>]      print recent audit entries from a .captain-obvious dir or
+                   [--type <p>] [--limit <n>] [--hook-runs] [--json]
 
 global:
   --db <path>       registry DB path (default: CAPTAIN_OBVIOUS_DB env or data/captain-obvious.db)
@@ -239,6 +251,87 @@ function runServe(args: ParsedArgs): void {
   }).catch((err) => fail(err instanceof Error ? err.message : String(err)));
 }
 
+const DEFAULT_DUMP_LIMIT = 100;
+
+/** A `.db` path (or none) is used as-is; any other path is a dir → `<dir>/audit-log.db`. */
+function dumpDbPath(pathArg: string | undefined): string {
+  if (!pathArg) return resolveAuditDbPath();
+  return pathArg.endsWith(".db")
+    ? resolve(pathArg)
+    : join(pathArg, "audit-log.db");
+}
+
+/** Epoch-ms → 'YYYY-MM-DD HH:MM:SS' UTC, matching the logs table's `created` format. */
+function toStamp(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 19).replace("T", " ");
+}
+
+function printHookRuns(rows: HookRunEntry[]): void {
+  for (const r of rows) {
+    const counts = [
+      r.found !== null ? `found ${r.found}` : "",
+      r.fixed !== null ? `fixed ${r.fixed}` : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    process.stdout.write(
+      `${toStamp(r.started)}  ${r.stage}  ${r.slug}  ${r.status}${counts ? `  ${counts}` : ""}\n`,
+    );
+  }
+}
+
+function printLogs(rows: LogEntry[]): void {
+  for (const r of rows) {
+    process.stdout.write(`${r.created}  ${r.logType}  ${r.message}\n`);
+  }
+}
+
+function emitRows<T>(
+  rows: T[],
+  asJson: boolean,
+  printText: (rows: T[]) => void,
+): void {
+  if (asJson) process.stdout.write(`${JSON.stringify(rows, null, 2)}\n`);
+  else printText(rows);
+}
+
+/** Fetch the requested rows (oldest-first for reading) and print them. */
+function emitAuditRows(db: Db, args: ParsedArgs, limit: number): void {
+  const asJson = args.flags.has("json");
+  if (args.flags.has("hook-runs")) {
+    emitRows(listHookRuns(db, { limit }).reverse(), asJson, printHookRuns);
+    return;
+  }
+  const type = args.values.get("type");
+  const fetched = type ? listLogs(db) : listLogs(db, { limit });
+  const rows = (
+    type ? fetched.filter((r) => r.logType.startsWith(type)) : fetched
+  )
+    .slice(0, limit)
+    .reverse();
+  emitRows(rows, asJson, printLogs);
+}
+
+function runDumpLogs(args: ParsedArgs): void {
+  const limitRaw = args.values.get("limit");
+  const limit = limitRaw
+    ? parseIntStrict(limitRaw, "--limit")
+    : DEFAULT_DUMP_LIMIT;
+  const path = dumpDbPath(args.values.get("audit-db") ?? args._);
+  let db: Db;
+  try {
+    db = openAuditDbReadonly(path);
+  } catch (err) {
+    const why = err instanceof Error ? err.message : String(err);
+    fail(`cannot read audit log at ${path}: ${why}`);
+  }
+  try {
+    emitAuditRows(db, args, limit);
+  } finally {
+    db.close();
+  }
+}
+
 const COMMANDS: Record<string, (args: ParsedArgs) => void> = {
   "add-language": runAddLanguage,
   "add-rule": runAddRule,
@@ -250,6 +343,7 @@ const COMMANDS: Record<string, (args: ParsedArgs) => void> = {
   init: runInit,
   serve: runServe,
   "prune-logs": runPruneLogs,
+  "dump-logs": runDumpLogs,
 };
 
 /** Commands that change registry state; only these open the audit-log sink. */

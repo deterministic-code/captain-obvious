@@ -12,7 +12,14 @@ export interface ParsedArgs {
 }
 
 /** Flags that never take a value (bare booleans). */
-const BOOLEAN_FLAGS = new Set(["enable", "disable", "add", "languages-fixed"]);
+const BOOLEAN_FLAGS = new Set([
+  "enable",
+  "disable",
+  "add",
+  "languages-fixed",
+  "hook-runs",
+  "json",
+]);
 
 export function parseArgs(argv: string[]): ParsedArgs {
   const values = new Map<string, string>();

@@ -38,7 +38,15 @@ export function resolveAuditDbPath(opts: AuditDbPathOpts = {}): string {
  * which the fail-open guard hooks would otherwise swallow into silence.
  */
 const REQUIRED_AUDIT_COLUMNS: Record<string, readonly string[]> = {
-  hook_runs: ["slug", "stage", "status", "started", "duration", "found", "fixed"],
+  hook_runs: [
+    "slug",
+    "stage",
+    "status",
+    "started",
+    "duration",
+    "found",
+    "fixed",
+  ],
   logs: ["log_type", "message", "created"],
 };
 
@@ -63,6 +71,13 @@ function assertAuditShape(db: Db, dbPath: string): void {
       );
     }
   }
+}
+
+/** Open an EXISTING audit DB read-only for inspection; throws if the file is absent. */
+export function openAuditDbReadonly(dbPath: string): Db {
+  const db = new Database(dbPath, { readonly: true, fileMustExist: true });
+  assertAuditShape(db, dbPath);
+  return db;
 }
 
 /** Open (creating if missing) the audit-log DB and apply its schema idempotently. */
