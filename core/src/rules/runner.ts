@@ -137,8 +137,12 @@ export function modifiedFiles(output: string): string[] {
   return files;
 }
 
-/** The one child spawn. Rejects on spawn error or kill signal (→ run.error); resolves on any exit code. */
-export function spawnRule(spec: RunSpec): Promise<RunOutcome> {
+/**
+ * The one child spawn — private to this module. Rejects on spawn error or kill
+ * signal (→ run.error); resolves on any exit code. Every caller reaches it through
+ * a `dispatch*` export so no rule spawns outside the runLogged bracket.
+ */
+function spawnRule(spec: RunSpec): Promise<RunOutcome> {
   const { cmd, argv, env, stdio } = planSpawn(spec);
   return new Promise((resolveOutcome, reject) => {
     const child = spawn(cmd, argv, { cwd: spec.cwd, env, stdio });
@@ -179,7 +183,7 @@ export function spawnRule(spec: RunSpec): Promise<RunOutcome> {
 }
 
 /** The audit-log detail for a completed run — the per-run outcome that confirms the rule ran. */
-export function formatRunEnd(
+function formatRunEnd(
   stage: string,
   slug: string,
   o: { found?: number | null; fixed?: number | null; issues?: number | null },
@@ -203,11 +207,11 @@ export interface RunRecord {
 
 /**
  * Bracket any rule work between a run.start and a run.end / run.error, recording
- * the hook_run. The shared logging chokepoint behind every public entry below —
- * spawned checks/fixes and in-process guards alike pass through here, so no rule
- * runs without both a start and an end/error row.
+ * the hook_run. The shared logging chokepoint behind every dispatch export below,
+ * private to this module — spawned checks/fixes and in-process guards alike pass
+ * through here, so no rule runs without both a start and an end/error row.
  */
-export async function runLogged<T>(
+async function runLogged<T>(
   auditDb: Db,
   slug: string,
   stage: string,
@@ -272,6 +276,71 @@ export function dispatchRule(auditDb: Db, spec: RunSpec): Promise<RunOutcome> {
       value: outcome,
     };
   });
+}
+
+/**
+ * A staged git-hook run: an optional deterministic fix, then the check, as ONE
+ * logged run. `fixSpec` is the fix to spawn first (null = no fix → the run is
+ * labeled "check"); `onFixed` re-stages the rewritten files (git add) after it.
+ */
+export interface StagedRun {
+  slug: string;
+  stage: string;
+  cwd: string;
+  args: string[];
+  checks: boolean;
+  fixSpec: { args: string[]; command?: string } | null;
+  onFixed?: () => Promise<void>;
+}
+
+/**
+ * Run one git-stage rule (fix → re-stage → check) through the single log bracket,
+ * so the whole fix+check is one run.start/run.end + hook_run. Resolves the check's
+ * exit code (0 when the rule only fixes). The git-hook path's sole entry into the
+ * runner — it never touches spawnRule/runLogged itself.
+ */
+export function dispatchStaged(auditDb: Db, run: StagedRun): Promise<number> {
+  return runLogged(
+    auditDb,
+    run.slug,
+    run.stage,
+    run.fixSpec ? "fix" : "check",
+    async () => {
+      if (run.fixSpec) {
+        await spawnRule({
+          slug: run.slug,
+          stage: run.stage,
+          cwd: run.cwd,
+          args: run.fixSpec.args,
+          mode: "fix",
+          command: run.fixSpec.command,
+        });
+        if (run.onFixed) await run.onFixed();
+      }
+      let code = 0;
+      let found: number | null = null;
+      if (run.checks) {
+        const outcome = await spawnRule({
+          slug: run.slug,
+          stage: run.stage,
+          cwd: run.cwd,
+          args: run.args,
+          mode: "check",
+        });
+        code = outcome.code;
+        found = outcome.found;
+      }
+      return {
+        record: {
+          code,
+          found,
+          fixed: null,
+          detail: formatRunEnd(run.stage, run.slug, { found }, code),
+        },
+        value: code,
+      };
+    },
+  );
 }
 
 /** A Claude guard's verdict for one PreToolUse/Stop event. */

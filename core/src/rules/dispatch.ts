@@ -4,7 +4,7 @@ import { getRuleFixes, type RuleAction } from "../db/fixes.js";
 import { openDb, resolveDbPath, type Db } from "../db/open.js";
 import { actionBehavior, DEFAULT_ACTION } from "./action-behavior.js";
 import { RULES } from "./index.js";
-import { formatRunEnd, runLogged, spawnRule } from "./runner.js";
+import { dispatchStaged } from "./runner.js";
 import { GIT_STAGE_FLAG, type GitStage, type Stage } from "./stages.js";
 
 export interface Dispatched {
@@ -86,8 +86,7 @@ export function selectDispatch(db: Db, stage: Stage): Dispatched[] {
     })
     .map((r) => {
       const bound = defaultBinding.get(r.meta.slug) as
-        | { slug: string }
-        | undefined;
+        { slug: string } | undefined;
       const action = bound?.slug ?? DEFAULT_ACTION;
       return {
         slug: r.meta.slug,
@@ -130,33 +129,21 @@ function stagedFiles(cwd: string): Promise<string[]> {
 }
 
 /**
- * Run a rule's deterministic fix over the staged set via the single runner. A
+ * Normalize a rule's deterministic fix into the spec `dispatchStaged` spawns. A
  * `scriptPath` fix is the rule's own check runner in fix mode (`--fix` respects
  * the git selector); a `scriptBody` fix is a shell command (e.g. `prettier
  * --write`) handed the staged files — both stay scoped to what's being committed.
- * A shell fix with nothing staged is a no-op.
+ * A shell fix with nothing staged is a no-op, returned as `null` (skip the spawn).
  */
-function runRuleFix(
-  slug: string,
-  stage: GitStage,
+function buildFixSpec(
   fix: RuleAction,
-  cwd: string,
   selectorArgs: string[],
   staged: string[],
-): Promise<unknown> {
-  if (fix.scriptPath) {
-    return spawnRule({ slug, stage, cwd, args: selectorArgs, mode: "fix" });
-  }
-  if (staged.length === 0) return Promise.resolve();
+): { args: string[]; command?: string } | null {
+  if (fix.scriptPath) return { args: selectorArgs };
+  if (staged.length === 0) return null;
   const parts = (fix.scriptBody as string).trim().split(/\s+/);
-  return spawnRule({
-    slug,
-    stage,
-    cwd,
-    args: [...parts.slice(1), ...staged],
-    mode: "fix",
-    command: parts[0],
-  });
+  return { args: [...parts.slice(1), ...staged], command: parts[0] };
 }
 
 function parseStage(value: string | undefined): GitStage {
@@ -197,34 +184,18 @@ export async function runDispatch(argv: string[]): Promise<void> {
   try {
     for (const { slug, action, fix } of selected) {
       const behavior = actionBehavior(action);
-      const label = fix && runsFixes(stage) ? "fix" : "check";
-      const code = await runLogged(auditDb, slug, stage, label, async () => {
-        if (fix && runsFixes(stage)) {
-          await runRuleFix(slug, stage, fix, cwd, args, staged);
-          if (staged.length) await runGit(["add", "--", ...staged], cwd);
-        }
-        let checkCode = 0;
-        let found: number | null = null;
-        if (behavior.checks) {
-          const outcome = await spawnRule({
-            slug,
-            stage,
-            cwd,
-            args,
-            mode: "check",
-          });
-          checkCode = outcome.code;
-          found = outcome.found;
-        }
-        return {
-          record: {
-            code: checkCode,
-            found,
-            fixed: null,
-            detail: formatRunEnd(stage, slug, { found }, checkCode),
-          },
-          value: checkCode,
-        };
+      const fixSpec =
+        fix && runsFixes(stage) ? buildFixSpec(fix, args, staged) : null;
+      const code = await dispatchStaged(auditDb, {
+        slug,
+        stage,
+        cwd,
+        args,
+        checks: behavior.checks,
+        fixSpec,
+        onFixed: staged.length
+          ? async () => void (await runGit(["add", "--", ...staged], cwd))
+          : undefined,
       });
       if (code !== 0 && behavior.blocks) process.exit(code);
     }
