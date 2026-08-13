@@ -250,32 +250,10 @@ async function runLogged<T>(
   }
 }
 
-/**
- * Run one rule (spawned check / json / fix) and log it. The sole executor of a
- * spawned rule; callers build a RunSpec and never spawn themselves.
- */
-export function dispatchRule(auditDb: Db, spec: RunSpec): Promise<RunOutcome> {
-  return runLogged(auditDb, spec.slug, spec.stage, spec.mode, async () => {
-    const outcome = await spawnRule(spec);
-    return {
-      record: {
-        code: outcome.code,
-        found: outcome.found,
-        fixed: outcome.fixed,
-        detail: formatRunEnd(
-          spec.stage,
-          spec.slug,
-          {
-            found: outcome.found,
-            fixed: outcome.fixed,
-            issues: outcome.violations?.length ?? null,
-          },
-          outcome.code,
-        ),
-      },
-      value: outcome,
-    };
-  });
+/** A Claude guard's verdict for one PreToolUse/Stop event. */
+export interface GuardVerdict {
+  deny: boolean;
+  reason?: string;
 }
 
 /**
@@ -294,84 +272,132 @@ export interface StagedRun {
 }
 
 /**
- * Run one git-stage rule (fix → re-stage → check) through the single log bracket,
- * so the whole fix+check is one run.start/run.end + hook_run. Resolves the check's
- * exit code (0 when the rule only fixes). The git-hook path's sole entry into the
- * runner — it never touches spawnRule/runLogged itself.
+ * The one job `dispatch` runs, tagged by kind:
+ *  - `spawn`  — one check.mjs run (check / json / fix), resolving its RunOutcome.
+ *  - `staged` — a git-stage fix→re-stage→check as one run, resolving the check's exit code.
+ *  - `guard`  — an in-process policy rule (no child), resolving its GuardVerdict.
  */
-export function dispatchStaged(auditDb: Db, run: StagedRun): Promise<number> {
-  return runLogged(
-    auditDb,
-    run.slug,
-    run.stage,
-    run.fixSpec ? "fix" : "check",
-    async () => {
-      if (run.fixSpec) {
-        await spawnRule({
-          slug: run.slug,
-          stage: run.stage,
-          cwd: run.cwd,
-          args: run.fixSpec.args,
-          mode: "fix",
-          command: run.fixSpec.command,
-        });
-        if (run.onFixed) await run.onFixed();
-      }
-      let code = 0;
-      let found: number | null = null;
-      if (run.checks) {
-        const outcome = await spawnRule({
-          slug: run.slug,
-          stage: run.stage,
-          cwd: run.cwd,
-          args: run.args,
-          mode: "check",
-        });
-        code = outcome.code;
-        found = outcome.found;
-      }
-      return {
-        record: {
-          code,
-          found,
-          fixed: null,
-          detail: formatRunEnd(run.stage, run.slug, { found }, code),
-        },
-        value: code,
-      };
-    },
-  );
-}
-
-/** A Claude guard's verdict for one PreToolUse/Stop event. */
-export interface GuardVerdict {
-  deny: boolean;
-  reason?: string;
-}
+export type RuleJob =
+  | { kind: "spawn"; spec: RunSpec }
+  | { kind: "staged"; run: StagedRun }
+  | {
+      kind: "guard";
+      slug: string;
+      stage: string;
+      evaluate: () => GuardVerdict | Promise<GuardVerdict>;
+    };
 
 /**
- * Run one in-process guard rule (no child process) and log it exactly like a
- * spawned run: `run.start`, a `hook_run` (failure when it denies, success when it
- * allows), and `run.end`. `evaluate` is the rule's pure decision function. Guards
- * are the tool/stop-stage rules whose "check" is a fast in-process policy test
- * rather than a spawned check.mjs.
+ * THE single dispatch function — the one and only way to run a rule. Every
+ * trigger (git hook, Claude guard, panel Run/Fix, Stop) builds a RuleJob and
+ * calls this; nothing else spawns a check or opens the log bracket. Each kind
+ * routes through the same private `runLogged`, so every run — spawned or
+ * in-process — is bracketed by run.start/run.end + a hook_run.
  */
-export function dispatchGuard(
+export function dispatch(
   auditDb: Db,
-  slug: string,
-  stage: string,
-  evaluate: () => GuardVerdict | Promise<GuardVerdict>,
-): Promise<GuardVerdict> {
-  return runLogged(auditDb, slug, stage, "guard", async () => {
-    const verdict = await evaluate();
-    return {
-      record: {
-        code: verdict.deny ? 1 : 0,
-        found: null,
-        fixed: null,
-        detail: `${stage}/${slug} — ${verdict.deny ? "denied" : "allowed"}`,
-      },
-      value: verdict,
-    };
-  });
+  job: { kind: "spawn"; spec: RunSpec },
+): Promise<RunOutcome>;
+export function dispatch(
+  auditDb: Db,
+  job: { kind: "staged"; run: StagedRun },
+): Promise<number>;
+export function dispatch(
+  auditDb: Db,
+  job: {
+    kind: "guard";
+    slug: string;
+    stage: string;
+    evaluate: () => GuardVerdict | Promise<GuardVerdict>;
+  },
+): Promise<GuardVerdict>;
+export function dispatch(
+  auditDb: Db,
+  job: RuleJob,
+): Promise<RunOutcome | number | GuardVerdict> {
+  switch (job.kind) {
+    case "spawn": {
+      const { spec } = job;
+      return runLogged(auditDb, spec.slug, spec.stage, spec.mode, async () => {
+        const outcome = await spawnRule(spec);
+        return {
+          record: {
+            code: outcome.code,
+            found: outcome.found,
+            fixed: outcome.fixed,
+            detail: formatRunEnd(
+              spec.stage,
+              spec.slug,
+              {
+                found: outcome.found,
+                fixed: outcome.fixed,
+                issues: outcome.violations?.length ?? null,
+              },
+              outcome.code,
+            ),
+          },
+          value: outcome,
+        };
+      });
+    }
+    case "staged": {
+      const { run } = job;
+      return runLogged(
+        auditDb,
+        run.slug,
+        run.stage,
+        run.fixSpec ? "fix" : "check",
+        async () => {
+          if (run.fixSpec) {
+            await spawnRule({
+              slug: run.slug,
+              stage: run.stage,
+              cwd: run.cwd,
+              args: run.fixSpec.args,
+              mode: "fix",
+              command: run.fixSpec.command,
+            });
+            if (run.onFixed) await run.onFixed();
+          }
+          let code = 0;
+          let found: number | null = null;
+          if (run.checks) {
+            const outcome = await spawnRule({
+              slug: run.slug,
+              stage: run.stage,
+              cwd: run.cwd,
+              args: run.args,
+              mode: "check",
+            });
+            code = outcome.code;
+            found = outcome.found;
+          }
+          return {
+            record: {
+              code,
+              found,
+              fixed: null,
+              detail: formatRunEnd(run.stage, run.slug, { found }, code),
+            },
+            value: code,
+          };
+        },
+      );
+    }
+    case "guard": {
+      const { slug, stage, evaluate } = job;
+      return runLogged(auditDb, slug, stage, "guard", async () => {
+        const verdict = await evaluate();
+        return {
+          record: {
+            code: verdict.deny ? 1 : 0,
+            found: null,
+            fixed: null,
+            detail: `${stage}/${slug} — ${verdict.deny ? "denied" : "allowed"}`,
+          },
+          value: verdict,
+        };
+      });
+    }
+  }
 }

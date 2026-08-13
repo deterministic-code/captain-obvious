@@ -8,7 +8,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { dirname, extname, join, resolve } from "node:path";
 import type { Db } from "../db/open.js";
 import { RULES } from "../rules/index.js";
-import { dispatchRule } from "../rules/runner.js";
+import { dispatch } from "../rules/runner.js";
 import type { Violation } from "../rules/types.js";
 import { repoRoot, resolveRunTarget } from "./target.js";
 import { JS_TS_EXTS as LINTABLE_EXTS } from "../../lib/languages.mjs";
@@ -162,20 +162,16 @@ async function runOne(
     };
   }
   try {
-    const outcome = await dispatchRule(auditDb, {
-      slug,
-      stage: "run",
-      cwd,
-      args: modeArgs,
-      mode: "json",
+    const outcome = await dispatch(auditDb, {
+      kind: "spawn",
+      spec: { slug, stage: "run", cwd, args: modeArgs, mode: "json" },
     });
     if (outcome.violations === null) {
       return {
         slug,
         ok: false,
         violations: [],
-        error:
-          outcome.stderr || `exited ${outcome.code} without JSON output`,
+        error: outcome.stderr || `exited ${outcome.code} without JSON output`,
       };
     }
     return { slug, ok: true, violations: outcome.violations };

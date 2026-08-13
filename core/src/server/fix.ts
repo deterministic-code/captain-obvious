@@ -19,7 +19,7 @@ import { logEvent } from "../db/audit.js";
 import { getRuleFixes, type RuleAction } from "../db/fixes.js";
 import type { Db } from "../db/open.js";
 import { RULES } from "../rules/index.js";
-import { dispatchRule, type RunSpec } from "../rules/runner.js";
+import { dispatch, type RunSpec } from "../rules/runner.js";
 import type { RuleMeta, Violation } from "../rules/types.js";
 import { repoRoot, resolveRunTarget } from "./target.js";
 import { mapPool, runRuleOnFile, runRules, type RunRequest } from "./run.js";
@@ -118,10 +118,10 @@ async function runScriptFix(
   const action = requireAction(db, slug, "script");
   const rel = relative(process.cwd(), resolved.target);
   try {
-    const outcome = await dispatchRule(
-      auditDb,
-      fixSpec(action, slug, resolved),
-    );
+    const outcome = await dispatch(auditDb, {
+      kind: "spawn",
+      spec: fixSpec(action, slug, resolved),
+    });
     const ok = outcome.code === 0;
     if (!ok) {
       logEvent("fix.applied", `script fix ${slug} on ${rel} — failed`);

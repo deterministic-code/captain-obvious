@@ -4,7 +4,7 @@ import { getRuleFixes, type RuleAction } from "../db/fixes.js";
 import { openDb, resolveDbPath, type Db } from "../db/open.js";
 import { actionBehavior, DEFAULT_ACTION } from "./action-behavior.js";
 import { RULES } from "./index.js";
-import { dispatchStaged } from "./runner.js";
+import { dispatch } from "./runner.js";
 import { GIT_STAGE_FLAG, type GitStage, type Stage } from "./stages.js";
 
 export interface Dispatched {
@@ -129,7 +129,8 @@ function stagedFiles(cwd: string): Promise<string[]> {
 }
 
 /**
- * Normalize a rule's deterministic fix into the spec `dispatchStaged` spawns. A
+ * Normalize a rule's deterministic fix into the spec `dispatch` (kind "staged")
+ * spawns. A
  * `scriptPath` fix is the rule's own check runner in fix mode (`--fix` respects
  * the git selector); a `scriptBody` fix is a shell command (e.g. `prettier
  * --write`) handed the staged files — both stay scoped to what's being committed.
@@ -186,16 +187,19 @@ export async function runDispatch(argv: string[]): Promise<void> {
       const behavior = actionBehavior(action);
       const fixSpec =
         fix && runsFixes(stage) ? buildFixSpec(fix, args, staged) : null;
-      const code = await dispatchStaged(auditDb, {
-        slug,
-        stage,
-        cwd,
-        args,
-        checks: behavior.checks,
-        fixSpec,
-        onFixed: staged.length
-          ? async () => void (await runGit(["add", "--", ...staged], cwd))
-          : undefined,
+      const code = await dispatch(auditDb, {
+        kind: "staged",
+        run: {
+          slug,
+          stage,
+          cwd,
+          args,
+          checks: behavior.checks,
+          fixSpec,
+          onFixed: staged.length
+            ? async () => void (await runGit(["add", "--", ...staged], cwd))
+            : undefined,
+        },
       });
       if (code !== 0 && behavior.blocks) process.exit(code);
     }
