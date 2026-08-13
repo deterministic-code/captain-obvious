@@ -1,6 +1,6 @@
 {
   "name": "@deterministic-code/co-rule-gov-require-pr",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "type": "module",
   "license": "MIT",
   "keywords": [
