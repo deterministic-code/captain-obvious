@@ -7,6 +7,7 @@ import { scaffoldConfig } from "../lib/scaffold-config.mjs";
 import { installGitHooks } from "../lib/git-hooks.mjs";
 import { installClaudeHooks } from "../lib/claude-settings.mjs";
 import { installNpmScripts } from "../lib/npm-scripts.mjs";
+import { DB_DIR_IGNORE, ensureDbIgnored } from "../lib/gitignore.mjs";
 
 const pkgRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -107,6 +108,7 @@ function parseArgs(argv) {
     yes: false,
     mode: undefined,
     wireHooks: undefined,
+    gitignore: undefined,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -120,6 +122,10 @@ function parseArgs(argv) {
       opts.mode = argv[(i += 1)];
     } else if (arg === "--no-hooks") {
       opts.wireHooks = false;
+    } else if (arg === "--gitignore") {
+      opts.gitignore = true;
+    } else if (arg === "--no-gitignore") {
+      opts.gitignore = false;
     }
   }
   return opts;
@@ -153,16 +159,41 @@ async function installHooks({ config, target, pkgRoot, rules }) {
   }
 }
 
-async function main() {
-  const { target, config: configPath, yes, mode, wireHooks } = parseArgs(
-    process.argv.slice(2),
+// Add `.captain-obvious/` to .gitignore when requested (the `--gitignore` flag wins,
+// else the config's `gitignore` key) and the DBs actually live in the repo (local
+// mode). Skipped silently when dist isn't built, like registry init.
+async function ignoreDb({ target, pkgRoot, want }) {
+  if (!want) return;
+  const locationPath = resolve(pkgRoot, "dist", "db", "location.js");
+  if (!(await exists(locationPath))) return;
+  const { resolveModeLocation } = await import(
+    pathToFileURL(locationPath).href
   );
+  const loc = resolveModeLocation(target);
+  if (!loc || loc.mode !== "local") return;
+  const { reason, path } = await ensureDbIgnored(target);
+  const note =
+    reason === "present"
+      ? `${DB_DIR_IGNORE} already ignored in ${path}`
+      : `${reason} ${path} — ignoring ${DB_DIR_IGNORE}`;
+  process.stdout.write(`captain-obvious: ${note}\n`);
+}
+
+async function main() {
+  const {
+    target,
+    config: configPath,
+    yes,
+    mode,
+    wireHooks,
+    gitignore,
+  } = parseArgs(process.argv.slice(2));
 
   if (!configPath) {
     const { created } = await scaffoldConfig({
       target,
       yes,
-      defaults: { mode, wireHooks },
+      defaults: { mode, wireHooks, gitignore },
     });
     if (created) {
       process.stdout.write(
@@ -194,6 +225,12 @@ async function main() {
       "captain-obvious: dist/db not built — skipping registry init (run `npm run build`)\n",
     );
   }
+
+  await ignoreDb({
+    target,
+    pkgRoot,
+    want: gitignore ?? config.gitignore,
+  });
 
   await warnMissingDependencies(rules);
 }

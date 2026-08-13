@@ -23,13 +23,15 @@ async function readConfig(path) {
 
 // readline/promises only captures input written while a question is pending, so
 // answer each prompt reactively as its text is written to `output`.
-function autoRespond(input, output, { mode, hooks }) {
+function autoRespond(input, output, { mode, hooks, gitignore = "" }) {
   output.on("data", (chunk) => {
     const text = chunk.toString();
     if (text.includes("Registry DB location")) {
       input.write(`${mode}\n`);
     } else if (text.includes("Wire git")) {
       input.write(`${hooks}\n`);
+    } else if (text.includes(".gitignore")) {
+      input.write(`${gitignore}\n`);
     }
   });
 }
@@ -65,7 +67,11 @@ describe("scaffold-config / scaffoldConfig", () => {
       created: true,
     });
     const written = await readConfig(result.path);
-    expect(written).toEqual({ gitHooks: {}, claudeHooks: CLAUDE_HOOKS });
+    expect(written).toEqual({
+      gitignore: true,
+      gitHooks: {},
+      claudeHooks: CLAUDE_HOOKS,
+    });
     expect(written.mode).toBeUndefined();
   });
 
@@ -76,6 +82,20 @@ describe("scaffold-config / scaffoldConfig", () => {
     const result = await scaffoldConfig({ target, input, output, isTTY: true });
 
     expect(await readConfig(result.path)).toEqual({
+      gitignore: true,
+      gitHooks: {},
+      claudeHooks: CLAUDE_HOOKS,
+    });
+  });
+
+  test("interactive: 'n' at the .gitignore prompt opts out", async () => {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    autoRespond(input, output, { mode: "", hooks: "", gitignore: "n" });
+    const result = await scaffoldConfig({ target, input, output, isTTY: true });
+
+    expect(await readConfig(result.path)).toEqual({
+      gitignore: false,
       gitHooks: {},
       claudeHooks: CLAUDE_HOOKS,
     });
@@ -105,6 +125,26 @@ describe("scaffold-config / scaffoldConfig", () => {
     });
 
     expect(await readConfig(result.path)).toEqual({
+      gitignore: true,
+      gitHooks: {},
+      claudeHooks: CLAUDE_HOOKS,
+    });
+  });
+
+  test("defaults: pinned gitignore=false is written without prompting", async () => {
+    const input = new PassThrough();
+    const output = new PassThrough();
+    autoRespond(input, output, { mode: "", hooks: "" });
+    const result = await scaffoldConfig({
+      target,
+      input,
+      output,
+      isTTY: true,
+      defaults: { gitignore: false },
+    });
+
+    expect(await readConfig(result.path)).toEqual({
+      gitignore: false,
       gitHooks: {},
       claudeHooks: CLAUDE_HOOKS,
     });

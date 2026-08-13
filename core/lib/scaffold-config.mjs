@@ -30,15 +30,26 @@ async function promptMissing(input, output, resolved, overrides) {
         resolved.wireHooks = false;
       }
     }
+    // Only local mode keeps DBs inside the repo, so it's the only mode worth ignoring.
+    if (resolved.mode === "local" && overrides.gitignore === undefined) {
+      const answer = await rl.question(
+        "Add .captain-obvious/ to .gitignore? [Y/n]: ",
+      );
+      if (answer.trim().toLowerCase().startsWith("n")) {
+        resolved.gitignore = false;
+      }
+    }
   } finally {
     rl.close();
   }
 }
 
-function buildConfig({ mode, wireHooks }) {
+function buildConfig({ mode, wireHooks, gitignore }) {
   const config = {};
   if (mode === "global") {
     config.mode = "global";
+  } else {
+    config.gitignore = gitignore;
   }
   config.gitHooks = wireHooks ? {} : { enabled: false };
   if (wireHooks) {
@@ -64,10 +75,11 @@ function buildConfig({ mode, wireHooks }) {
  * pinned via `defaults`:
  * - Registry DB mode (local/global) [default: local]
  * - Wire git + Claude Code guard hooks? [default: yes]
+ * - Add .captain-obvious/ to .gitignore? [default: yes] (local mode only)
  *
  * `yes` (or a non-TTY stdin) skips all prompts and takes the defaults. `defaults`
- * ({ mode, wireHooks }) pins individual answers from CLI flags — a pinned value
- * is never prompted for, so `--mode global` still asks about hooks but not mode.
+ * ({ mode, wireHooks, gitignore }) pins individual answers from CLI flags — a pinned
+ * value is never prompted for, so `--mode global` still asks about hooks but not mode.
  */
 export async function scaffoldConfig({
   target,
@@ -83,10 +95,15 @@ export async function scaffoldConfig({
     return { path: configPath, created: false };
   }
 
-  const overrides = { mode: defaults.mode, wireHooks: defaults.wireHooks };
+  const overrides = {
+    mode: defaults.mode,
+    wireHooks: defaults.wireHooks,
+    gitignore: defaults.gitignore,
+  };
   const resolved = {
     mode: overrides.mode ?? "local",
     wireHooks: overrides.wireHooks ?? true,
+    gitignore: overrides.gitignore ?? true,
   };
 
   if (isTTY && !yes) {
