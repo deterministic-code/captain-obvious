@@ -1,21 +1,21 @@
 /** @type {import("@deterministic-code/captain-obvious/plugin").RulePlugin} */
 export default {
   meta: {
-    slug: "gov-no-push-to-main",
-    name: "No direct commits on main",
+    slug: "gov-merge-before-stop",
+    name: "Merge before stopping",
     category: "governance",
     description:
-      "Blocks committing directly on main/master; work must happen on a branch. Bypass: ALLOW_EDIT_ON_MAIN=1.",
+      "Blocks ending a Claude Code session while work is unmerged: uncommitted changes, unpushed commits, an open non-draft PR, or commits not on main.",
     languages: [],
     config: {
       branches: ["main", "master"],
     },
     ratchetable: false,
-    modes: ["push", "warn"],
-    stages: ["tool", "pre-push"],
-    supportStages: ["tool", "pre-push", "git-pre-push"],
+    modes: ["warn"],
+    stages: ["stop"],
+    supportStages: ["stop"],
     defaultAction: "warn",
-    order: 27,
+    order: 30,
     actions: [],
   },
   control: {

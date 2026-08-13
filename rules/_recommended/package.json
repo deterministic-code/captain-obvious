@@ -16,6 +16,7 @@
   ],
   "dependencies": {
     "@deterministic-code/co-rule-gov-main-ci-green": "^0.3.3",
+    "@deterministic-code/co-rule-gov-merge-before-stop": "^0.3.3",
     "@deterministic-code/co-rule-gov-no-push-to-main": "^0.3.3",
     "@deterministic-code/co-rule-gov-require-pr": "^0.3.3",
     "@deterministic-code/co-rule-gov-tests-green": "^0.3.3",

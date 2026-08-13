@@ -1,43 +1,38 @@
-import { relative } from "node:path";
-import type { HookRunRecord } from "../db/audit.js";
+import { execFile } from "node:child_process";
+import { access } from "node:fs/promises";
+import { dirname, join, normalize, relative } from "node:path";
+import { promisify } from "node:util";
 import { getDefaultProjectProtected } from "../db/projects.js";
 import type { Db } from "../db/open.js";
 import { selectDispatch } from "./dispatch.js";
 import { matchProtected } from "./protectedPaths.js";
+import { dispatchGuard, type GuardVerdict } from "./runner.js";
+
+const execFileAsync = promisify(execFile);
 
 /** Claude Code PreToolUse tools that carry a `file_path` we can guard. */
 const EDIT_TOOLS = new Set(["Edit", "Write", "NotebookEdit"]);
+const DEFAULT_BRANCHES = ["main", "master"];
+/** git mutations denied on a protected branch (mirrors main-branch-guard.sh). */
+const FORBIDDEN_GIT = /^git\s+(commit|add|stash|rebase|reset|checkout\s+--)/;
 
-/** The one tool-stage rule this guard enforces; other rules may be tagged at `tool` but are not run here. */
-const PROTECTED_PATHS_SLUG = "lint-protected-paths";
+const ALLOW: GuardVerdict = { deny: false };
 
-export interface GuardDecision {
-  deny: boolean;
-  reason?: string;
-}
-
-/** The Activity row a guard evaluation produces; the shim stamps its timing. */
-export type GuardRun = Omit<HookRunRecord, "startedMs" | "durationMs">;
-
-export interface GuardResult {
-  decision: GuardDecision;
-  /** The hook_run to log for this PreToolUse, or null when the rule didn't run. */
-  run: GuardRun | null;
-}
-
-const ALLOW: GuardDecision = { deny: false };
+// ---------------------------------------------------------------------------
+// lint-protected-paths — deny editing a path matching the project's globs.
+// ---------------------------------------------------------------------------
 
 /**
  * Decide whether a PreToolUse event touches a protected path. `inputJson` is the
  * raw hook stdin; `repoRoot` is the git top-level the edited path is relative to.
- * Fail-open on tools/inputs we don't guard (a guard must never crash a benign
- * edit); deny only a concrete in-repo file that matches a protected glob.
+ * Fail-open on tools/inputs we don't guard; deny only a concrete in-repo file
+ * that matches a protected glob.
  */
 export function evaluateGuard(
   inputJson: string,
   repoRoot: string,
   globs: string[],
-): GuardDecision {
+): GuardVerdict {
   const input = JSON.parse(inputJson) as {
     tool_name?: string;
     tool_input?: { file_path?: string };
@@ -54,47 +49,155 @@ export function evaluateGuard(
   };
 }
 
+// ---------------------------------------------------------------------------
+// gov-no-push-to-main — deny edits / dangerous git commands on a protected branch.
+// (The tool-stage half of the rule; its git/CLI half is rules/.../check.mjs.)
+// ---------------------------------------------------------------------------
+
 /**
- * The guard decision for a PreToolUse event against the registry `db`, plus the
- * Activity row to log. `lint-protected-paths` runs only when enabled at the
- * `tool` stage; when it runs, every evaluation yields a `run` (a `failure`
- * when it blocks, `success` when it allows) so the tool path shows up in
- * Activity the same way git-stage dispatches do. `run` is null when the rule is
- * disabled — nothing ran, so nothing is logged.
+ * The cwd of the first forbidden `git` mutation in a Bash command, or null when
+ * the command runs no guarded git operation. Follows `cd` and `git -C` across a
+ * `&&`/`;`/`||`-chained command so the branch is resolved where the git op runs.
  */
-export function guardDecision(
-  inputJson: string,
-  repoRoot: string,
-  db: Db,
-): GuardResult {
-  const selected = selectDispatch(db, "tool");
-  if (!selected.some((d) => d.slug === PROTECTED_PATHS_SLUG)) {
-    return { decision: ALLOW, run: null };
+export function forbiddenGitDir(command: string, cwd: string): string | null {
+  let dir = cwd;
+  for (const raw of command.split(/\s*(?:&&|\|\||;|\n)\s*/)) {
+    let stmt = raw.trim();
+    if (!stmt) continue;
+    const cd = stmt.match(/^cd\s+(\S+)/);
+    if (cd) {
+      const target = cd[1].replace(/^['"]|['"]$/g, "");
+      dir = target.startsWith("/") ? target : normalize(join(dir, target));
+      continue;
+    }
+    const gitC = stmt.match(/^git\s+-C\s+(\S+)\s+(.*)/);
+    if (gitC) {
+      const target = gitC[1].replace(/^['"]|['"]$/g, "");
+      dir = target.startsWith("/") ? target : normalize(join(dir, target));
+      stmt = `git ${gitC[2]}`;
+    }
+    if (FORBIDDEN_GIT.test(stmt)) return dir;
   }
-  const decision = evaluateGuard(
-    inputJson,
-    repoRoot,
-    getDefaultProjectProtected(db),
+  return null;
+}
+
+/** The current branch of the repo containing `dir`, or null (detached / not a repo). */
+async function branchOf(dir: string): Promise<string | null> {
+  return execFileAsync("git", [
+    "-C",
+    dir,
+    "symbolic-ref",
+    "--short",
+    "HEAD",
+  ]).then(
+    ({ stdout }) => stdout.trim(),
+    () => null,
   );
-  return {
-    decision,
-    run: {
-      slug: PROTECTED_PATHS_SLUG,
-      stage: "tool",
-      status: decision.deny ? "failure" : "success",
-    },
-  };
+}
+
+async function dirExists(dir: string): Promise<boolean> {
+  return access(dir).then(
+    () => true,
+    () => false,
+  );
 }
 
 /**
- * The single stdout payload for a PreToolUse guard: the deny decision (when the
- * guard blocks) plus, when the audit write failed, a user-visible `systemMessage`
- * so a broken log surfaces loudly instead of vanishing into the shim's fail-open
- * catch. Combined into one JSON object so the decision and the warning can't race
- * as two lines. Returns null when there's nothing to say (allowed, log succeeded).
+ * Deny a PreToolUse edit, or a git-mutating Bash command, that lands on a
+ * protected branch. `cwd` is the fallback working dir for a Bash command with no
+ * explicit `cwd`. Bypass for one call: `ALLOW_EDIT_ON_MAIN=1`.
+ */
+export async function evaluateMainBranch(
+  inputJson: string,
+  cwd: string,
+  branches: string[] = DEFAULT_BRANCHES,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<GuardVerdict> {
+  if (env.ALLOW_EDIT_ON_MAIN === "1") return ALLOW;
+  const input = JSON.parse(inputJson) as {
+    tool_name?: string;
+    tool_input?: { file_path?: string; command?: string };
+    cwd?: string;
+  };
+  let dir: string | null = null;
+  if (input.tool_name && EDIT_TOOLS.has(input.tool_name)) {
+    const fp = input.tool_input?.file_path;
+    if (!fp) return ALLOW;
+    dir = dirname(fp);
+  } else if (input.tool_name === "Bash") {
+    const command = input.tool_input?.command;
+    if (!command) return ALLOW;
+    if (command.includes("ALLOW_EDIT_ON_MAIN=1")) return ALLOW;
+    dir = forbiddenGitDir(command, input.cwd || cwd);
+    if (!dir) return ALLOW;
+  } else {
+    return ALLOW;
+  }
+  if (!(await dirExists(dir))) return ALLOW;
+  const branch = await branchOf(dir);
+  if (branch && branches.includes(branch)) {
+    return {
+      deny: true,
+      reason: `BLOCKED on branch '${branch}' in ${dir}. CLAUDE.md: 'Never work off main directly'. Create a worktree first: git worktree add -b <slug> .worktrees/<slug> ${branch} — then work there. Bypass for one call: ALLOW_EDIT_ON_MAIN=1.`,
+    };
+  }
+  return ALLOW;
+}
+
+// ---------------------------------------------------------------------------
+// Generalized tool-stage guard dispatch — every enabled tool-stage guard rule
+// runs through the single runner (dispatchGuard), so each is logged, and the
+// first deny wins.
+// ---------------------------------------------------------------------------
+
+interface ToolCtx {
+  inputJson: string;
+  repoRoot: string;
+  db: Db;
+}
+
+const TOOL_GUARDS: Record<
+  string,
+  (ctx: ToolCtx) => GuardVerdict | Promise<GuardVerdict>
+> = {
+  "lint-protected-paths": (ctx) =>
+    evaluateGuard(ctx.inputJson, ctx.repoRoot, getDefaultProjectProtected(ctx.db)),
+  "gov-no-push-to-main": (ctx) =>
+    evaluateMainBranch(ctx.inputJson, ctx.repoRoot),
+};
+
+/**
+ * Evaluate every enabled tool-stage guard rule for a PreToolUse event, each
+ * through dispatchGuard (so it logs a run.start/run.end and a hook_run), and
+ * return the first deny. Only rules with a registered evaluator participate;
+ * others tagged `tool` are ignored here.
+ */
+export async function runToolGuards(
+  inputJson: string,
+  repoRoot: string,
+  db: Db,
+  auditDb: Db,
+): Promise<GuardVerdict> {
+  let decision: GuardVerdict = ALLOW;
+  for (const d of selectDispatch(db, "tool")) {
+    const evaluate = TOOL_GUARDS[d.slug];
+    if (!evaluate) continue;
+    const verdict = await dispatchGuard(auditDb, d.slug, "tool", () =>
+      evaluate({ inputJson, repoRoot, db }),
+    );
+    if (verdict.deny && !decision.deny) decision = verdict;
+  }
+  return decision;
+}
+
+/**
+ * The single stdout payload for a PreToolUse guard: the deny decision (when a
+ * guard blocks) plus, when the audit write failed, a visible `systemMessage` so a
+ * broken log surfaces loudly. Combined into one JSON object. Returns null when
+ * there is nothing to say (allowed, log succeeded).
  */
 export function formatGuardOutput(
-  decision: GuardDecision,
+  decision: GuardVerdict,
   auditError?: string,
 ): string | null {
   const out: { systemMessage?: string; hookSpecificOutput?: unknown } = {};

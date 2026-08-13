@@ -1,10 +1,10 @@
 import { spawn } from "node:child_process";
-import type { Readable } from "node:stream";
-import { openAuditDb, recordHookRun, resolveAuditDbPath } from "../db/audit.js";
+import { openAuditDb, resolveAuditDbPath } from "../db/audit.js";
 import { getRuleFixes, type RuleAction } from "../db/fixes.js";
 import { openDb, resolveDbPath, type Db } from "../db/open.js";
 import { actionBehavior, DEFAULT_ACTION } from "./action-behavior.js";
 import { RULES } from "./index.js";
+import { formatRunEnd, runLogged, spawnRule } from "./runner.js";
 import { GIT_STAGE_FLAG, type GitStage, type Stage } from "./stages.js";
 
 export interface Dispatched {
@@ -14,11 +14,6 @@ export interface Dispatched {
   /** The `script` fix to run before checking, when `action` is a fix variant; else null. */
   fix: RuleAction | null;
 }
-
-/** A rule's absolute check-runner path, stamped by the loader (rules/<slug>/check.mjs). */
-const CHECK_PATH = new Map(
-  RULES.map((r) => [r.meta.slug, r.checkPath ?? null]),
-);
 
 /**
  * The `script` fix a fix-bound rule must run. The panel only offers the fix
@@ -91,7 +86,8 @@ export function selectDispatch(db: Db, stage: Stage): Dispatched[] {
     })
     .map((r) => {
       const bound = defaultBinding.get(r.meta.slug) as
-        { slug: string } | undefined;
+        | { slug: string }
+        | undefined;
       const action = bound?.slug ?? DEFAULT_ACTION;
       return {
         slug: r.meta.slug,
@@ -101,73 +97,6 @@ export function selectDispatch(db: Db, stage: Stage): Dispatched[] {
           : null,
       };
     });
-}
-
-/** Absolute path to a rule's check runner, as stamped by the loader. */
-export function checkScriptPath(slug: string): string {
-  const entry = CHECK_PATH.get(slug);
-  if (!entry) throw new Error(`rule has no check runner: ${slug}`);
-  return entry;
-}
-
-/** Spawn a fix child with inherited stdio in `cwd`, resolving its exit code (killed → reject). */
-function spawnProcess(
-  command: string,
-  args: string[],
-  label: string,
-  cwd: string,
-): Promise<number> {
-  return new Promise((resolveCode, reject) => {
-    const child = spawn(command, args, { stdio: "inherit", cwd });
-    child.on("error", reject);
-    child.on("exit", (code, signal) => {
-      if (signal) reject(new Error(`${label} killed by ${signal}`));
-      else resolveCode(code ?? 0);
-    });
-  });
-}
-
-export interface RuleRunResult {
-  code: number;
-  /** Violation count the check reported on the result pipe, or null if it emitted none. */
-  found: number | null;
-}
-
-/** The extra fd the check writes its result sentinel to (see rules/_kit emitFound). */
-const RESULT_FD = 3;
-
-/** Parse the check's result sentinel — the last JSON line on fd 3 — into a found count. */
-function parseFound(raw: string): number | null {
-  const line = raw
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .pop();
-  if (!line) return null;
-  const parsed = JSON.parse(line) as { found?: unknown };
-  return typeof parsed.found === "number" ? parsed.found : null;
-}
-
-/**
- * Spawn a rule's check, inheriting stdio so its human report streams live while
- * reading the violation count out-of-band on fd 3. Resolves the exit code and the
- * parsed count; a killed child rejects like the shared spawnProcess.
- */
-function runRule(slug: string, args: string[]): Promise<RuleRunResult> {
-  return new Promise((resolveResult, reject) => {
-    const child = spawn(process.execPath, [checkScriptPath(slug), ...args], {
-      stdio: ["inherit", "inherit", "inherit", "pipe"],
-      env: { ...process.env, CO_RESULT_FD: String(RESULT_FD) },
-    });
-    const pipe = child.stdio[RESULT_FD] as Readable;
-    let buf = "";
-    pipe.on("data", (d) => (buf += d));
-    child.on("error", reject);
-    child.on("exit", (code, signal) => {
-      if (signal) reject(new Error(`${slug} killed by ${signal}`));
-      else resolveResult({ code: code ?? 0, found: parseFound(buf) });
-    });
-  });
 }
 
 /** git plumbing, capturing stdout; rejects on a non-zero exit. */
@@ -201,29 +130,33 @@ function stagedFiles(cwd: string): Promise<string[]> {
 }
 
 /**
- * Run a rule's deterministic fix over the staged set. A `scriptPath` fix is the
- * rule's own check runner in fix mode (`--fix` respects the git selector); a
- * `scriptBody` fix is a shell command (e.g. `prettier --write`) handed the staged
- * files, so both stay scoped to what's being committed.
+ * Run a rule's deterministic fix over the staged set via the single runner. A
+ * `scriptPath` fix is the rule's own check runner in fix mode (`--fix` respects
+ * the git selector); a `scriptBody` fix is a shell command (e.g. `prettier
+ * --write`) handed the staged files — both stay scoped to what's being committed.
+ * A shell fix with nothing staged is a no-op.
  */
 function runRuleFix(
   slug: string,
+  stage: GitStage,
   fix: RuleAction,
   cwd: string,
   selectorArgs: string[],
   staged: string[],
-): Promise<number> {
+): Promise<unknown> {
   if (fix.scriptPath) {
-    return spawnProcess(
-      process.execPath,
-      [checkScriptPath(slug), "--fix", ...selectorArgs],
-      "fix",
-      cwd,
-    );
+    return spawnRule({ slug, stage, cwd, args: selectorArgs, mode: "fix" });
   }
-  if (staged.length === 0) return Promise.resolve(0);
+  if (staged.length === 0) return Promise.resolve();
   const parts = (fix.scriptBody as string).trim().split(/\s+/);
-  return spawnProcess(parts[0], [...parts.slice(1), ...staged], "fix", cwd);
+  return spawnRule({
+    slug,
+    stage,
+    cwd,
+    args: [...parts.slice(1), ...staged],
+    mode: "fix",
+    command: parts[0],
+  });
 }
 
 function parseStage(value: string | undefined): GitStage {
@@ -241,12 +174,12 @@ function runsFixes(stage: GitStage): boolean {
 }
 
 /**
- * Run every enabled rule for a git stage, each as an isolated child process — the
- * hook `main()`s call process.exit, so they cannot share this one. A rule's
- * action binding decides what happens (action-behavior.ts): advisory rules print
- * but never fail; blocking rules fail the stage on the first non-zero exit; fix
- * rules run their deterministic fix first (staged stages only, then re-stage the
- * rewritten files) and warn/halt on whatever the fix couldn't resolve.
+ * Run every enabled rule for a git stage through the single runner (runner.ts),
+ * so each rule's fix+check is one logged run (run.start / run.end + a hook_run).
+ * A rule's action binding decides what happens (action-behavior.ts): advisory
+ * rules print but never fail; blocking rules fail the stage on the first non-zero
+ * exit; fix rules run their deterministic fix first (staged stages only, then
+ * re-stage the rewritten files) and warn/halt on whatever the fix couldn't resolve.
  */
 export async function runDispatch(argv: string[]): Promise<void> {
   const stage = parseStage(argv[0]);
@@ -264,34 +197,35 @@ export async function runDispatch(argv: string[]): Promise<void> {
   try {
     for (const { slug, action, fix } of selected) {
       const behavior = actionBehavior(action);
-      const startedMs = Date.now();
-      let code = 0;
-      let found: number | null = null;
-      // Default failure: a run that throws before it completes (killed child,
-      // failed fix or re-stage) leaves this untouched, so the finally still logs
-      // it. Every rule the loop begins gets exactly one hook_run row.
-      let status: "success" | "failure" = "failure";
-      try {
+      const label = fix && runsFixes(stage) ? "fix" : "check";
+      const code = await runLogged(auditDb, slug, stage, label, async () => {
         if (fix && runsFixes(stage)) {
-          await runRuleFix(slug, fix, cwd, args, staged);
+          await runRuleFix(slug, stage, fix, cwd, args, staged);
           if (staged.length) await runGit(["add", "--", ...staged], cwd);
         }
+        let checkCode = 0;
+        let found: number | null = null;
         if (behavior.checks) {
-          const result = await runRule(slug, args);
-          code = result.code;
-          found = result.found;
+          const outcome = await spawnRule({
+            slug,
+            stage,
+            cwd,
+            args,
+            mode: "check",
+          });
+          checkCode = outcome.code;
+          found = outcome.found;
         }
-        status = code === 0 ? "success" : "failure";
-      } finally {
-        recordHookRun(auditDb, {
-          slug,
-          stage,
-          status,
-          startedMs,
-          durationMs: Date.now() - startedMs,
-          found,
-        });
-      }
+        return {
+          record: {
+            code: checkCode,
+            found,
+            fixed: null,
+            detail: formatRunEnd(stage, slug, { found }, checkCode),
+          },
+          value: checkCode,
+        };
+      });
       if (code !== 0 && behavior.blocks) process.exit(code);
     }
   } finally {

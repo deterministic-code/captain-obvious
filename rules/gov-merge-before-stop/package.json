@@ -1,0 +1,24 @@
+{
+  "name": "@deterministic-code/co-rule-gov-merge-before-stop",
+  "version": "0.3.3",
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "captain-obvious-rule"
+  ],
+  "exports": {
+    "./plugin.mjs": "./plugin.mjs",
+    "./package.json": "./package.json",
+    "./check.mjs": "./check.mjs"
+  },
+  "files": [
+    "plugin.mjs",
+    "check.mjs"
+  ],
+  "dependencies": {
+    "@deterministic-code/co-rule-kit": "^0.3.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

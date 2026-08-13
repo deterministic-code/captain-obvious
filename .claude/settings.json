@@ -7,18 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PROJECT_DIR}/core/hooks/claude/main-branch-guard.sh",
-            "timeout": 5
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write|NotebookEdit",
-        "_captainObvious": true,
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ${CLAUDE_PROJECT_DIR}/core/hooks/claude/protected-paths-guard.sh",
+            "command": "bash ${CLAUDE_PROJECT_DIR}/core/hooks/claude/pre-tool-guard.sh",
             "timeout": 5
           }
         ]
@@ -30,7 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash ${CLAUDE_PROJECT_DIR}/core/hooks/claude/stop-unmerged-guard.sh",
+            "command": "bash ${CLAUDE_PROJECT_DIR}/core/hooks/claude/stop-guard.sh",
             "timeout": 15
           }
         ]

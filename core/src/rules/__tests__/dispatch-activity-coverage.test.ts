@@ -107,8 +107,14 @@ beforeEach(() => {
   process.env.CAPTAIN_OBVIOUS_AUDIT_DB = join(tmpDir, "audit.db");
 
   // Default: every spawn is a clean success; individual tests override for failures.
+  // Emit both `exit` and `close` so the fake satisfies whichever the runner awaits
+  // (check mode resolves on `exit`, the fix/json capture modes on `close`).
   spawnMock.mockImplementation(
-    () => fakeChild((c) => c.emit("exit", 0, null)) as never,
+    () =>
+      fakeChild((c) => {
+        c.emit("exit", 0, null);
+        c.emit("close", 0, null);
+      }) as never,
   );
   exitSpy = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
     throw new Error("process.exit:" + code);

@@ -317,7 +317,7 @@ async function handle(
   }
   if (pathname === "/api/run" && method === "POST") {
     const body = (await readBody(req)) as RunRequest;
-    return sendJson(res, 200, await runRules(body));
+    return sendJson(res, 200, await runRules(auditDb, body));
   }
 
   // --- fix (apply a rule's remediation to violations the run surfaced) ---
@@ -331,19 +331,19 @@ async function handle(
   }
   if (pathname === "/api/run/fix/plan" && method === "POST") {
     const body = (await readBody(req)) as FixRequest;
-    return sendJson(res, 200, await planFix(db, body));
+    return sendJson(res, 200, await planFix(db, auditDb, body));
   }
   if (pathname === "/api/run/fix/plan/all" && method === "POST") {
     const body = (await readBody(req)) as RunRequest;
-    return sendJson(res, 200, await planAllFixes(db, body));
+    return sendJson(res, 200, await planAllFixes(db, auditDb, body));
   }
   if (pathname === "/api/run/fix/ai" && method === "POST") {
     const body = (await readBody(req)) as FixRequest;
-    return sendJson(res, 200, await aiProposeFix(db, body));
+    return sendJson(res, 200, await aiProposeFix(db, auditDb, body));
   }
   if (pathname === "/api/run/fix/ai/all" && method === "POST") {
     const body = (await readBody(req)) as RunRequest;
-    return sendJson(res, 200, await aiProposeAllFixes(db, body));
+    return sendJson(res, 200, await aiProposeAllFixes(db, auditDb, body));
   }
   if (pathname === "/api/run/fix/ai/apply" && method === "POST") {
     const body = (await readBody(req)) as AiApplyRequest;

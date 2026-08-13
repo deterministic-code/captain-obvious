@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 // Governance rule runner: block committing/pushing directly on a protected
-// branch (main/master). The Claude PreToolUse variant lives in
-// hooks/claude/main-branch-guard.sh; this is the git/CLI equivalent so the rule
-// is runnable via defineRule().run (rules/<slug>/check.mjs) and from bin/lint.mjs.
-// Bypass for one invocation: ALLOW_EDIT_ON_MAIN=1.
+// branch (main/master). This is the git/CLI (pre-push) half of the rule; the
+// Claude PreToolUse (tool-stage) half is the in-process evaluator in
+// core/src/rules/claudeGuard.ts (evaluateMainBranch). Bypass: ALLOW_EDIT_ON_MAIN=1.
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { isInvokedAsScript } from "@deterministic-code/co-rule-kit/lint-shared";

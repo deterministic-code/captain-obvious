@@ -27,6 +27,7 @@ export const STAGES = [
   { slug: "pre-push", name: "Pre-push (Claude)", gitFlag: "--push" },
   { slug: "git-pre-push", name: "Pre-push (CLI)", gitFlag: "--push" },
   { slug: "tool", name: "Tool (Claude editor)", gitFlag: null },
+  { slug: "stop", name: "Stop (Claude session)", gitFlag: null },
   { slug: "server", name: "Server (GitHub)", gitFlag: null },
 ] as const;
 

@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { checkScriptPath } from "../dispatch.js";
+import { checkScriptPath } from "../runner.js";
 import { RULES } from "../index.js";
 import type { Stage } from "../types.js";
 
